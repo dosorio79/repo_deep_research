@@ -1,7 +1,49 @@
 [project]
 name = "repo-deep-research"
 version = "0.1.0"
-description = "Add your description here"
+description = "Evidence-grounded research for Python repositories"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastembed==0.7.3",
+    "pathspec==0.12.1",
+    "pydantic-settings==2.10.1",
+    "qdrant-client==1.15.1",
+]
+
+[project.scripts]
+repo-research = "repo_research.cli:main"
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/repo_research"]
+
+[dependency-groups]
+dev = [
+    "mypy==1.17.1",
+    "pytest==8.4.1",
+    "ruff==0.12.10",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["repo_research"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+strict = true
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra"]
