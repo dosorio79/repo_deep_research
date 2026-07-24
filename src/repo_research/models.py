@@ -54,6 +54,7 @@ class SearchQuery(BaseModel):
 
     text: str = Field(min_length=1)
     repository_id: str = Field(min_length=1)
+    commit_hash: str = Field(min_length=1)
     limit: int = Field(default=5, ge=1, le=20)
 
 
@@ -64,11 +65,28 @@ class SearchResult(BaseModel):
     score: float
 
 
+class IngestionIssue(BaseModel):
+    """A path-scoped reason an otherwise eligible file was not indexed."""
+
+    path: str = Field(min_length=1)
+    error_type: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+
+
 class IngestSummary(BaseModel):
     """The observable result of one repository indexing operation."""
 
     repository: RepositoryIdentity
     indexed_chunks: int = Field(ge=0)
+    skipped_files: list[IngestionIssue] = Field(default_factory=list)
+    index_updated: bool = True
+
+
+class ParsedFiles(BaseModel):
+    """Successful chunks and diagnostics from parsing a repository file set."""
+
+    chunks: list[ParsedChunk] = Field(default_factory=list)
+    skipped_files: list[IngestionIssue] = Field(default_factory=list)
 
 
 def create_chunk(

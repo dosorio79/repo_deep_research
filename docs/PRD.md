@@ -655,6 +655,20 @@ Judge dimensions:
 
 A query about the repository returns correct files, symbols, and line ranges.
 
+### M1.1 — Ingestion reliability hardening
+
+- validate embeddings before replacing current repository points;
+- retain the last successful index when embedding or indexing fails;
+- continue indexing eligible files when an individual file cannot be decoded or parsed;
+- return structured skipped-file diagnostics from the ingestion command;
+- cover ingestion and CLI success and failure paths with focused tests.
+
+**Exit condition**
+
+An unsuccessful ingestion does not remove previously searchable evidence, and
+an eligible repository with individual unreadable or invalid source files still
+returns indexed evidence plus actionable diagnostics.
+
 ### M2 — Evaluated hybrid retrieval
 
 - sparse vectors;

@@ -19,7 +19,13 @@ content, contextual metadata, and deterministic content/point IDs. Qdrant
 persists that complete payload, allowing the CLI to return evidence rather than
 only text snippets.
 
-`RepositoryDatabase` replaces all points for one repository identity during ingestion.
-This is intentionally simple and makes re-ingestion idempotent; incremental
-commit comparison is deferred. M1 uses only cosine dense retrieval. Sparse
-vectors, fusion, rewriting, and reranking are M2+ work.
+`RepositoryDatabase` stages a replacement by validating embeddings and upserting
+new chunks before deleting stale point IDs. This retains the previous searchable
+index if embedding validation or upsert fails. Dense search is scoped to both
+repository and commit identity, and stale points are removed after a successful
+replacement. Incremental commit comparison is deferred. M1 uses only cosine
+dense retrieval. Sparse vectors, fusion, rewriting, and reranking are M2+ work.
+
+`ingestion.py` reports decoding, filesystem, and syntax failures for individual
+eligible files without discarding successfully parsed chunks. The CLI emits
+those diagnostics alongside the repository identity and indexed-chunk count.

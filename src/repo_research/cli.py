@@ -11,7 +11,7 @@ from qdrant_client import QdrantClient
 from repo_research.config import Settings
 from repo_research.db import RepositoryDatabase, local_embedder
 from repo_research.ingestion import discover_repository, parse_files
-from repo_research.models import SearchQuery
+from repo_research.models import IngestSummary, SearchQuery
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,17 +35,17 @@ def main() -> None:
     database = _create_database(settings)
     if arguments.command == "ingest":
         repository, files = discover_repository(root_path, settings.max_file_size_bytes)
-        chunks = parse_files(files, repository)
-        database.replace(repository.repository_id, chunks)
-        print(
-            json.dumps(
-                {
-                    "repository": repository.model_dump(mode="json"),
-                    "indexed_chunks": len(chunks),
-                },
-                indent=2,
-            )
+        parsed_files = parse_files(files, repository)
+        index_updated = bool(parsed_files.chunks or not parsed_files.skipped_files)
+        if index_updated:
+            database.replace(repository.repository_id, parsed_files.chunks)
+        summary = IngestSummary(
+            repository=repository,
+            indexed_chunks=len(parsed_files.chunks),
+            skipped_files=parsed_files.skipped_files,
+            index_updated=index_updated,
         )
+        print(json.dumps(summary.model_dump(mode="json"), indent=2))
         return
 
     repository, _ = discover_repository(root_path, settings.max_file_size_bytes)
@@ -53,6 +53,7 @@ def main() -> None:
         SearchQuery(
             text=arguments.query,
             repository_id=repository.repository_id,
+            commit_hash=repository.commit_hash,
             limit=arguments.limit,
         )
     )

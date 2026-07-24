@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from repo_research.ingestion import parse_file
+from repo_research.ingestion import parse_file, parse_files
 from repo_research.models import RepositoryIdentity
 
 
@@ -64,3 +64,18 @@ def test_configuration_file_is_preserved_as_one_chunk(tmp_path: Path) -> None:
     assert len(chunks) == 1
     assert chunks[0].language == "toml"
     assert chunks[0].content == "[service]\nport = 8000\n"
+
+
+def test_parse_files_keeps_valid_chunks_when_python_source_is_invalid(
+    tmp_path: Path,
+) -> None:
+    valid_path = tmp_path / "valid.py"
+    invalid_path = tmp_path / "invalid.py"
+    valid_path.write_text("def valid() -> None:\n    return None\n", encoding="utf-8")
+    invalid_path.write_text("def broken(:\n", encoding="utf-8")
+
+    parsed_files = parse_files([valid_path, invalid_path], _repository(tmp_path))
+
+    assert [chunk.symbol for chunk in parsed_files.chunks] == ["valid"]
+    assert parsed_files.skipped_files[0].path == "invalid.py"
+    assert parsed_files.skipped_files[0].error_type == "SyntaxError"

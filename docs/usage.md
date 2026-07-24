@@ -10,10 +10,13 @@ make ingest-self
 # or: uv run repo-research ingest /path/to/python-repository
 ```
 
-The command emits the repository name, root path, branch, commit hash, and
-number of indexed chunks as JSON. Re-running it replaces existing points for
-that repository identity, so changed and removed paths do not persist as
-current search results.
+The command emits the repository name, root path, branch, commit hash, indexed
+chunk count, `index_updated`, and any `skipped_files` diagnostics as JSON.
+Re-running it upserts validated chunks before removing stale points, so an
+embedding validation or Qdrant write failure retains the previously searchable
+index. If every eligible file fails to parse, the command reports diagnostics
+without replacing that index. Changed and removed paths do not persist as
+current search results after a successful replacement.
 
 ## Search repository evidence
 

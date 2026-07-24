@@ -9,7 +9,13 @@ from pathlib import Path
 from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 
-from repo_research.models import ParsedChunk, RepositoryIdentity, create_chunk
+from repo_research.models import (
+    IngestionIssue,
+    ParsedChunk,
+    ParsedFiles,
+    RepositoryIdentity,
+    create_chunk,
+)
 
 SUPPORTED_SUFFIXES = {".json", ".md", ".py", ".toml", ".yaml", ".yml"}
 IGNORED_DIRECTORY_NAMES = {
@@ -50,9 +56,22 @@ def discover_repository(
     return repository, sorted(files)
 
 
-def parse_files(paths: list[Path], repository: RepositoryIdentity) -> list[ParsedChunk]:
-    """Parse supported files into searchable chunks."""
-    return [chunk for path in paths for chunk in parse_file(path, repository)]
+def parse_files(paths: list[Path], repository: RepositoryIdentity) -> ParsedFiles:
+    """Parse files, retaining successful chunks when individual files fail."""
+    chunks: list[ParsedChunk] = []
+    skipped_files: list[IngestionIssue] = []
+    for path in paths:
+        try:
+            chunks.extend(parse_file(path, repository))
+        except (OSError, SyntaxError, UnicodeError) as error:
+            skipped_files.append(
+                IngestionIssue(
+                    path=path.relative_to(repository.root_path).as_posix(),
+                    error_type=type(error).__name__,
+                    message=_error_message(error),
+                )
+            )
+    return ParsedFiles(chunks=chunks, skipped_files=skipped_files)
 
 
 def parse_file(path: Path, repository: RepositoryIdentity) -> list[ParsedChunk]:
@@ -290,3 +309,9 @@ def _is_eligible(
 
 def _source_slice(lines: list[str], start_line: int, end_line: int) -> str:
     return "".join(lines[start_line - 1 : end_line])
+
+
+def _error_message(error: OSError | SyntaxError | UnicodeError) -> str:
+    if isinstance(error, SyntaxError):
+        return error.msg
+    return str(error)

@@ -7,10 +7,11 @@ answers that cite repository paths, symbols, and line ranges.
 
 ## Current status
 
-M1 — Searchable repository is complete. The project now discovers local Python
-repositories, creates evidence-rich Python/Markdown/configuration chunks,
-indexes local ONNX dense vectors in Qdrant, and exposes CLI ingestion/search.
-Sparse or hybrid retrieval, answer generation, agents, API/UI, feedback, and
+M1.1 — Searchable repository is complete and safe to retry. The project
+discovers local Python repositories, creates evidence-rich
+Python/Markdown/configuration chunks, indexes local ONNX dense vectors in
+Qdrant, and exposes CLI ingestion/search with skipped-file diagnostics. Sparse
+or hybrid retrieval, answer generation, agents, API/UI, feedback, and
 monitoring remain deliberately deferred.
 
 ## Requirements
@@ -71,6 +72,8 @@ See [docs/setup.md](docs/setup.md), [docs/usage.md](docs/usage.md), and
 [docs/architecture.md](docs/architecture.md) for the operational details. The
 M1 implementation record is in
 [docs/plans/m1-searchable-repository.md](docs/plans/m1-searchable-repository.md).
+Reliability work completed before M2 is recorded in
+[docs/plans/m1-reliability-hardening.md](docs/plans/m1-reliability-hardening.md).
 
 ## Roadmap
 

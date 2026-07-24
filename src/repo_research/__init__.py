@@ -1,6 +1,19 @@
 """Repo Deep Research package."""
 
 from repo_research.config import Settings
-from repo_research.models import ParsedChunk, RepositoryIdentity, SearchResult
+from repo_research.models import (
+    IngestionIssue,
+    ParsedChunk,
+    ParsedFiles,
+    RepositoryIdentity,
+    SearchResult,
+)
 
-__all__ = ["ParsedChunk", "RepositoryIdentity", "SearchResult", "Settings"]
+__all__ = [
+    "IngestionIssue",
+    "ParsedChunk",
+    "ParsedFiles",
+    "RepositoryIdentity",
+    "SearchResult",
+    "Settings",
+]

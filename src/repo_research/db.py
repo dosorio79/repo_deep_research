@@ -38,41 +38,39 @@ class RepositoryDatabase:
         self._embed = embed
 
     def replace(self, repository_id: str, chunks: list[ParsedChunk]) -> None:
-        """Replace all current points for a repository, keeping ingestion idempotent."""
+        """Safely replace current chunks while retaining the prior index on failure."""
         self._ensure_collection()
-        repository_filter = models.Filter(
-            must=[
-                models.FieldCondition(
-                    key="repository_id",
-                    match=models.MatchValue(value=repository_id),
-                )
-            ]
-        )
-        self._client.delete(
-            collection_name=self._collection_name,
-            points_selector=models.FilterSelector(filter=repository_filter),
-            wait=True,
-        )
-        if not chunks:
-            return
-
-        vectors = self._embed([chunk.content for chunk in chunks])
+        existing_ids = self._existing_chunk_ids(repository_id)
+        vectors = self._embed([chunk.content for chunk in chunks]) if chunks else []
         if len(vectors) != len(chunks):
             raise ValueError(
                 "embedder returned a different number of vectors than chunks"
             )
-        self._client.upsert(
-            collection_name=self._collection_name,
-            points=[
-                models.PointStruct(
-                    id=chunk.chunk_id,
-                    vector=vector,
-                    payload=chunk.model_dump(mode="json"),
-                )
-                for chunk, vector in zip(chunks, vectors, strict=True)
-            ],
-            wait=True,
-        )
+        if any(len(vector) != self._embedding_dimension for vector in vectors):
+            raise ValueError("embedder returned a vector with an unexpected dimension")
+        if chunks:
+            self._client.upsert(
+                collection_name=self._collection_name,
+                points=[
+                    models.PointStruct(
+                        id=chunk.chunk_id,
+                        vector=vector,
+                        payload=chunk.model_dump(mode="json"),
+                    )
+                    for chunk, vector in zip(chunks, vectors, strict=True)
+                ],
+                wait=True,
+            )
+        incoming_ids = {chunk.chunk_id for chunk in chunks}
+        stale_ids = [
+            point_id for point_id in existing_ids if point_id not in incoming_ids
+        ]
+        if stale_ids:
+            self._client.delete(
+                collection_name=self._collection_name,
+                points_selector=models.PointIdsList(points=stale_ids),
+                wait=True,
+            )
 
     def search(self, query: SearchQuery) -> list[SearchResult]:
         """Return typed dense search results scoped to one repository."""
@@ -84,7 +82,11 @@ class RepositoryDatabase:
                     models.FieldCondition(
                         key="repository_id",
                         match=models.MatchValue(value=query.repository_id),
-                    )
+                    ),
+                    models.FieldCondition(
+                        key="commit_hash",
+                        match=models.MatchValue(value=query.commit_hash),
+                    ),
                 ]
             ),
             limit=query.limit,
@@ -96,6 +98,31 @@ class RepositoryDatabase:
             )
             for point in response.points
         ]
+
+    def _existing_chunk_ids(self, repository_id: str) -> list[models.ExtendedPointId]:
+        """Return all current point IDs before a replacement is staged."""
+        point_ids: list[models.ExtendedPointId] = []
+        offset: models.ExtendedPointId | None = None
+        repository_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="repository_id",
+                    match=models.MatchValue(value=repository_id),
+                )
+            ]
+        )
+        while True:
+            points, next_offset = self._client.scroll(
+                collection_name=self._collection_name,
+                scroll_filter=repository_filter,
+                offset=offset,
+                with_payload=False,
+                with_vectors=False,
+            )
+            point_ids.extend(point.id for point in points)
+            if next_offset is None:
+                return point_ids
+            offset = next_offset
 
     def _ensure_collection(self) -> None:
         if not self._client.collection_exists(self._collection_name):
