@@ -45,4 +45,26 @@ evaluation report.
 
 ## Outcome
 
-In progress.
+Completed on 2026-07-24.
+
+- `RepositoryDatabase` now stores named `dense` and `sparse` vectors and offers
+  dense, sparse, and Qdrant RRF-hybrid modes through `SearchQuery`.
+- Development and held-out JSON datasets each contain 15 validated questions;
+  together they cover ten locate, ten flow, and ten change-impact prompts.
+- The CLI produces deterministic JSON reports, and `RDR_RETRIEVAL_MODE=dense`
+  is the configured default after the held-out comparison favored dense across
+  every reported metric.
+- The M2 collection is `repo_chunks_v2`; an M1 collection must be re-ingested
+  because its unnamed-vector schema is incompatible.
+
+## Validation
+
+Completed on commit `5e23291`:
+
+- `make lint` — passed;
+- `make typecheck` — passed (strict mypy, 14 source files);
+- `make test` — passed (20 tests);
+- `docker compose config --quiet` — passed;
+- local Qdrant ingestion — passed (265 points, 530 named vectors);
+- development and held-out retrieval comparisons — completed; dense selected
+  from held-out results recorded in `docs/evaluation.md`.

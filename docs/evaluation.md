@@ -42,3 +42,22 @@ At the requested result limit (five by default), each mode reports:
 Use the held-out report to choose the production retrieval mode. The baseline
 uses Qdrant Reciprocal Rank Fusion without tuned weights; query rewriting and
 reranking are intentionally not part of this comparison.
+
+## Measured baseline
+
+On 2026-07-24, commit `5e23291`, this repository was re-ingested into a local
+`repo_chunks_v2` collection and evaluated at five results per question. The
+generated reports are intentionally not committed; the audited measurements are:
+
+| Dataset | Mode | File Hit Rate | File MRR | File Recall | File Precision | Symbol Hit Rate |
+|---|---:|---:|---:|---:|---:|---:|
+| Development | dense | 0.667 | 0.491 | 0.461 | 0.190 | 0.429 |
+| Development | sparse | 0.267 | 0.139 | 0.222 | 0.066 | 0.071 |
+| Development | hybrid | 0.467 | 0.347 | 0.294 | 0.112 | 0.286 |
+| Held-out | dense | 0.733 | 0.539 | 0.589 | 0.247 | 0.600 |
+| Held-out | sparse | 0.467 | 0.236 | 0.356 | 0.100 | 0.333 |
+| Held-out | hybrid | 0.600 | 0.417 | 0.456 | 0.153 | 0.467 |
+
+Dense retrieval is therefore the production default (`RDR_RETRIEVAL_MODE=dense`)
+for the next milestone. Hybrid remains available for future evaluated changes;
+the measurements do not support making it the default yet.

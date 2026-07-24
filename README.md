@@ -69,6 +69,7 @@ Copy `.env.example` to `.env` for local overrides. All runtime settings use the
 | `RDR_EMBEDDING_DIMENSION` | `384` | Required dense-vector dimension. |
 | `RDR_EMBEDDING_BATCH_SIZE` | `16` | Bounded local ONNX indexing batch size. |
 | `RDR_SPARSE_EMBEDDING_MODEL` | `Qdrant/bm25` | Local FastEmbed-compatible sparse encoder. |
+| `RDR_RETRIEVAL_MODE` | `dense` | Measured production retrieval default. |
 | `RDR_LOG_LEVEL` | `INFO` | Application log level. |
 
 See [docs/setup.md](docs/setup.md), [docs/usage.md](docs/usage.md), and

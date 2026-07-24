@@ -43,7 +43,8 @@ uv run repo-research evaluate-retrieval --dataset eval/held_out.json \
 ```
 
 The output reports file Hit Rate, MRR, Recall, Precision, and symbol Hit Rate
-for each mode. Select the production mode only from the held-out comparison.
+for each mode. The current held-out comparison selects dense as the production
+default; see `docs/evaluation.md` for the recorded measurements.
 
 ## Supported source
 
