@@ -26,10 +26,24 @@ uv run repo-research search "where is repository configuration validated?"
 
 Search emits JSON entries containing a score and a typed chunk. Each chunk
 includes its path, symbol when applicable, line range, content, and structural
-context. Dense search is the only retrieval mode in M1.
+context. Select `--mode dense`, `--mode sparse`, or `--mode hybrid`; hybrid uses
+Qdrant Reciprocal Rank Fusion.
 
 Use `--path /path/to/repository` to search another already-indexed local
 repository and `--limit 10` to change the number of returned results.
+
+## Evaluate retrieval
+
+After ingesting into the M2 `repo_chunks_v2` collection, compare baseline modes:
+
+```bash
+make evaluate-retrieval
+uv run repo-research evaluate-retrieval --dataset eval/held_out.json \
+  --output eval/results/retrieval-held-out.json
+```
+
+The output reports file Hit Rate, MRR, Recall, Precision, and symbol Hit Rate
+for each mode. Select the production mode only from the held-out comparison.
 
 ## Supported source
 

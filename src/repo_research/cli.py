@@ -9,9 +9,10 @@ from pathlib import Path
 from qdrant_client import QdrantClient
 
 from repo_research.config import Settings
-from repo_research.db import RepositoryDatabase, local_embedder
+from repo_research.db import RepositoryDatabase, local_embedder, local_sparse_embedder
+from repo_research.evaluation import evaluate_records, load_records, write_report
 from repo_research.ingestion import discover_repository, parse_files
-from repo_research.models import IngestSummary, SearchQuery
+from repo_research.models import IngestSummary, RetrievalMode, SearchQuery
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -24,6 +25,18 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("query")
     search.add_argument("--path", type=Path, default=None)
     search.add_argument("--limit", type=int, default=5)
+    search.add_argument(
+        "--mode", choices=[mode.value for mode in RetrievalMode], default=None
+    )
+    evaluate = subparsers.add_parser(
+        "evaluate-retrieval", help="evaluate dense, sparse, and hybrid retrieval"
+    )
+    evaluate.add_argument("--path", type=Path, default=None)
+    evaluate.add_argument("--dataset", type=Path, default=Path("eval/development.json"))
+    evaluate.add_argument(
+        "--output", type=Path, default=Path("eval/results/retrieval-development.json")
+    )
+    evaluate.add_argument("--limit", type=int, default=5)
     return parser
 
 
@@ -49,12 +62,32 @@ def main() -> None:
         return
 
     repository, _ = discover_repository(root_path, settings.max_file_size_bytes)
+    if arguments.command == "evaluate-retrieval":
+        evaluation_results = evaluate_records(
+            database=database,
+            repository=repository,
+            records=load_records(arguments.dataset),
+            dataset=arguments.dataset.as_posix(),
+            limit=arguments.limit,
+        )
+        write_report(evaluation_results, arguments.output)
+        print(
+            json.dumps(
+                [result.model_dump(mode="json") for result in evaluation_results],
+                indent=2,
+            )
+        )
+        return
+
     results = database.search(
         SearchQuery(
             text=arguments.query,
             repository_id=repository.repository_id,
             commit_hash=repository.commit_hash,
             limit=arguments.limit,
+            mode=RetrievalMode(arguments.mode)
+            if arguments.mode
+            else settings.retrieval_mode,
         )
     )
     print(json.dumps([result.model_dump(mode="json") for result in results], indent=2))
@@ -65,5 +98,10 @@ def _create_database(settings: Settings) -> RepositoryDatabase:
         client=QdrantClient(url=settings.qdrant_url),
         collection_name=settings.qdrant_collection,
         embedding_dimension=settings.embedding_dimension,
-        embed=local_embedder(settings.embedding_model, settings.embedding_batch_size),
+        dense_embed=local_embedder(
+            settings.embedding_model, settings.embedding_batch_size
+        ),
+        sparse_embed=local_sparse_embedder(
+            settings.sparse_embedding_model, settings.embedding_batch_size
+        ),
     )

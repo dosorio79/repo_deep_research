@@ -1,0 +1,95 @@
+"""Tests for deterministic retrieval-evaluation records and metrics."""
+
+import json
+from pathlib import Path
+
+from repo_research.evaluation import evaluate_records, load_records, write_report
+from repo_research.models import (
+    EvaluationRecord,
+    ParsedChunk,
+    RepositoryIdentity,
+    SearchResult,
+)
+
+
+class FakeDatabase:
+    """Return a fixed result so metrics do not depend on models or Qdrant."""
+
+    def __init__(self, result: SearchResult) -> None:
+        self._result = result
+
+    def search(self, query: object) -> list[SearchResult]:
+        return [self._result]
+
+
+def test_evaluation_calculates_metrics_and_writes_stable_report(tmp_path: Path) -> None:
+    repository = RepositoryIdentity(
+        name="sample",
+        root_path=tmp_path,
+        branch="main",
+        commit_hash="abc123",
+    )
+    chunk = ParsedChunk(
+        chunk_id="chunk",
+        repository_id=repository.repository_id,
+        commit_hash=repository.commit_hash,
+        path="src/example.py",
+        language="python",
+        chunk_type="function",
+        symbol="target",
+        start_line=1,
+        end_line=2,
+        content="def target():\n    return None\n",
+        content_hash="hash",
+    )
+    records_path = tmp_path / "records.json"
+    records_path.write_text(
+        json.dumps(
+            [
+                EvaluationRecord(
+                    id="locate_001",
+                    question="Where is target?",
+                    question_type="locate",
+                    relevant_files=["src/example.py"],
+                    relevant_symbols=["target"],
+                ).model_dump()
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    results = evaluate_records(
+        database=FakeDatabase(SearchResult(chunk=chunk, score=1.0)),
+        repository=repository,
+        records=load_records(records_path),
+        dataset="development",
+        limit=5,
+    )
+    report_path = tmp_path / "report.json"
+    write_report(results, report_path)
+
+    assert len(results) == 3
+    assert all(result.file_hit_rate == 1.0 for result in results)
+    assert all(result.file_mrr == 1.0 for result in results)
+    assert all(result.symbol_hit_rate == 1.0 for result in results)
+    assert (
+        json.loads(report_path.read_text(encoding="utf-8"))[0]["dataset"]
+        == "development"
+    )
+
+
+def test_versioned_ground_truth_sets_are_complete_and_disjoint() -> None:
+    root = Path(__file__).parents[1]
+    development = load_records(root / "eval/development.json")
+    held_out = load_records(root / "eval/held_out.json")
+
+    assert len(development) == 15
+    assert len(held_out) == 15
+    assert {record.id for record in development}.isdisjoint(
+        record.id for record in held_out
+    )
+    assert {record.question_type for record in development} == {
+        "locate",
+        "flow",
+        "change",
+    }

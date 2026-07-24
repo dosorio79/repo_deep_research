@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
@@ -49,20 +50,54 @@ class ParsedChunk(BaseModel):
         return self
 
 
+class RetrievalMode(StrEnum):
+    """The supported repository retrieval strategies."""
+
+    DENSE = "dense"
+    SPARSE = "sparse"
+    HYBRID = "hybrid"
+
+
 class SearchQuery(BaseModel):
-    """A dense-search request scoped to one repository."""
+    """A repository search request scoped to one source revision."""
 
     text: str = Field(min_length=1)
     repository_id: str = Field(min_length=1)
     commit_hash: str = Field(min_length=1)
     limit: int = Field(default=5, ge=1, le=20)
+    mode: RetrievalMode = RetrievalMode.DENSE
 
 
 class SearchResult(BaseModel):
-    """A normalized dense-search result returned to callers."""
+    """A normalized retrieval result returned by every search mode."""
 
     chunk: ParsedChunk
     score: float
+
+
+class EvaluationRecord(BaseModel):
+    """One manually verified retrieval question and its expected evidence."""
+
+    id: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+    question_type: str = Field(min_length=1)
+    relevant_files: list[str] = Field(min_length=1)
+    relevant_symbols: list[str] = Field(default_factory=list)
+    notes: str = ""
+
+
+class EvaluationResult(BaseModel):
+    """Aggregate retrieval metrics for a dataset and one retrieval mode."""
+
+    dataset: str = Field(min_length=1)
+    mode: RetrievalMode
+    limit: int = Field(ge=1)
+    record_count: int = Field(ge=0)
+    file_hit_rate: float = Field(ge=0, le=1)
+    file_mrr: float = Field(ge=0, le=1)
+    file_recall: float = Field(ge=0, le=1)
+    file_precision: float = Field(ge=0, le=1)
+    symbol_hit_rate: float = Field(ge=0, le=1)
 
 
 class IngestionIssue(BaseModel):

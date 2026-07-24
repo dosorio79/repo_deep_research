@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from repo_research.config import Settings
+from repo_research.models import RetrievalMode
 
 
 def test_settings_use_local_defaults() -> None:
@@ -16,6 +17,9 @@ def test_settings_use_local_defaults() -> None:
     assert settings.repository_root == Path(".")
     assert settings.max_file_size_bytes == 1_048_576
     assert settings.embedding_batch_size == 16
+    assert settings.qdrant_collection == "repo_chunks_v2"
+    assert settings.sparse_embedding_model == "Qdrant/bm25"
+    assert settings.retrieval_mode is RetrievalMode.DENSE
 
 
 def test_settings_read_prefixed_environment_values(

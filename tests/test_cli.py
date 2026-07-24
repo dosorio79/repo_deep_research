@@ -12,11 +12,24 @@ from repo_research.models import ParsedChunk
 
 
 def test_cli_parses_search_request() -> None:
-    arguments = build_parser().parse_args(["search", "where is cost calculated?"])
+    arguments = build_parser().parse_args(
+        ["search", "where is cost calculated?", "--mode", "hybrid"]
+    )
 
     assert arguments.command == "search"
     assert arguments.query == "where is cost calculated?"
     assert arguments.limit == 5
+    assert arguments.mode == "hybrid"
+
+
+def test_cli_parses_retrieval_evaluation_request() -> None:
+    arguments = build_parser().parse_args(
+        ["evaluate-retrieval", "--dataset", "eval/held_out.json", "--limit", "10"]
+    )
+
+    assert arguments.command == "evaluate-retrieval"
+    assert arguments.dataset == Path("eval/held_out.json")
+    assert arguments.limit == 10
 
 
 class FakeDatabase:

@@ -5,6 +5,8 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from repo_research.models import RetrievalMode
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and an optional .env."""
@@ -18,12 +20,14 @@ class Settings(BaseSettings):
 
     environment: str = "local"
     qdrant_url: str = "http://localhost:6333"
-    qdrant_collection: str = "repo_chunks"
+    qdrant_collection: str = "repo_chunks_v2"
     repository_root: Path = Path(".")
     max_file_size_bytes: int = Field(default=1_048_576, gt=0)
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dimension: int = Field(default=384, gt=0)
     embedding_batch_size: int = Field(default=16, gt=0)
+    sparse_embedding_model: str = "Qdrant/bm25"
+    retrieval_mode: RetrievalMode = RetrievalMode.DENSE
     log_level: str = "INFO"
 
     @field_validator("qdrant_url")
