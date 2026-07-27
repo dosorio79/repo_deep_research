@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from repo_research.models import RepositoryIdentity, create_chunk
+from repo_research.models import (
+    AnswerEvaluationResult,
+    RepositoryIdentity,
+    create_chunk,
+)
 
 
 def test_create_chunk_is_deterministic_for_identical_source() -> None:
@@ -58,4 +62,18 @@ def test_create_chunk_rejects_reversed_line_ranges() -> None:
             start_line=2,
             end_line=1,
             content="x = 1\n",
+        )
+
+
+def test_answer_evaluation_scores_are_bounded() -> None:
+    with pytest.raises(ValidationError, match="citation_accuracy"):
+        AnswerEvaluationResult(
+            record_id="locate_001",
+            question="Where is configuration validated?",
+            correctness=4,
+            groundedness=4,
+            citation_accuracy=6,
+            completeness=4,
+            usefulness=4,
+            unsupported_claim_count=0,
         )

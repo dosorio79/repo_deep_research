@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := test
 
-.PHONY: install format lint typecheck test docker-up docker-down ingest-self evaluate-retrieval
+.PHONY: install format lint typecheck test docker-up docker-down ingest-self evaluate-retrieval api
 
 install:
 	uv sync --extra dev
@@ -30,3 +30,6 @@ ingest-self:
 
 evaluate-retrieval:
 	uv run repo-research evaluate-retrieval
+
+api:
+	uv run uvicorn repo_research.api:app --reload

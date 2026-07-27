@@ -20,6 +20,10 @@ def test_settings_use_local_defaults() -> None:
     assert settings.qdrant_collection == "repo_chunks_v2"
     assert settings.sparse_embedding_model == "Qdrant/bm25"
     assert settings.retrieval_mode is RetrievalMode.DENSE
+    assert settings.openai_model == "gpt-5-mini"
+    assert settings.openai_judge_model == "gpt-5.1"
+    assert settings.research_limit == 5
+    assert settings.answer_eval_limit == 5
 
 
 def test_settings_read_prefixed_environment_values(

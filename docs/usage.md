@@ -46,6 +46,43 @@ The output reports file Hit Rate, MRR, Recall, Precision, and symbol Hit Rate
 for each mode. The current held-out comparison selects dense as the production
 default; see `docs/evaluation.md` for the recorded measurements.
 
+## Answer with grounded direct RAG
+
+After Qdrant is running, the repository is ingested, and `OPENAI_API_KEY` is set,
+ask for a grounded answer:
+
+```bash
+uv run repo-research research "where is repository configuration validated?" \
+  --mode locate --retrieval-mode dense
+```
+
+The command emits a `ResearchAnswer` JSON document with a summary,
+implementation flow, files and symbols, risks, unresolved questions, and
+canonical evidence items. The model cites opaque evidence IDs only; application
+code maps those IDs back to stored paths and line ranges. If retrieval or
+citation validation is insufficient, the command returns an explicit
+`insufficient_evidence` answer instead of an unsupported claim.
+
+Run the minimal backend for future UI integration:
+
+```bash
+make api
+curl -s http://127.0.0.1:8000/health
+```
+
+## Evaluate answers
+
+Answer evaluation is live and opt-in because it calls OpenAI for both answer
+generation and judging:
+
+```bash
+uv run repo-research evaluate-answers --dataset eval/development.json \
+  --output eval/results/answer-development.json
+```
+
+Generated answer reports under `eval/results/` are ignored by git. Copy audited
+summary numbers into documentation only after a deliberate held-out run.
+
 ## Supported source
 
 M1 indexes `.py`, `.md`, `.yaml`, `.yml`, `.toml`, and `.json` files. It skips

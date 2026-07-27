@@ -1,4 +1,4 @@
-# M1 architecture
+# Architecture
 
 ```text
 Local repository path
@@ -10,7 +10,10 @@ ingestion.py -- filters, Git identity, and parsing
 db.py -- FastEmbed (local ONNX), current chunk payloads, and vector search
         |
         v
-repo-research CLI -- JSON evidence
+research.py -- direct RAG, citation validation, and answer evaluation
+        |
+        v
+repo-research CLI / FastAPI -- JSON evidence and grounded answers
 ```
 
 `ParsedChunk` is the boundary between parsing and storage. It carries the
@@ -34,3 +37,10 @@ those diagnostics alongside the repository identity and indexed-chunk count.
 `evaluation.py` loads versioned JSON ground truth, runs every baseline retrieval
 mode, and writes deterministic file- and symbol-level metric reports. It uses a
 small search protocol, so metric tests require neither a model nor Qdrant.
+
+`research.py` adds the M3 direct-RAG layer. It assigns opaque evidence IDs to
+retrieved chunks, asks the answer model to cite only those IDs, then maps valid
+IDs back to canonical paths, symbols, and line ranges from storage. Unknown
+citations or empty retrieval results return explicit insufficient-evidence
+answers. The minimal FastAPI app keeps routes thin and delegates orchestration
+to the same service used by the CLI.

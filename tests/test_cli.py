@@ -8,7 +8,14 @@ import pytest
 
 from repo_research import cli
 from repo_research.cli import build_parser
-from repo_research.models import ParsedChunk
+from repo_research.models import (
+    ParsedChunk,
+    ResearchAnswer,
+    ResearchMode,
+    ResearchRequest,
+    SearchResult,
+)
+from repo_research.research import ResearchAnswerDraft
 
 
 def test_cli_parses_search_request() -> None:
@@ -32,14 +39,46 @@ def test_cli_parses_retrieval_evaluation_request() -> None:
     assert arguments.limit == 10
 
 
+def test_cli_parses_research_request() -> None:
+    arguments = build_parser().parse_args(
+        [
+            "research",
+            "where is configuration validated?",
+            "--mode",
+            "locate",
+            "--retrieval-mode",
+            "dense",
+        ]
+    )
+
+    assert arguments.command == "research"
+    assert arguments.question == "where is configuration validated?"
+    assert arguments.mode == "locate"
+    assert arguments.retrieval_mode == "dense"
+
+
+def test_cli_parses_answer_evaluation_request() -> None:
+    arguments = build_parser().parse_args(
+        ["evaluate-answers", "--dataset", "eval/held_out.json", "--limit", "3"]
+    )
+
+    assert arguments.command == "evaluate-answers"
+    assert arguments.dataset == Path("eval/held_out.json")
+    assert arguments.limit == 3
+
+
 class FakeDatabase:
     """Capture CLI indexing calls without connecting to Qdrant."""
 
     def __init__(self) -> None:
         self.replacements: list[tuple[str, int]] = []
+        self.results: list[SearchResult] = []
 
     def replace(self, repository_id: str, chunks: list[ParsedChunk]) -> None:
         self.replacements.append((repository_id, len(chunks)))
+
+    def search(self, query: object) -> list[SearchResult]:
+        return self.results
 
 
 class FakeSettings:
@@ -47,6 +86,44 @@ class FakeSettings:
 
     repository_root = Path(".")
     max_file_size_bytes = 1_048_576
+    retrieval_mode = "dense"
+    research_limit = 5
+    answer_eval_limit = 5
+    openai_model = "gpt-5-mini"
+    openai_judge_model = "gpt-5.1"
+
+
+class FakeOpenAIModel:
+    """Fake answer model used by CLI tests."""
+
+    def generate_answer(
+        self,
+        *,
+        request: ResearchRequest,
+        evidence_context: str,
+    ) -> ResearchAnswerDraft:
+        raise AssertionError("no evidence should skip model generation")
+
+
+def test_cli_research_emits_grounded_answer_without_live_model(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = FakeDatabase()
+    monkeypatch.setattr(cli, "Settings", FakeSettings)
+    monkeypatch.setattr(cli, "_create_database", lambda _: database)
+    monkeypatch.setattr(cli, "_create_openai_model", lambda _: FakeOpenAIModel())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["repo-research", "research", "where is missing logic?", "--path", "."],
+    )
+
+    cli.main()
+
+    result = ResearchAnswer.model_validate_json(capsys.readouterr().out)
+    assert result.mode is ResearchMode.AUTO
+    assert result.insufficient_evidence is True
 
 
 def test_cli_ingest_emits_skipped_file_diagnostics(

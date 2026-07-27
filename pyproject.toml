@@ -5,10 +5,13 @@ description = "Evidence-grounded research for Python repositories"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi==0.140.7",
     "fastembed==0.7.3",
+    "openai==2.48.0",
     "pathspec==0.12.1",
     "pydantic-settings==2.10.1",
     "qdrant-client==1.15.1",
+    "uvicorn==0.51.0",
 ]
 
 [project.scripts]
@@ -23,6 +26,7 @@ packages = ["src/repo_research"]
 
 [dependency-groups]
 dev = [
+    "httpx==0.28.1",
     "mypy==1.17.1",
     "pytest==8.4.1",
     "ruff==0.12.10",

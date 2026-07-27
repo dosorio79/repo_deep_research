@@ -1,4 +1,4 @@
-"""Command line interface for M1 local repository indexing and search."""
+"""Command line interface for repository ingestion, retrieval, and research."""
 
 from __future__ import annotations
 
@@ -12,7 +12,19 @@ from repo_research.config import Settings
 from repo_research.db import RepositoryDatabase, local_embedder, local_sparse_embedder
 from repo_research.evaluation import evaluate_records, load_records, write_report
 from repo_research.ingestion import discover_repository, parse_files
-from repo_research.models import IngestSummary, RetrievalMode, SearchQuery
+from repo_research.models import (
+    IngestSummary,
+    ResearchMode,
+    ResearchRequest,
+    RetrievalMode,
+    SearchQuery,
+)
+from repo_research.research import (
+    OpenAIResponsesModel,
+    ResearchService,
+    evaluate_answers_from_dataset,
+    write_answer_evaluation_report,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +49,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--output", type=Path, default=Path("eval/results/retrieval-development.json")
     )
     evaluate.add_argument("--limit", type=int, default=5)
+    research = subparsers.add_parser("research", help="answer with grounded direct RAG")
+    research.add_argument("question")
+    research.add_argument("--path", type=Path, default=None)
+    research.add_argument(
+        "--mode", choices=[mode.value for mode in ResearchMode], default="auto"
+    )
+    research.add_argument(
+        "--retrieval-mode",
+        choices=[mode.value for mode in RetrievalMode],
+        default=None,
+    )
+    research.add_argument("--limit", type=int, default=None)
+    answer_eval = subparsers.add_parser(
+        "evaluate-answers", help="evaluate grounded answers with an LLM judge"
+    )
+    answer_eval.add_argument("--path", type=Path, default=None)
+    answer_eval.add_argument(
+        "--dataset", type=Path, default=Path("eval/development.json")
+    )
+    answer_eval.add_argument(
+        "--output", type=Path, default=Path("eval/results/answer-development.json")
+    )
+    answer_eval.add_argument(
+        "--retrieval-mode",
+        choices=[mode.value for mode in RetrievalMode],
+        default=None,
+    )
+    answer_eval.add_argument("--limit", type=int, default=None)
     return parser
 
 
@@ -79,6 +119,48 @@ def main() -> None:
         )
         return
 
+    if arguments.command == "research":
+        service = ResearchService(
+            database=database,
+            generator=_create_openai_model(settings),
+        )
+        answer = service.research(
+            repository=repository,
+            request=ResearchRequest(
+                question=arguments.question,
+                repository_path=root_path,
+                mode=ResearchMode(arguments.mode),
+                retrieval_mode=RetrievalMode(arguments.retrieval_mode)
+                if arguments.retrieval_mode
+                else settings.retrieval_mode,
+                limit=arguments.limit or settings.research_limit,
+            ),
+        )
+        print(json.dumps(answer.model_dump(mode="json"), indent=2))
+        return
+
+    if arguments.command == "evaluate-answers":
+        model = _create_openai_model(settings)
+        service = ResearchService(database=database, generator=model)
+        answer_results = evaluate_answers_from_dataset(
+            service=service,
+            judge=model,
+            repository=repository,
+            dataset=arguments.dataset,
+            retrieval_mode=RetrievalMode(arguments.retrieval_mode)
+            if arguments.retrieval_mode
+            else settings.retrieval_mode,
+            limit=arguments.limit or settings.answer_eval_limit,
+        )
+        write_answer_evaluation_report(answer_results, arguments.output)
+        print(
+            json.dumps(
+                [result.model_dump(mode="json") for result in answer_results],
+                indent=2,
+            )
+        )
+        return
+
     results = database.search(
         SearchQuery(
             text=arguments.query,
@@ -104,4 +186,11 @@ def _create_database(settings: Settings) -> RepositoryDatabase:
         sparse_embed=local_sparse_embedder(
             settings.sparse_embedding_model, settings.embedding_batch_size
         ),
+    )
+
+
+def _create_openai_model(settings: Settings) -> OpenAIResponsesModel:
+    return OpenAIResponsesModel(
+        answer_model=settings.openai_model,
+        judge_model=settings.openai_judge_model,
     )

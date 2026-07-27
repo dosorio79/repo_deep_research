@@ -58,6 +58,15 @@ class RetrievalMode(StrEnum):
     HYBRID = "hybrid"
 
 
+class ResearchMode(StrEnum):
+    """The supported answer intents for direct repository research."""
+
+    LOCATE = "locate"
+    FLOW = "flow"
+    CHANGE = "change"
+    AUTO = "auto"
+
+
 class SearchQuery(BaseModel):
     """A repository search request scoped to one source revision."""
 
@@ -73,6 +82,54 @@ class SearchResult(BaseModel):
 
     chunk: ParsedChunk
     score: float
+
+
+class ResearchRequest(BaseModel):
+    """A direct-RAG research request scoped by CLI or API orchestration."""
+
+    question: str = Field(min_length=1)
+    repository_path: Path | None = None
+    mode: ResearchMode = ResearchMode.AUTO
+    retrieval_mode: RetrievalMode = RetrievalMode.DENSE
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class EvidenceItem(BaseModel):
+    """A canonical citation derived from a retrieved repository chunk."""
+
+    evidence_id: str = Field(min_length=1)
+    path: str = Field(min_length=1)
+    start_line: int = Field(ge=1)
+    end_line: int = Field(ge=1)
+    symbol: str | None = None
+    score: float
+    reason: str = Field(min_length=1)
+
+
+class ChangeTarget(BaseModel):
+    """A file or symbol that may need changes, grounded by evidence."""
+
+    path: str = Field(min_length=1)
+    symbol: str | None = None
+    reason: str = Field(min_length=1)
+    evidence_ids: list[str] = Field(min_length=1)
+
+
+class ResearchAnswer(BaseModel):
+    """A grounded direct-RAG answer with validated repository citations."""
+
+    question: str = Field(min_length=1)
+    mode: ResearchMode
+    summary: str = Field(min_length=1)
+    implementation_flow: list[str] = Field(default_factory=list)
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+    relevant_files: list[str] = Field(default_factory=list)
+    relevant_symbols: list[str] = Field(default_factory=list)
+    change_targets: list[ChangeTarget] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0, le=1)
+    unresolved_questions: list[str] = Field(default_factory=list)
+    insufficient_evidence: bool = False
 
 
 class EvaluationRecord(BaseModel):
@@ -98,6 +155,20 @@ class EvaluationResult(BaseModel):
     file_recall: float = Field(ge=0, le=1)
     file_precision: float = Field(ge=0, le=1)
     symbol_hit_rate: float = Field(ge=0, le=1)
+
+
+class AnswerEvaluationResult(BaseModel):
+    """LLM-judge scores for one grounded direct-RAG answer."""
+
+    record_id: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+    correctness: float = Field(ge=0, le=5)
+    groundedness: float = Field(ge=0, le=5)
+    citation_accuracy: float = Field(ge=0, le=5)
+    completeness: float = Field(ge=0, le=5)
+    usefulness: float = Field(ge=0, le=5)
+    unsupported_claim_count: int = Field(ge=0)
+    notes: str = ""
 
 
 class IngestionIssue(BaseModel):

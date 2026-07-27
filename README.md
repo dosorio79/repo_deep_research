@@ -7,12 +7,12 @@ answers that cite repository paths, symbols, and line ranges.
 
 ## Current status
 
-M2 — Evaluated hybrid retrieval is implemented. The project supports dense,
-sparse, and Qdrant RRF-hybrid retrieval with typed evidence results and a
-versioned development/held-out evaluation dataset. Run the documented
-evaluation command after ingestion to select the production mode from measured
-results. Answer generation, agents, API/UI, feedback, and monitoring remain
-deliberately deferred.
+M3 — Grounded direct RAG backend is implemented. The project supports dense,
+sparse, and Qdrant RRF-hybrid retrieval, then uses a direct OpenAI Responses API
+RAG baseline to produce structured answers with application-validated
+citations. A minimal FastAPI backend exposes `/health` and `/research`.
+PydanticAI agent loops, feedback, monitoring, and the React/Lovable frontend
+remain deliberately deferred.
 
 ## Requirements
 
@@ -29,6 +29,7 @@ make test
 make docker-up
 make ingest-self
 uv run repo-research search "where is configuration validated?" --mode hybrid
+uv run repo-research research "where is configuration validated?" --mode locate
 make evaluate-retrieval
 ```
 
@@ -50,8 +51,11 @@ Stop the local service with `make docker-down`.
 | `make docker-down` | Stop the local Qdrant service. |
 | `make ingest-self` | Parse and densely index this repository. |
 | `make evaluate-retrieval` | Evaluate dense, sparse, and hybrid retrieval on the development records. |
+| `make api` | Run the minimal FastAPI backend on localhost. |
 | `uv run repo-research ingest PATH` | Parse and index a local repository with dense and sparse vectors. |
 | `uv run repo-research search QUERY --mode MODE` | Return `dense`, `sparse`, or `hybrid` evidence. |
+| `uv run repo-research research QUERY` | Return a grounded direct-RAG answer. |
+| `uv run repo-research evaluate-answers` | Run opt-in live answer judging with OpenAI. |
 
 ## Configuration
 
@@ -70,6 +74,10 @@ Copy `.env.example` to `.env` for local overrides. All runtime settings use the
 | `RDR_EMBEDDING_BATCH_SIZE` | `16` | Bounded local ONNX indexing batch size. |
 | `RDR_SPARSE_EMBEDDING_MODEL` | `Qdrant/bm25` | Local FastEmbed-compatible sparse encoder. |
 | `RDR_RETRIEVAL_MODE` | `dense` | Measured production retrieval default. |
+| `RDR_OPENAI_MODEL` | `gpt-5-mini` | Default direct-RAG answer model. |
+| `RDR_OPENAI_JUDGE_MODEL` | `gpt-5.1` | Default answer-evaluation judge model. |
+| `RDR_RESEARCH_LIMIT` | `5` | Default retrieved evidence limit for research answers. |
+| `RDR_ANSWER_EVAL_LIMIT` | `5` | Default retrieved evidence limit during answer evaluation. |
 | `RDR_LOG_LEVEL` | `INFO` | Application log level. |
 
 See [docs/setup.md](docs/setup.md), [docs/usage.md](docs/usage.md), and
@@ -80,7 +88,8 @@ Reliability work completed before M2 is recorded in
 [docs/plans/m1-reliability-hardening.md](docs/plans/m1-reliability-hardening.md).
 The M2 implementation and evaluation procedure are in
 [docs/plans/m2-evaluated-hybrid-retrieval.md](docs/plans/m2-evaluated-hybrid-retrieval.md)
-and [docs/evaluation.md](docs/evaluation.md).
+and [docs/evaluation.md](docs/evaluation.md). The M3 implementation record is
+in [docs/plans/m3-grounded-rag.md](docs/plans/m3-grounded-rag.md).
 
 ## M2 migration
 
@@ -90,6 +99,6 @@ ingestion before searching or evaluating M2 modes.
 
 ## Roadmap
 
-M3 adds grounded answers. Later milestones add bounded agentic research and
-the product interface/operations stack.
+M4 adds bounded agentic research. Later milestones add feedback, monitoring,
+and the product interface/operations stack.
 The complete scope is in [docs/PRD.md](docs/PRD.md).

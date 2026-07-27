@@ -41,3 +41,23 @@ Runtime locally. The model downloads once into FastEmbed's local cache on first
 ingestion; subsequent runs use that cache. No embedding API key or paid model
 call is required. The default batch size is deliberately bounded to 16 for
 predictable memory use during local repository indexing.
+
+## OpenAI-backed research
+
+M3 direct RAG uses the OpenAI Responses API only when running `research`,
+`evaluate-answers`, or the `/research` API endpoint. Set `OPENAI_API_KEY` in the
+environment or in `.env` before live answer generation:
+
+```bash
+export OPENAI_API_KEY="..."
+```
+
+The default answer model is `RDR_OPENAI_MODEL=gpt-5-mini`; the default judge
+model for opt-in answer evaluation is `RDR_OPENAI_JUDGE_MODEL=gpt-5.1`.
+Default unit tests use fake model adapters and do not require paid model calls.
+
+Run the minimal API with:
+
+```bash
+make api
+```

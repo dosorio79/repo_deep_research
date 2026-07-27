@@ -1,6 +1,6 @@
-# Retrieval evaluation
+# Evaluation
 
-## Purpose
+## Retrieval purpose
 
 M2 compares dense, sparse, and Qdrant RRF-hybrid retrieval using repository
 evidence that is manually verified and versioned with the project.
@@ -61,3 +61,23 @@ generated reports are intentionally not committed; the audited measurements are:
 Dense retrieval is therefore the production default (`RDR_RETRIEVAL_MODE=dense`)
 for the next milestone. Hybrid remains available for future evaluated changes;
 the measurements do not support making it the default yet.
+
+## Answer evaluation
+
+M3 adds an opt-in live answer evaluation command for the direct-RAG baseline:
+
+```bash
+uv run repo-research evaluate-answers --dataset eval/development.json \
+  --output eval/results/answer-development.json
+uv run repo-research evaluate-answers --dataset eval/held_out.json \
+  --output eval/results/answer-held-out.json
+```
+
+The command reuses the versioned retrieval records, generates a grounded answer
+for each question, then asks the configured judge model to score correctness,
+groundedness, citation accuracy, completeness, usefulness, and unsupported-claim
+count. It requires `OPENAI_API_KEY`; default unit tests use fake model adapters
+and do not call OpenAI.
+
+Generated answer reports remain under ignored `eval/results/`. Commit only
+audited summary measurements, not transient local report files.

@@ -165,6 +165,10 @@ class RepositoryDatabase:
             for point in response.points
         ]
 
+    def health_check(self) -> bool:
+        """Return whether Qdrant responds to a lightweight collection request."""
+        return bool(self._client.get_collections())
+
     def _existing_chunk_ids(self, repository_id: str) -> list[models.ExtendedPointId]:
         """Return all current point IDs before a replacement is staged."""
         point_ids: list[models.ExtendedPointId] = []

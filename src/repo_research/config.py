@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     embedding_batch_size: int = Field(default=16, gt=0)
     sparse_embedding_model: str = "Qdrant/bm25"
     retrieval_mode: RetrievalMode = RetrievalMode.DENSE
+    openai_model: str = "gpt-5-mini"
+    openai_judge_model: str = "gpt-5.1"
+    research_limit: int = Field(default=5, ge=1, le=20)
+    answer_eval_limit: int = Field(default=5, ge=1, le=20)
     log_level: str = "INFO"
 
     @field_validator("qdrant_url")
