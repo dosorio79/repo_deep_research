@@ -45,9 +45,9 @@ predictable memory use during local repository indexing.
 
 ## OpenAI-backed research
 
-M3 direct RAG uses the OpenAI Responses API only when running `research`,
-`evaluate-answers`, or the `/research` API endpoint. Set `OPENAI_API_KEY` in the
-environment or in `.env` before live answer generation:
+M3 direct RAG uses the OpenAI Responses API only when running `rag`,
+`api-rag`, `evaluate-answers`, or the `/research` API endpoint. Set
+`OPENAI_API_KEY` in the environment or in `.env` before live answer generation:
 
 ```bash
 export OPENAI_API_KEY="..."

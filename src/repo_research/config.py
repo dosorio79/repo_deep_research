@@ -1,11 +1,33 @@
 """Validated runtime configuration for Repo Deep Research."""
 
+import os
 from pathlib import Path
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from repo_research.models import RetrievalMode
+
+
+def load_dotenv_environment(path: Path = Path(".env")) -> None:
+    """Load simple KEY=VALUE entries from .env into os.environ when missing."""
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = _strip_env_quotes(value.strip())
+
+
+def _strip_env_quotes(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
 
 
 class Settings(BaseSettings):

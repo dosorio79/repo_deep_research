@@ -9,6 +9,7 @@ from typing import Any, Protocol, cast
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from repo_research.config import load_dotenv_environment
 from repo_research.evaluation import load_records
 from repo_research.models import (
     AnswerEvaluationResult,
@@ -107,7 +108,7 @@ class ResearchService:
                 text=request.question,
                 repository_id=repository.repository_id,
                 commit_hash=repository.commit_hash,
-                limit=request.limit,
+                limit=_research_candidate_limit(request.limit),
                 mode=request.retrieval_mode,
             )
         )
@@ -116,6 +117,7 @@ class ResearchService:
                 request=request,
                 reason="No repository evidence was retrieved for the question.",
             )
+        results = _select_research_results(results, request.limit)
 
         evidence_by_id = _evidence_by_id(results)
         evidence_context = _format_evidence_context(evidence_by_id, results)
@@ -143,6 +145,7 @@ class OpenAIResponsesModel:
     def __init__(self, *, answer_model: str, judge_model: str | None = None) -> None:
         self._answer_model = answer_model
         self._judge_model = judge_model or answer_model
+        load_dotenv_environment()
         self._client = OpenAI()
 
     def generate_answer(
@@ -347,6 +350,36 @@ def _evidence_by_id(results: list[SearchResult]) -> dict[str, EvidenceItem]:
             reason="Retrieved repository evidence.",
         )
     return evidence
+
+
+def _research_candidate_limit(answer_limit: int) -> int:
+    """Retrieve extra candidates so RAG can prefer implementation evidence."""
+    return min(20, max(answer_limit * 4, answer_limit))
+
+
+def _select_research_results(
+    results: list[SearchResult], answer_limit: int
+) -> list[SearchResult]:
+    """Prefer source chunks for answer context without changing raw search scores."""
+    ranked = sorted(
+        enumerate(results),
+        key=lambda item: (_research_context_score(item[1]), -item[0]),
+        reverse=True,
+    )
+    return [result for _, result in ranked[:answer_limit]]
+
+
+def _research_context_score(result: SearchResult) -> float:
+    path = result.chunk.path
+    if path.startswith("src/"):
+        return result.score + 0.08
+    if path.startswith("tests/"):
+        return result.score - 0.06
+    if path.startswith("docs/"):
+        return result.score - 0.04
+    if path in {"README.md", "AGENTS.md"}:
+        return result.score - 0.03
+    return result.score
 
 
 def _format_evidence_context(

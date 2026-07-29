@@ -1,11 +1,12 @@
 """Tests for the runtime configuration boundary."""
 
+import os
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from repo_research.config import Settings
+from repo_research.config import Settings, load_dotenv_environment
 from repo_research.models import RetrievalMode
 
 
@@ -46,3 +47,21 @@ def test_settings_reject_invalid_qdrant_url() -> None:
 def test_settings_reject_non_positive_file_size() -> None:
     with pytest.raises(ValidationError, match="max_file_size_bytes"):
         Settings(max_file_size_bytes=0)
+
+
+def test_load_dotenv_environment_loads_unprefixed_openai_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        'OPENAI_API_KEY="test-key"\nRDR_QDRANT_URL=http://example.test\n',
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("RDR_QDRANT_URL", "http://already-set.test")
+
+    load_dotenv_environment(env_file)
+
+    assert os.environ["OPENAI_API_KEY"] == "test-key"
+    assert os.environ["RDR_QDRANT_URL"] == "http://already-set.test"

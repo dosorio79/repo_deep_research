@@ -26,8 +26,10 @@ class FakeDatabase:
 
     def __init__(self, results: list[SearchResult]) -> None:
         self._results = results
+        self.queries: list[object] = []
 
     def search(self, query: object) -> list[SearchResult]:
+        self.queries.append(query)
         return self._results
 
 
@@ -143,6 +145,64 @@ def test_research_returns_insufficient_evidence_without_results(tmp_path: Path) 
     assert answer.evidence == []
 
 
+def test_research_prefers_source_context_over_tests_and_docs(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    database = FakeDatabase(
+        [
+            SearchResult(
+                chunk=_chunk(
+                    repository,
+                    path="README.md",
+                    symbol="Quick start",
+                ),
+                score=0.79,
+            ),
+            SearchResult(
+                chunk=_chunk(
+                    repository,
+                    path="tests/test_config.py",
+                    symbol="test_settings_reject_invalid_qdrant_url",
+                ),
+                score=0.74,
+            ),
+            SearchResult(
+                chunk=_chunk(
+                    repository,
+                    path="src/repo_research/config.py",
+                    symbol="Settings",
+                ),
+                score=0.72,
+            ),
+        ]
+    )
+    service = ResearchService(
+        database=database,
+        generator=FakeGenerator(
+            ResearchAnswerDraft(
+                summary="Configuration is validated in Settings.",
+                evidence=[
+                    EvidenceReference(
+                        evidence_id="E1", reason="Defines validated settings."
+                    )
+                ],
+                confidence=0.8,
+            )
+        ),
+    )
+
+    answer = service.research(
+        repository=repository,
+        request=ResearchRequest(
+            question="Where is configuration validated?",
+            mode=ResearchMode.LOCATE,
+            limit=1,
+        ),
+    )
+
+    assert answer.evidence[0].path == "src/repo_research/config.py"
+    assert answer.relevant_symbols == ["Settings"]
+
+
 def test_answer_evaluation_writes_stable_report(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     service = ResearchService(
@@ -193,15 +253,20 @@ def _repository(root: Path) -> RepositoryIdentity:
     )
 
 
-def _chunk(repository: RepositoryIdentity) -> ParsedChunk:
+def _chunk(
+    repository: RepositoryIdentity,
+    *,
+    path: str = "src/repo_research/config.py",
+    symbol: str | None = "Settings",
+) -> ParsedChunk:
     return ParsedChunk(
         chunk_id="chunk-1",
         repository_id=repository.repository_id,
         commit_hash=repository.commit_hash,
-        path="src/repo_research/config.py",
+        path=path,
         language="python",
         chunk_type="class",
-        symbol="Settings",
+        symbol=symbol,
         start_line=1,
         end_line=5,
         content="class Settings(BaseSettings):\n    pass\n",
