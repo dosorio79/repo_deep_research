@@ -1,9 +1,9 @@
 # Repo Deep Research
 
-Repo Deep Research will be an evidence-grounded research tool for Python
-repositories. It is the LLM Zoomcamp capstone: users will be able to locate
-implementation logic, understand module flow, and assess change impact using
-answers that cite repository paths, symbols, and line ranges.
+Repo Deep Research is an evidence-grounded research tool for Python
+repositories. It is the LLM Zoomcamp capstone: users can locate implementation
+logic, understand module flow, and assess change impact using answers that cite
+repository paths, symbols, and line ranges.
 
 ## Current status
 

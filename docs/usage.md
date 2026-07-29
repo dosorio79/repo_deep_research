@@ -85,7 +85,7 @@ summary numbers into documentation only after a deliberate held-out run.
 
 ## Supported source
 
-M1 indexes `.py`, `.md`, `.yaml`, `.yml`, `.toml`, and `.json` files. It skips
-Git metadata, virtual environments, caches, build outputs, `node_modules`,
-binary files, root `.gitignore` matches, and files above
-`RDR_MAX_FILE_SIZE_BYTES`.
+The ingestion command indexes `.py`, `.md`, `.yaml`, `.yml`, `.toml`, and
+`.json` files. It skips Git metadata, virtual environments, caches, build
+outputs, `node_modules`, binary files, root `.gitignore` matches, and files
+above `RDR_MAX_FILE_SIZE_BYTES`.

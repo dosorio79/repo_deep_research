@@ -138,7 +138,7 @@ This is the default capstone demonstration because reviewers can verify answers 
 - Retrieval evaluation
 - LLM answer evaluation
 - FastAPI application interface
-- Minimal Streamlit user interface
+- React TypeScript user interface built with Lovable
 - User feedback collection
 - Logfire observability
 - Monitoring dashboard with at least five useful charts
@@ -208,7 +208,7 @@ Target average judge scores on a held-out set:
 
 ## 8.1 Main interface
 
-The Streamlit interface contains:
+The React TypeScript interface contains:
 
 1. Repository selector
    - Current project repository
@@ -472,7 +472,7 @@ Repository path or public GitHub URL
        FastAPI      Logfire
           |
           v
-      Streamlit UI
+      React TypeScript UI
           |
           v
    Feedback and dashboard data
@@ -492,7 +492,7 @@ Repository path or public GitHub URL
 | Fusion | Reciprocal Rank Fusion |
 | Reranking | Local cross-encoder, deferred until baseline works |
 | API | FastAPI |
-| UI | Streamlit |
+| UI | React TypeScript built with Lovable |
 | Monitoring and traces | Logfire |
 | Feedback store | SQLite initially |
 | Evaluation | Python, pytest, pandas |
@@ -708,7 +708,7 @@ The system produces a useful, evidence-backed change plan for its own repository
 ### M5 — Product and operations
 
 - FastAPI;
-- Streamlit;
+- React TypeScript frontend built with Lovable;
 - feedback;
 - Logfire;
 - automated ingestion orchestration;
@@ -731,7 +731,7 @@ A reviewer can clone, configure, start, ingest, query, and inspect monitoring us
 - direct RAG baseline;
 - PydanticAI research agent;
 - cited answers;
-- FastAPI or Streamlit;
+- FastAPI and React TypeScript frontend;
 - feedback;
 - monitoring;
 - Docker Compose;
