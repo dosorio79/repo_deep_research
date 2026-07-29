@@ -28,8 +28,8 @@ make install
 make test
 make docker-up
 make ingest-self
-uv run repo-research search "where is configuration validated?" --mode hybrid
-uv run repo-research research "where is configuration validated?" --mode locate
+make evidence QUESTION="where is configuration validated?"
+make rag QUESTION="where is configuration validated?" RESEARCH_MODE=locate
 make evaluate-retrieval
 ```
 
@@ -42,20 +42,27 @@ Stop the local service with `make docker-down`.
 
 | Command | Purpose |
 |---|---|
-| `make install` | Install locked development dependencies with uv. |
+| `make install` | Install locked runtime and development dependencies with uv. |
 | `make format` | Apply Ruff formatting and safe lint fixes. |
 | `make lint` | Check formatting and lint rules. |
 | `make typecheck` | Run strict mypy checks. |
 | `make test` | Run the unit test suite. |
+| `make validate` | Run lint, typecheck, and tests. |
 | `make docker-up` | Start the local Qdrant service. |
 | `make docker-down` | Stop the local Qdrant service. |
-| `make ingest-self` | Parse and densely index this repository. |
+| `make ready` | Install dependencies, start Qdrant, and ingest this repository. |
+| `make ingest REPO_PATH=PATH` | Parse and index a local repository. |
+| `make ingest-self` | Parse and index this repository. |
+| `make evidence QUESTION="..."` | Start Qdrant and return repository evidence using dense retrieval by default. |
+| `make rag QUESTION="..."` | Start Qdrant and return a grounded direct-RAG answer. |
+| `make api-rag QUESTION="..."` | Start Qdrant and return a grounded answer through the local FastAPI `/research` endpoint. |
 | `make evaluate-retrieval` | Evaluate dense, sparse, and hybrid retrieval on the development records. |
+| `make evaluate-answers` | Run opt-in live answer judging with OpenAI. |
 | `make api` | Run the minimal FastAPI backend on localhost. |
-| `uv run repo-research ingest PATH` | Parse and index a local repository with dense and sparse vectors. |
-| `uv run repo-research search QUERY --mode MODE` | Return `dense`, `sparse`, or `hybrid` evidence. |
-| `uv run repo-research research QUERY` | Return a grounded direct-RAG answer. |
-| `uv run repo-research evaluate-answers` | Run opt-in live answer judging with OpenAI. |
+
+The main Make targets accept optional variables: `QUESTION`, `REPO_PATH`,
+`LIMIT`, `RETRIEVAL_MODE`, `RESEARCH_MODE`, `DATASET`, and `API_URL`. Run
+`make help` for examples.
 
 ## Configuration
 

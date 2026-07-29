@@ -52,8 +52,8 @@ After Qdrant is running, the repository is ingested, and `OPENAI_API_KEY` is set
 ask for a grounded answer:
 
 ```bash
-uv run repo-research research "where is repository configuration validated?" \
-  --mode locate --retrieval-mode dense
+make rag QUESTION="where is repository configuration validated?" \
+  RESEARCH_MODE=locate
 ```
 
 The command emits a `ResearchAnswer` JSON document with a summary,
@@ -67,7 +67,13 @@ Run the minimal backend for future UI integration:
 
 ```bash
 make api
-curl -s http://127.0.0.1:8000/health
+```
+
+Then, in another terminal, exercise the same RAG service through FastAPI:
+
+```bash
+make api-rag QUESTION="where is repository configuration validated?" \
+  RESEARCH_MODE=locate
 ```
 
 ## Evaluate answers

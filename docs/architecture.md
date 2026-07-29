@@ -1,5 +1,32 @@
 # Architecture
 
+## Working layers
+
+```text
+Makefile
+  Thin developer shortcuts: ready, evidence, rag, api, api-rag.
+
+Entry points
+  repo-research CLI for local commands.
+  FastAPI for the future frontend and HTTP contract tests.
+
+Service layer
+  research.py runs direct RAG, citation validation, and answer evaluation.
+
+Retrieval and storage
+  db.py owns FastEmbed, Qdrant payloads, and dense/sparse/hybrid search.
+
+Ingestion
+  ingestion.py discovers files, records Git identity, filters, and parses.
+```
+
+Both `make rag` and `make api-rag` reach the same `ResearchService`. The
+difference is the entry point: `rag` calls the CLI directly, while `api-rag`
+posts to FastAPI `/research` and exercises the HTTP contract that the frontend
+will use.
+
+## Data Flow
+
 ```text
 Local repository path
         |
