@@ -126,6 +126,9 @@ def test_rag_rejects_unknown_model_evidence_ids(tmp_path: Path) -> None:
     )
 
     assert answer.insufficient_evidence is True
+    assert answer.evidence[0].path == "src/repo_research/config.py"
+    assert answer.relevant_files == ["src/repo_research/config.py"]
+    assert answer.relevant_symbols == ["Settings"]
     assert "unknown evidence IDs" in answer.unresolved_questions[0]
 
 
@@ -209,6 +212,16 @@ def test_auto_mode_infers_locate_for_where_questions(tmp_path: Path) -> None:
     request = RagRequest(question="where is repository configuration validated?")
 
     assert infer_rag_mode(request) is RagMode.LOCATE
+
+
+def test_auto_mode_infers_change_for_change_impact_questions(tmp_path: Path) -> None:
+    assert infer_rag_mode(RagRequest(question="Add a cross-encoder reranker")) is (
+        RagMode.CHANGE
+    )
+    assert infer_rag_mode(RagRequest(question="What should I add?")) is RagMode.CHANGE
+    assert infer_rag_mode(RagRequest(question="How to modify retrieval?")) is (
+        RagMode.CHANGE
+    )
 
 
 def test_locate_mode_removes_change_targets_and_metadata_prompts(

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Protocol, cast
 
@@ -129,6 +131,7 @@ class DirectRagService:
             return insufficient_evidence_rag_answer(
                 request=request,
                 reason=f"Answer generation failed validation: {error}",
+                closest_evidence=evidence_by_id.values(),
             )
 
         return _build_validated_answer(
@@ -242,16 +245,18 @@ def insufficient_evidence_rag_answer(
     *,
     request: RagRequest,
     reason: str,
+    closest_evidence: Iterable[EvidenceItem] = (),
 ) -> RagAnswer:
     """Return a deterministic answer when evidence or validation is insufficient."""
+    evidence = _closest_evidence_items(closest_evidence)
     return RagAnswer(
         question=request.question,
         mode=request.mode,
         summary="Insufficient repository evidence to answer the question.",
         implementation_flow=[],
-        evidence=[],
-        relevant_files=[],
-        relevant_symbols=[],
+        evidence=evidence,
+        relevant_files=sorted({item.path for item in evidence}),
+        relevant_symbols=sorted({item.symbol for item in evidence if item.symbol}),
         change_targets=[],
         risks=["The answer is intentionally withheld because grounding failed."],
         confidence=0.0,
@@ -267,12 +272,22 @@ def infer_rag_mode(request: RagRequest) -> RagMode:
     question = request.question.strip().lower()
     if question.startswith(("where is", "where are", "where does")):
         return RagMode.LOCATE
-    if question.startswith(("how does", "how do")) or "flow" in question:
-        return RagMode.FLOW
+    tokens = set(re.findall(r"[a-z0-9_]+", question))
+    change_terms = {
+        "add",
+        "adapt",
+        "change",
+        "changes",
+        "modify",
+        "support",
+        "update",
+    }
     if question.startswith(
         ("what change", "what changes", "which files", "where to modify")
-    ) or any(term in question for term in (" add ", " support ", " modify ")):
+    ) or tokens.intersection(change_terms):
         return RagMode.CHANGE
+    if question.startswith(("how does", "how do", "how to")) or "flow" in tokens:
+        return RagMode.FLOW
     return RagMode.AUTO
 
 
@@ -287,6 +302,7 @@ def _build_validated_answer(
         return insufficient_evidence_rag_answer(
             request=request,
             reason="Model returned an answer without citing retrieved evidence.",
+            closest_evidence=evidence_by_id.values(),
         )
     unknown_ids = sorted(
         {
@@ -305,6 +321,7 @@ def _build_validated_answer(
         return insufficient_evidence_rag_answer(
             request=request,
             reason=f"Model cited unknown evidence IDs: {sorted(set(unknown_ids))}",
+            closest_evidence=evidence_by_id.values(),
         )
 
     evidence = [
@@ -369,6 +386,15 @@ def _evidence_by_id(results: list[SearchResult]) -> dict[str, EvidenceItem]:
             reason="Retrieved repository evidence.",
         )
     return evidence
+
+
+def _closest_evidence_items(
+    closest_evidence: Iterable[EvidenceItem],
+) -> list[EvidenceItem]:
+    return [
+        item.model_copy(update={"reason": "Closest retrieved repository evidence."})
+        for item in closest_evidence
+    ]
 
 
 def _format_evidence_context(

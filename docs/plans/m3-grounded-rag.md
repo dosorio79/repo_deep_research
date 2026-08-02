@@ -89,14 +89,17 @@ Live smoke hardening before M4:
   returned by the application;
 - added deterministic post-generation cleanup that removes change targets
   outside change mode and drops metadata-preference unresolved questions while
-  preserving real evidence gaps.
+  preserving real evidence gaps;
+- kept the closest retrieved evidence in validation-failure
+  `insufficient_evidence` answers so the response still identifies the nearest
+  repository context without presenting unsupported conclusions.
 
 Cleanup validation completed locally:
 
 - `uv run ruff check src tests scripts` — passed;
 - `uv run ruff format --check src tests scripts` — passed;
 - `uv run mypy` — passed (strict mypy, 19 source files);
-- `uv run pytest` — passed (40 tests).
+- `uv run pytest` — passed (41 tests).
 
 ## Validation
 
@@ -106,10 +109,17 @@ Completed locally:
 - `make typecheck` — passed (strict mypy, 18 source files);
 - `make test` — passed (30 tests);
 - `make docker-up` — passed; Qdrant reported healthy;
-- `make ingest-self` — passed (351 chunks, no skipped files).
+- `make ingest-self` — passed (381 chunks, no skipped files).
 
-Skipped locally:
+Live smoke validation completed locally:
 
-- live `repo-research rag ...` smoke test — `OPENAI_API_KEY` was not set;
-- live `repo-research evaluate-answers ...` smoke test — `OPENAI_API_KEY` was
-  not set.
+- `uv run repo-research rag "where is repository configuration validated?"
+  --mode locate --limit 5` — passed with validated `src/repo_research/config.py`
+  evidence;
+- FastAPI `/health` and `POST /rag` via `scripts/api_rag.py` — passed on an
+  alternate local port because `8000` was already unavailable.
+
+Not run locally:
+
+- full live `repo-research evaluate-answers ...` dataset judging, to avoid a
+  broad paid evaluation run during cleanup.
