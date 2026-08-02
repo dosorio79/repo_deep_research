@@ -1,4 +1,4 @@
-"""Grounded direct-RAG research and answer evaluation services."""
+"""Grounded direct-RAG answer generation and evaluation services."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from repo_research.models import (
     ChangeTarget,
     EvaluationRecord,
     EvidenceItem,
+    RagAnswer,
+    RagMode,
+    RagRequest,
     RepositoryIdentity,
-    ResearchAnswer,
-    ResearchMode,
-    ResearchRequest,
     RetrievalMode,
     SearchQuery,
     SearchResult,
@@ -39,9 +39,9 @@ class AnswerGenerator(Protocol):
     def generate_answer(
         self,
         *,
-        request: ResearchRequest,
+        request: RagRequest,
         evidence_context: str,
-    ) -> ResearchAnswerDraft:
+    ) -> RagAnswerDraft:
         """Return a model draft that cites opaque evidence IDs only."""
 
 
@@ -52,7 +52,7 @@ class AnswerJudge(Protocol):
         self,
         *,
         record: EvaluationRecord,
-        answer: ResearchAnswer,
+        answer: RagAnswer,
     ) -> AnswerEvaluationResult:
         """Return judge scores for one answer."""
 
@@ -71,7 +71,7 @@ class ChangeTargetDraft(BaseModel):
     evidence_ids: list[str] = Field(min_length=1)
 
 
-class ResearchAnswerDraft(BaseModel):
+class RagAnswerDraft(BaseModel):
     """Structured model output before canonical citation validation."""
 
     summary: str = Field(min_length=1)
@@ -84,7 +84,7 @@ class ResearchAnswerDraft(BaseModel):
     insufficient_evidence: bool = False
 
 
-class ResearchService:
+class DirectRagService:
     """Answer repository questions using one retrieval pass and grounded citations."""
 
     def __init__(
@@ -96,29 +96,27 @@ class ResearchService:
         self._database = database
         self._generator = generator
 
-    def research(
+    def answer(
         self,
         *,
         repository: RepositoryIdentity,
-        request: ResearchRequest,
-    ) -> ResearchAnswer:
+        request: RagRequest,
+    ) -> RagAnswer:
         """Return a direct-RAG answer with citations validated against retrieval."""
         results = self._database.search(
             SearchQuery(
                 text=request.question,
                 repository_id=repository.repository_id,
                 commit_hash=repository.commit_hash,
-                limit=_research_candidate_limit(request.limit),
+                limit=request.limit,
                 mode=request.retrieval_mode,
             )
         )
         if not results:
-            return insufficient_evidence_answer(
+            return insufficient_evidence_rag_answer(
                 request=request,
                 reason="No repository evidence was retrieved for the question.",
             )
-        results = _select_research_results(results, request.limit)
-
         evidence_by_id = _evidence_by_id(results)
         evidence_context = _format_evidence_context(evidence_by_id, results)
         try:
@@ -127,7 +125,7 @@ class ResearchService:
                 evidence_context=evidence_context,
             )
         except ValueError as error:
-            return insufficient_evidence_answer(
+            return insufficient_evidence_rag_answer(
                 request=request,
                 reason=f"Answer generation failed validation: {error}",
             )
@@ -151,23 +149,23 @@ class OpenAIResponsesModel:
     def generate_answer(
         self,
         *,
-        request: ResearchRequest,
+        request: RagRequest,
         evidence_context: str,
-    ) -> ResearchAnswerDraft:
+    ) -> RagAnswerDraft:
         """Generate a structured answer draft with the configured answer model."""
         prompt = _answer_prompt(request=request, evidence_context=evidence_context)
         return _create_structured_response(
             client=self._client,
             model=self._answer_model,
             prompt=prompt,
-            response_model=ResearchAnswerDraft,
+            response_model=RagAnswerDraft,
         )
 
     def judge_answer(
         self,
         *,
         record: EvaluationRecord,
-        answer: ResearchAnswer,
+        answer: RagAnswer,
     ) -> AnswerEvaluationResult:
         """Judge one answer using the configured judge model."""
         prompt = _judge_prompt(record=record, answer=answer)
@@ -184,7 +182,7 @@ class OpenAIResponsesModel:
 
 def evaluate_answers(
     *,
-    service: ResearchService,
+    service: DirectRagService,
     judge: AnswerJudge,
     repository: RepositoryIdentity,
     records: list[EvaluationRecord],
@@ -194,11 +192,11 @@ def evaluate_answers(
     """Run direct RAG and judge evaluation for versioned records."""
     results: list[AnswerEvaluationResult] = []
     for record in records:
-        answer = service.research(
+        answer = service.answer(
             repository=repository,
-            request=ResearchRequest(
+            request=RagRequest(
                 question=record.question,
-                mode=_research_mode_from_question_type(record.question_type),
+                mode=_rag_mode_from_question_type(record.question_type),
                 retrieval_mode=retrieval_mode,
                 limit=limit,
             ),
@@ -209,7 +207,7 @@ def evaluate_answers(
 
 def evaluate_answers_from_dataset(
     *,
-    service: ResearchService,
+    service: DirectRagService,
     judge: AnswerJudge,
     repository: RepositoryIdentity,
     dataset: Path,
@@ -239,13 +237,13 @@ def write_answer_evaluation_report(
     )
 
 
-def insufficient_evidence_answer(
+def insufficient_evidence_rag_answer(
     *,
-    request: ResearchRequest,
+    request: RagRequest,
     reason: str,
-) -> ResearchAnswer:
+) -> RagAnswer:
     """Return a deterministic answer when evidence or validation is insufficient."""
-    return ResearchAnswer(
+    return RagAnswer(
         question=request.question,
         mode=request.mode,
         summary="Insufficient repository evidence to answer the question.",
@@ -263,13 +261,13 @@ def insufficient_evidence_answer(
 
 def _build_validated_answer(
     *,
-    request: ResearchRequest,
-    draft: ResearchAnswerDraft,
+    request: RagRequest,
+    draft: RagAnswerDraft,
     evidence_by_id: dict[str, EvidenceItem],
-) -> ResearchAnswer:
+) -> RagAnswer:
     referenced_ids = [reference.evidence_id for reference in draft.evidence]
     if not referenced_ids and not draft.insufficient_evidence:
-        return insufficient_evidence_answer(
+        return insufficient_evidence_rag_answer(
             request=request,
             reason="Model returned an answer without citing retrieved evidence.",
         )
@@ -287,7 +285,7 @@ def _build_validated_answer(
             if evidence_id not in evidence_by_id
         )
     if unknown_ids:
-        return insufficient_evidence_answer(
+        return insufficient_evidence_rag_answer(
             request=request,
             reason=f"Model cited unknown evidence IDs: {sorted(set(unknown_ids))}",
         )
@@ -301,7 +299,7 @@ def _build_validated_answer(
     relevant_files = sorted({item.path for item in evidence})
     relevant_symbols = sorted({item.symbol for item in evidence if item.symbol})
     change_targets = _canonical_change_targets(draft.change_targets, evidence_by_id)
-    return ResearchAnswer(
+    return RagAnswer(
         question=request.question,
         mode=request.mode,
         summary=draft.summary,
@@ -352,36 +350,6 @@ def _evidence_by_id(results: list[SearchResult]) -> dict[str, EvidenceItem]:
     return evidence
 
 
-def _research_candidate_limit(answer_limit: int) -> int:
-    """Retrieve extra candidates so RAG can prefer implementation evidence."""
-    return min(20, max(answer_limit * 4, answer_limit))
-
-
-def _select_research_results(
-    results: list[SearchResult], answer_limit: int
-) -> list[SearchResult]:
-    """Prefer source chunks for answer context without changing raw search scores."""
-    ranked = sorted(
-        enumerate(results),
-        key=lambda item: (_research_context_score(item[1]), -item[0]),
-        reverse=True,
-    )
-    return [result for _, result in ranked[:answer_limit]]
-
-
-def _research_context_score(result: SearchResult) -> float:
-    path = result.chunk.path
-    if path.startswith("src/"):
-        return result.score + 0.08
-    if path.startswith("tests/"):
-        return result.score - 0.06
-    if path.startswith("docs/"):
-        return result.score - 0.04
-    if path in {"README.md", "AGENTS.md"}:
-        return result.score - 0.03
-    return result.score
-
-
 def _format_evidence_context(
     evidence_by_id: dict[str, EvidenceItem],
     results: list[SearchResult],
@@ -404,7 +372,7 @@ def _format_evidence_context(
     return "\n\n".join(sections)
 
 
-def _answer_prompt(*, request: ResearchRequest, evidence_context: str) -> str:
+def _answer_prompt(*, request: RagRequest, evidence_context: str) -> str:
     return "\n\n".join(
         [
             "You answer questions about a Python repository using only the provided "
@@ -412,7 +380,7 @@ def _answer_prompt(*, request: ResearchRequest, evidence_context: str) -> str:
             "or line numbers; the application maps evidence IDs to canonical "
             "citations. If the evidence is insufficient, set insufficient_evidence "
             "to true and explain what is missing.",
-            f"Research mode: {request.mode.value}",
+            f"RAG mode: {request.mode.value}",
             f"Question: {request.question}",
             "Evidence:",
             evidence_context,
@@ -420,7 +388,7 @@ def _answer_prompt(*, request: ResearchRequest, evidence_context: str) -> str:
     )
 
 
-def _judge_prompt(*, record: EvaluationRecord, answer: ResearchAnswer) -> str:
+def _judge_prompt(*, record: EvaluationRecord, answer: RagAnswer) -> str:
     return "\n\n".join(
         [
             "Judge this repository answer against the manually verified record. "
@@ -456,10 +424,10 @@ def _create_structured_response[T: BaseModel](
     return parsed
 
 
-def _research_mode_from_question_type(question_type: str) -> ResearchMode:
+def _rag_mode_from_question_type(question_type: str) -> RagMode:
     mapping = {
-        "locate": ResearchMode.LOCATE,
-        "flow": ResearchMode.FLOW,
-        "change": ResearchMode.CHANGE,
+        "locate": RagMode.LOCATE,
+        "flow": RagMode.FLOW,
+        "change": RagMode.CHANGE,
     }
-    return mapping.get(question_type, ResearchMode.AUTO)
+    return mapping.get(question_type, RagMode.AUTO)

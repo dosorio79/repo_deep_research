@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from repo_research import cli
+from repo_research import cli, runtime
 from repo_research.cli import build_parser
 from repo_research.models import (
     ParsedChunk,
-    ResearchAnswer,
-    ResearchMode,
-    ResearchRequest,
+    RagAnswer,
+    RagMode,
+    RagRequest,
     SearchResult,
 )
-from repo_research.research import ResearchAnswerDraft
+from repo_research.rag import RagAnswerDraft
 
 
 def test_cli_parses_search_request() -> None:
@@ -39,10 +39,10 @@ def test_cli_parses_retrieval_evaluation_request() -> None:
     assert arguments.limit == 10
 
 
-def test_cli_parses_research_request() -> None:
+def test_cli_parses_rag_request() -> None:
     arguments = build_parser().parse_args(
         [
-            "research",
+            "rag",
             "where is configuration validated?",
             "--mode",
             "locate",
@@ -51,7 +51,7 @@ def test_cli_parses_research_request() -> None:
         ]
     )
 
-    assert arguments.command == "research"
+    assert arguments.command == "rag"
     assert arguments.question == "where is configuration validated?"
     assert arguments.mode == "locate"
     assert arguments.retrieval_mode == "dense"
@@ -87,8 +87,8 @@ class FakeSettings:
     repository_root = Path(".")
     max_file_size_bytes = 1_048_576
     retrieval_mode = "dense"
-    research_limit = 5
-    answer_eval_limit = 5
+    retrieval_limit = 5
+    answer_evaluation_limit = 5
     openai_model = "gpt-5-mini"
     openai_judge_model = "gpt-5.1"
 
@@ -99,30 +99,30 @@ class FakeOpenAIModel:
     def generate_answer(
         self,
         *,
-        request: ResearchRequest,
+        request: RagRequest,
         evidence_context: str,
-    ) -> ResearchAnswerDraft:
+    ) -> RagAnswerDraft:
         raise AssertionError("no evidence should skip model generation")
 
 
-def test_cli_research_emits_grounded_answer_without_live_model(
+def test_cli_rag_emits_grounded_answer_without_live_model(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     database = FakeDatabase()
     monkeypatch.setattr(cli, "Settings", FakeSettings)
-    monkeypatch.setattr(cli, "_create_database", lambda _: database)
-    monkeypatch.setattr(cli, "_create_openai_model", lambda _: FakeOpenAIModel())
+    monkeypatch.setattr(runtime, "create_database", lambda _: database)
+    monkeypatch.setattr(runtime, "create_answer_model", lambda _: FakeOpenAIModel())
     monkeypatch.setattr(
         sys,
         "argv",
-        ["repo-research", "research", "where is missing logic?", "--path", "."],
+        ["repo-research", "rag", "where is missing logic?", "--path", "."],
     )
 
     cli.main()
 
-    result = ResearchAnswer.model_validate_json(capsys.readouterr().out)
-    assert result.mode is ResearchMode.AUTO
+    result = RagAnswer.model_validate_json(capsys.readouterr().out)
+    assert result.mode is RagMode.AUTO
     assert result.insufficient_evidence is True
 
 
@@ -139,7 +139,7 @@ def test_cli_ingest_emits_skipped_file_diagnostics(
     def create_database(_: object) -> FakeDatabase:
         return database
 
-    monkeypatch.setattr(cli, "_create_database", create_database)
+    monkeypatch.setattr(runtime, "create_database", create_database)
     monkeypatch.setattr(sys, "argv", ["repo-research", "ingest", str(tmp_path)])
 
     cli.main()
@@ -163,7 +163,7 @@ def test_cli_keeps_the_existing_index_when_every_file_fails_to_parse(
     def create_database(_: object) -> FakeDatabase:
         return database
 
-    monkeypatch.setattr(cli, "_create_database", create_database)
+    monkeypatch.setattr(runtime, "create_database", create_database)
     monkeypatch.setattr(sys, "argv", ["repo-research", "ingest", str(tmp_path)])
 
     cli.main()

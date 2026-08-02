@@ -248,7 +248,7 @@ Minimum endpoints:
 ```text
 POST /repositories/ingest
 GET  /repositories
-POST /research
+POST /rag
 POST /feedback
 GET  /health
 ```

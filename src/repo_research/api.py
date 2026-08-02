@@ -1,4 +1,4 @@
-"""Minimal FastAPI backend for M3 grounded research."""
+"""Minimal FastAPI backend for M3 grounded direct RAG."""
 
 from __future__ import annotations
 
@@ -6,19 +6,23 @@ from typing import Protocol
 
 from fastapi import FastAPI, HTTPException
 
-from repo_research.cli import _create_database, _create_openai_model
 from repo_research.config import Settings
 from repo_research.ingestion import discover_repository
 from repo_research.models import (
-    ResearchAnswer,
-    ResearchRequest,
+    RagAnswer,
+    RagRequest,
     SearchQuery,
     SearchResult,
 )
-from repo_research.research import AnswerGenerator, ResearchService
+from repo_research.rag import AnswerGenerator
+from repo_research.runtime import (
+    create_answer_model,
+    create_database,
+    create_direct_rag_service,
+)
 
 
-class ResearchDatabase(Protocol):
+class RagDatabase(Protocol):
     """Database behavior required by the API routes."""
 
     def health_check(self) -> bool:
@@ -31,21 +35,21 @@ class ResearchDatabase(Protocol):
 def create_app(
     *,
     settings: Settings | None = None,
-    database: ResearchDatabase | None = None,
+    database: RagDatabase | None = None,
     generator: AnswerGenerator | None = None,
 ) -> FastAPI:
     """Create a FastAPI app with injectable runtime dependencies."""
     app_settings = settings or Settings()
     app = FastAPI(title="Repo Deep Research", version="0.1.0")
 
-    def get_database() -> ResearchDatabase:
-        return database or _create_database(app_settings)
+    def get_database() -> RagDatabase:
+        return database or create_database(app_settings)
 
     def get_generator() -> AnswerGenerator:
-        return generator or _create_openai_model(app_settings)
+        return generator or create_answer_model(app_settings)
 
     @app.get("/health")
-    def health() -> dict[str, str | bool]:
+    async def health() -> dict[str, str | bool]:
         qdrant_ok = False
         try:
             qdrant_ok = get_database().health_check()
@@ -53,18 +57,19 @@ def create_app(
             qdrant_ok = False
         return {"status": "ok" if qdrant_ok else "degraded", "qdrant": qdrant_ok}
 
-    @app.post("/research", response_model=ResearchAnswer)
-    def research(request: ResearchRequest) -> ResearchAnswer:
+    @app.post("/rag", response_model=RagAnswer)
+    async def rag(request: RagRequest) -> RagAnswer:
         root_path = (request.repository_path or app_settings.repository_root).resolve()
         try:
             repository, _ = discover_repository(
                 root_path, app_settings.max_file_size_bytes
             )
-            service = ResearchService(
+            service = create_direct_rag_service(
+                settings=app_settings,
                 database=get_database(),
                 generator=get_generator(),
             )
-            return service.research(
+            return service.answer(
                 repository=repository,
                 request=request.model_copy(update={"repository_path": root_path}),
             )

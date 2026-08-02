@@ -1,4 +1,4 @@
-"""Call the local FastAPI /research endpoint from Make.
+"""Call the local FastAPI /rag endpoint from Make.
 
 The script keeps JSON construction out of the Makefile so questions can contain
 normal punctuation without shell quoting surprises.
@@ -14,19 +14,19 @@ from urllib.request import Request, urlopen
 
 
 def main() -> int:
-    """Post one research request to the configured API URL."""
+    """Post one direct-RAG request to the configured API URL."""
     api_url = os.environ.get("API_URL", "http://127.0.0.1:8000").rstrip("/")
     payload = {
         "question": os.environ.get(
             "QUESTION", "where is repository configuration validated?"
         ),
         "repository_path": os.environ.get("REPO_PATH", "."),
-        "mode": os.environ.get("RESEARCH_MODE", "auto"),
+        "mode": os.environ.get("RAG_MODE", "auto"),
         "retrieval_mode": os.environ.get("RETRIEVAL_MODE", "dense"),
         "limit": int(os.environ.get("LIMIT", "5")),
     }
     request = Request(
-        f"{api_url}/research",
+        f"{api_url}/rag",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",

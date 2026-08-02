@@ -21,9 +21,12 @@ def test_settings_use_local_defaults() -> None:
     assert settings.qdrant_collection == "repo_chunks_v2"
     assert settings.sparse_embedding_model == "Qdrant/bm25"
     assert settings.retrieval_mode is RetrievalMode.DENSE
+    assert settings.openai_answer_model == "gpt-5-mini"
     assert settings.openai_model == "gpt-5-mini"
     assert settings.openai_judge_model == "gpt-5.1"
+    assert settings.retrieval_limit == 5
     assert settings.research_limit == 5
+    assert settings.answer_evaluation_limit == 5
     assert settings.answer_eval_limit == 5
 
 
@@ -37,6 +40,46 @@ def test_settings_read_prefixed_environment_values(
 
     assert settings.qdrant_url == "https://qdrant.example.test"
     assert settings.log_level == "DEBUG"
+
+
+def test_settings_read_grouped_openai_and_limit_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RDR_OPENAI_ANSWER_MODEL", "answer-model")
+    monkeypatch.setenv("RDR_RETRIEVAL_LIMIT", "7")
+    monkeypatch.setenv("RDR_ANSWER_EVALUATION_LIMIT", "3")
+
+    settings = Settings()
+
+    assert settings.openai_answer_model == "answer-model"
+    assert settings.retrieval_limit == 7
+    assert settings.answer_evaluation_limit == 3
+
+
+def test_settings_keep_legacy_openai_and_limit_aliases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RDR_OPENAI_MODEL", "legacy-answer-model")
+    monkeypatch.setenv("RDR_RESEARCH_LIMIT", "6")
+    monkeypatch.setenv("RDR_ANSWER_EVAL_LIMIT", "4")
+
+    settings = Settings()
+
+    assert settings.openai_answer_model == "legacy-answer-model"
+    assert settings.retrieval_limit == 6
+    assert settings.answer_evaluation_limit == 4
+
+
+def test_settings_accept_field_name_overrides() -> None:
+    settings = Settings(
+        openai_answer_model="custom-answer-model",
+        retrieval_limit=2,
+        answer_evaluation_limit=3,
+    )
+
+    assert settings.openai_answer_model == "custom-answer-model"
+    assert settings.retrieval_limit == 2
+    assert settings.answer_evaluation_limit == 3
 
 
 def test_settings_reject_invalid_qdrant_url() -> None:

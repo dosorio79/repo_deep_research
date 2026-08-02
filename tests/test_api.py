@@ -2,12 +2,13 @@
 
 from pathlib import Path
 
-from fastapi.testclient import TestClient
+import httpx
+import pytest
 
 from repo_research.api import create_app
 from repo_research.config import Settings
-from repo_research.models import ResearchRequest, SearchResult
-from repo_research.research import ResearchAnswerDraft
+from repo_research.models import RagRequest, SearchResult
+from repo_research.rag import RagAnswerDraft
 
 
 class FakeDatabase:
@@ -29,38 +30,51 @@ class FakeGenerator:
     def generate_answer(
         self,
         *,
-        request: ResearchRequest,
+        request: RagRequest,
         evidence_context: str,
-    ) -> ResearchAnswerDraft:
+    ) -> RagAnswerDraft:
         raise AssertionError("empty retrieval should not call the model")
 
 
-def test_health_reports_qdrant_status() -> None:
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_health_reports_qdrant_status() -> None:
     app = create_app(
         settings=Settings(repository_root=Path(".")),
         database=FakeDatabase(healthy=True),
         generator=FakeGenerator(),
     )
-    client = TestClient(app)
 
-    response = client.get("/health")
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get("/health")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "qdrant": True}
 
 
-def test_research_returns_insufficient_evidence_shape() -> None:
+@pytest.mark.anyio
+async def test_rag_returns_insufficient_evidence_shape() -> None:
     app = create_app(
         settings=Settings(repository_root=Path(".")),
         database=FakeDatabase(healthy=True),
         generator=FakeGenerator(),
     )
-    client = TestClient(app)
 
-    response = client.post(
-        "/research",
-        json={"question": "Where is missing logic?", "limit": 5},
-    )
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/rag",
+            json={"question": "Where is missing logic?", "limit": 5},
+        )
 
     assert response.status_code == 200
     body = response.json()

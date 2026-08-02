@@ -1,4 +1,4 @@
-"""Typed system-boundary models for repository research."""
+"""Typed system-boundary models for repository evidence and RAG answers."""
 
 from __future__ import annotations
 
@@ -58,8 +58,8 @@ class RetrievalMode(StrEnum):
     HYBRID = "hybrid"
 
 
-class ResearchMode(StrEnum):
-    """The supported answer intents for direct repository research."""
+class RagMode(StrEnum):
+    """The supported answer intents for direct RAG."""
 
     LOCATE = "locate"
     FLOW = "flow"
@@ -84,12 +84,12 @@ class SearchResult(BaseModel):
     score: float
 
 
-class ResearchRequest(BaseModel):
-    """A direct-RAG research request scoped by CLI or API orchestration."""
+class RagRequest(BaseModel):
+    """A direct-RAG request scoped by CLI or API orchestration."""
 
     question: str = Field(min_length=1)
     repository_path: Path | None = None
-    mode: ResearchMode = ResearchMode.AUTO
+    mode: RagMode = RagMode.AUTO
     retrieval_mode: RetrievalMode = RetrievalMode.DENSE
     limit: int = Field(default=5, ge=1, le=20)
 
@@ -115,11 +115,11 @@ class ChangeTarget(BaseModel):
     evidence_ids: list[str] = Field(min_length=1)
 
 
-class ResearchAnswer(BaseModel):
+class RagAnswer(BaseModel):
     """A grounded direct-RAG answer with validated repository citations."""
 
     question: str = Field(min_length=1)
-    mode: ResearchMode
+    mode: RagMode
     summary: str = Field(min_length=1)
     implementation_flow: list[str] = Field(default_factory=list)
     evidence: list[EvidenceItem] = Field(default_factory=list)

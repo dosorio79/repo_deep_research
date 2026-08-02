@@ -1,4 +1,4 @@
-"""Tests for grounded direct-RAG research behavior."""
+"""Tests for grounded direct-RAG behavior."""
 
 from pathlib import Path
 
@@ -6,23 +6,23 @@ from repo_research.models import (
     AnswerEvaluationResult,
     EvaluationRecord,
     ParsedChunk,
+    RagMode,
+    RagRequest,
     RepositoryIdentity,
-    ResearchMode,
-    ResearchRequest,
     RetrievalMode,
     SearchResult,
 )
-from repo_research.research import (
+from repo_research.rag import (
+    DirectRagService,
     EvidenceReference,
-    ResearchAnswerDraft,
-    ResearchService,
+    RagAnswerDraft,
     evaluate_answers,
     write_answer_evaluation_report,
 )
 
 
 class FakeDatabase:
-    """Return fixed retrieval results for deterministic research tests."""
+    """Return fixed retrieval results for deterministic RAG tests."""
 
     def __init__(self, results: list[SearchResult]) -> None:
         self._results = results
@@ -36,15 +36,15 @@ class FakeDatabase:
 class FakeGenerator:
     """Return a fixed model draft without network calls."""
 
-    def __init__(self, draft: ResearchAnswerDraft) -> None:
+    def __init__(self, draft: RagAnswerDraft) -> None:
         self._draft = draft
 
     def generate_answer(
         self,
         *,
-        request: ResearchRequest,
+        request: RagRequest,
         evidence_context: str,
-    ) -> ResearchAnswerDraft:
+    ) -> RagAnswerDraft:
         assert request.question
         assert evidence_context
         return self._draft
@@ -71,13 +71,13 @@ class FakeJudge:
         )
 
 
-def test_research_maps_evidence_ids_to_canonical_citations(tmp_path: Path) -> None:
+def test_rag_maps_evidence_ids_to_canonical_citations(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     chunk = _chunk(repository)
-    service = ResearchService(
+    service = DirectRagService(
         database=FakeDatabase([SearchResult(chunk=chunk, score=0.9)]),
         generator=FakeGenerator(
-            ResearchAnswerDraft(
+            RagAnswerDraft(
                 summary="Configuration is validated in Settings.",
                 implementation_flow=["Settings loads environment values."],
                 evidence=[
@@ -90,11 +90,11 @@ def test_research_maps_evidence_ids_to_canonical_citations(tmp_path: Path) -> No
         ),
     )
 
-    answer = service.research(
+    answer = service.answer(
         repository=repository,
-        request=ResearchRequest(
+        request=RagRequest(
             question="Where is configuration validated?",
-            mode=ResearchMode.LOCATE,
+            mode=RagMode.LOCATE,
         ),
     )
 
@@ -105,12 +105,12 @@ def test_research_maps_evidence_ids_to_canonical_citations(tmp_path: Path) -> No
     assert answer.relevant_symbols == ["Settings"]
 
 
-def test_research_rejects_unknown_model_evidence_ids(tmp_path: Path) -> None:
+def test_rag_rejects_unknown_model_evidence_ids(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
-    service = ResearchService(
+    service = DirectRagService(
         database=FakeDatabase([SearchResult(chunk=_chunk(repository), score=0.9)]),
         generator=FakeGenerator(
-            ResearchAnswerDraft(
+            RagAnswerDraft(
                 summary="Unsupported claim.",
                 evidence=[EvidenceReference(evidence_id="E99", reason="Missing.")],
                 confidence=0.5,
@@ -118,34 +118,34 @@ def test_research_rejects_unknown_model_evidence_ids(tmp_path: Path) -> None:
         ),
     )
 
-    answer = service.research(
+    answer = service.answer(
         repository=repository,
-        request=ResearchRequest(question="Where is configuration validated?"),
+        request=RagRequest(question="Where is configuration validated?"),
     )
 
     assert answer.insufficient_evidence is True
     assert "unknown evidence IDs" in answer.unresolved_questions[0]
 
 
-def test_research_returns_insufficient_evidence_without_results(tmp_path: Path) -> None:
+def test_rag_returns_insufficient_evidence_without_results(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
-    service = ResearchService(
+    service = DirectRagService(
         database=FakeDatabase([]),
         generator=FakeGenerator(
-            ResearchAnswerDraft(summary="Should not be used.", confidence=0.1)
+            RagAnswerDraft(summary="Should not be used.", confidence=0.1)
         ),
     )
 
-    answer = service.research(
+    answer = service.answer(
         repository=repository,
-        request=ResearchRequest(question="Where is missing logic?"),
+        request=RagRequest(question="Where is missing logic?"),
     )
 
     assert answer.insufficient_evidence is True
     assert answer.evidence == []
 
 
-def test_research_prefers_source_context_over_tests_and_docs(tmp_path: Path) -> None:
+def test_rag_preserves_selected_retrieval_order(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     database = FakeDatabase(
         [
@@ -175,10 +175,10 @@ def test_research_prefers_source_context_over_tests_and_docs(tmp_path: Path) -> 
             ),
         ]
     )
-    service = ResearchService(
+    service = DirectRagService(
         database=database,
         generator=FakeGenerator(
-            ResearchAnswerDraft(
+            RagAnswerDraft(
                 summary="Configuration is validated in Settings.",
                 evidence=[
                     EvidenceReference(
@@ -190,25 +190,25 @@ def test_research_prefers_source_context_over_tests_and_docs(tmp_path: Path) -> 
         ),
     )
 
-    answer = service.research(
+    answer = service.answer(
         repository=repository,
-        request=ResearchRequest(
+        request=RagRequest(
             question="Where is configuration validated?",
-            mode=ResearchMode.LOCATE,
+            mode=RagMode.LOCATE,
             limit=1,
         ),
     )
 
-    assert answer.evidence[0].path == "src/repo_research/config.py"
-    assert answer.relevant_symbols == ["Settings"]
+    assert answer.evidence[0].path == "README.md"
+    assert answer.relevant_symbols == ["Quick start"]
 
 
 def test_answer_evaluation_writes_stable_report(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
-    service = ResearchService(
+    service = DirectRagService(
         database=FakeDatabase([SearchResult(chunk=_chunk(repository), score=0.9)]),
         generator=FakeGenerator(
-            ResearchAnswerDraft(
+            RagAnswerDraft(
                 summary="Configuration is validated in Settings.",
                 evidence=[
                     EvidenceReference(

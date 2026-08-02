@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from repo_research.models import RetrievalMode
@@ -38,6 +38,7 @@ class Settings(BaseSettings):
         env_prefix="RDR_",
         env_ignore_empty=True,
         extra="ignore",
+        validate_by_name=True,
     )
 
     environment: str = "local"
@@ -50,11 +51,51 @@ class Settings(BaseSettings):
     embedding_batch_size: int = Field(default=16, gt=0)
     sparse_embedding_model: str = "Qdrant/bm25"
     retrieval_mode: RetrievalMode = RetrievalMode.DENSE
-    openai_model: str = "gpt-5-mini"
+    openai_answer_model: str = Field(
+        default="gpt-5-mini",
+        validation_alias=AliasChoices(
+            "openai_answer_model",
+            "RDR_OPENAI_ANSWER_MODEL",
+            "RDR_OPENAI_MODEL",
+        ),
+    )
     openai_judge_model: str = "gpt-5.1"
-    research_limit: int = Field(default=5, ge=1, le=20)
-    answer_eval_limit: int = Field(default=5, ge=1, le=20)
+    retrieval_limit: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        validation_alias=AliasChoices(
+            "retrieval_limit",
+            "RDR_RETRIEVAL_LIMIT",
+            "RDR_RESEARCH_LIMIT",
+        ),
+    )
+    answer_evaluation_limit: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        validation_alias=AliasChoices(
+            "answer_evaluation_limit",
+            "RDR_ANSWER_EVALUATION_LIMIT",
+            "RDR_ANSWER_EVAL_LIMIT",
+        ),
+    )
     log_level: str = "INFO"
+
+    @property
+    def openai_model(self) -> str:
+        """Backward-compatible name for the direct-RAG answer model."""
+        return self.openai_answer_model
+
+    @property
+    def research_limit(self) -> int:
+        """Backward-compatible name for the default research retrieval limit."""
+        return self.retrieval_limit
+
+    @property
+    def answer_eval_limit(self) -> int:
+        """Backward-compatible name for the answer-evaluation retrieval limit."""
+        return self.answer_evaluation_limit
 
     @field_validator("qdrant_url")
     @classmethod

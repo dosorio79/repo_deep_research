@@ -9,14 +9,14 @@ M4.
 ## Scope
 
 - direct RAG over the existing `RepositoryDatabase.search` boundary;
-- typed research requests, answers, evidence, change targets, and judge results;
+- typed RAG requests, answers, evidence, change targets, and judge results;
 - opaque evidence IDs mapped back to canonical chunk paths and line ranges;
 - deterministic insufficient-evidence behavior when retrieval or citation
   validation fails;
 - OpenAI Responses API adapter with `gpt-5-mini` for answers and `gpt-5.1` for
   opt-in judge evaluation;
-- CLI commands for `research` and `evaluate-answers`;
-- minimal FastAPI `/health` and `/research` endpoints for future React/Lovable
+- CLI commands for `rag` and `evaluate-answers`;
+- minimal FastAPI `/health` and `/rag` endpoints for future React/Lovable
   frontend integration.
 
 ## Decisions
@@ -32,24 +32,60 @@ M4.
 
 ## Affected tests
 
-- research service maps evidence IDs to canonical citations;
+- direct-RAG service maps evidence IDs to canonical citations;
 - unknown evidence IDs and empty retrieval return insufficient evidence;
 - answer-evaluation reports write stable JSON;
-- CLI parses and emits M3 research output with fake adapters;
-- FastAPI `/health` and `/research` return stable contract shapes.
+- CLI parses and emits M3 direct-RAG output with fake adapters;
+- FastAPI `/health` and `/rag` return stable contract shapes.
 
 ## Outcome
 
 Completed on 2026-07-27.
 
-- `ResearchService` now generates direct-RAG answers from retrieved chunks and
-  validates all citations before returning a `ResearchAnswer`.
+- `DirectRagService` now generates direct-RAG answers from retrieved chunks and
+  validates all citations before returning a `RagAnswer`.
 - `OpenAIResponsesModel` provides the live answer and judge adapter behind a
   small protocol used by tests and services.
-- `repo-research research` and `repo-research evaluate-answers` expose the M3
+- `repo-research rag` and `repo-research evaluate-answers` expose the M3
   backend through CLI JSON commands.
-- `repo_research.api:create_app` exposes `/health` and `/research` with
+- `repo_research.api:create_app` exposes `/health` and `/rag` with
   injectable dependencies for tests and future UI integration.
+
+## Cleanup before M4
+
+Completed after the adversarial clarity review:
+
+- moved runtime composition into `runtime.py` so CLI and FastAPI share backend
+  construction without API importing CLI internals;
+- kept the CLI as a first-class entry point while making FastAPI the future
+  frontend-facing consumer of the same service;
+- removed the hidden answer-context path weighting so direct RAG preserves the
+  selected retrieval mode's result order;
+- kept evaluation responsible for selecting the default retrieval mode, while
+  CLI/API callers can still choose dense, sparse, or hybrid per request;
+- introduced clearer grouped env names for answer model and limits while
+  preserving legacy local `.env` aliases;
+- changed API contract tests to use an async ASGI transport and async route
+  functions, avoiding the local Starlette `TestClient`/AnyIO threadpool hang.
+
+This cleanup does not start M4. The next milestone remains bounded agentic
+research over the same backend and retrieval contracts.
+
+Terminology cleanup before M4:
+
+- renamed the current M3 module from `research.py` to `rag.py`;
+- renamed the direct-RAG service and boundary models to `DirectRagService`,
+  `RagRequest`, `RagAnswer`, and `RagMode`;
+- renamed the public M3 command and API endpoint to `repo-research rag` and
+  `POST /rag`;
+- reserved "research" for the future M4 agentic investigation workflow.
+
+Cleanup validation completed locally:
+
+- `uv run ruff check src tests scripts` — passed;
+- `uv run ruff format --check src tests scripts` — passed;
+- `uv run mypy` — passed (strict mypy, 19 source files);
+- `uv run pytest` — passed (35 tests).
 
 ## Validation
 
@@ -63,6 +99,6 @@ Completed locally:
 
 Skipped locally:
 
-- live `repo-research research ...` smoke test — `OPENAI_API_KEY` was not set;
+- live `repo-research rag ...` smoke test — `OPENAI_API_KEY` was not set;
 - live `repo-research evaluate-answers ...` smoke test — `OPENAI_API_KEY` was
   not set.

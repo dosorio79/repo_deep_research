@@ -4,7 +4,7 @@ REPO_PATH ?= .
 QUESTION ?= where is repository configuration validated?
 LIMIT ?= 5
 RETRIEVAL_MODE ?= dense
-RESEARCH_MODE ?= auto
+RAG_MODE ?= auto
 DATASET ?= eval/development.json
 API_URL ?= http://127.0.0.1:8000
 
@@ -62,10 +62,10 @@ evidence: docker-up
 	uv run repo-research search "$(QUESTION)" --path "$(REPO_PATH)" --limit "$(LIMIT)" --mode "$(RETRIEVAL_MODE)"
 
 rag: docker-up
-	uv run repo-research research "$(QUESTION)" --path "$(REPO_PATH)" --mode "$(RESEARCH_MODE)" --limit "$(LIMIT)" --retrieval-mode "$(RETRIEVAL_MODE)"
+	uv run repo-research rag "$(QUESTION)" --path "$(REPO_PATH)" --mode "$(RAG_MODE)" --limit "$(LIMIT)" --retrieval-mode "$(RETRIEVAL_MODE)"
 
 api-rag: docker-up
-	QUESTION="$(QUESTION)" REPO_PATH="$(REPO_PATH)" LIMIT="$(LIMIT)" RETRIEVAL_MODE="$(RETRIEVAL_MODE)" RESEARCH_MODE="$(RESEARCH_MODE)" API_URL="$(API_URL)" uv run python scripts/api_rag.py
+	QUESTION="$(QUESTION)" REPO_PATH="$(REPO_PATH)" LIMIT="$(LIMIT)" RETRIEVAL_MODE="$(RETRIEVAL_MODE)" RAG_MODE="$(RAG_MODE)" API_URL="$(API_URL)" uv run python scripts/api_rag.py
 
 evaluate-retrieval:
 	uv run repo-research evaluate-retrieval --path "$(REPO_PATH)" --dataset "$(DATASET)" --output eval/results/retrieval-development.json --limit "$(LIMIT)"

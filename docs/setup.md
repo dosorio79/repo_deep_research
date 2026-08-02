@@ -43,18 +43,20 @@ ingestion; subsequent runs use that cache. No embedding API key or paid model
 call is required. The default batch size is deliberately bounded to 16 for
 predictable memory use during local repository indexing.
 
-## OpenAI-backed research
+## OpenAI-backed direct RAG
 
 M3 direct RAG uses the OpenAI Responses API only when running `rag`,
-`api-rag`, `evaluate-answers`, or the `/research` API endpoint. Set
+`api-rag`, `evaluate-answers`, or the `/rag` API endpoint. Set
 `OPENAI_API_KEY` in the environment or in `.env` before live answer generation:
 
 ```bash
 export OPENAI_API_KEY="..."
 ```
 
-The default answer model is `RDR_OPENAI_MODEL=gpt-5-mini`; the default judge
-model for opt-in answer evaluation is `RDR_OPENAI_JUDGE_MODEL=gpt-5.1`.
+The default answer model is `RDR_OPENAI_ANSWER_MODEL=gpt-5-mini`; the default
+judge model for opt-in answer evaluation is
+`RDR_OPENAI_JUDGE_MODEL=gpt-5.1`.
+Legacy `RDR_OPENAI_MODEL` remains accepted for existing local `.env` files.
 Default unit tests use fake model adapters and do not require paid model calls.
 
 Run the minimal API with:

@@ -27,7 +27,8 @@ uv run repo-research search "where is repository configuration validated?"
 Search emits JSON entries containing a score and a typed chunk. Each chunk
 includes its path, symbol when applicable, line range, content, and structural
 context. Select `--mode dense`, `--mode sparse`, or `--mode hybrid`; hybrid uses
-Qdrant Reciprocal Rank Fusion.
+Qdrant Reciprocal Rank Fusion. Evaluation selects the documented default mode,
+but each CLI/API request may choose a retrieval mode independently.
 
 Use `--path /path/to/repository` to search another already-indexed local
 repository and `--limit 10` to change the number of returned results.
@@ -53,15 +54,17 @@ ask for a grounded answer:
 
 ```bash
 make rag QUESTION="where is repository configuration validated?" \
-  RESEARCH_MODE=locate
+  RAG_MODE=locate
 ```
 
-The command emits a `ResearchAnswer` JSON document with a summary,
+The command emits a `RagAnswer` JSON document with a summary,
 implementation flow, files and symbols, risks, unresolved questions, and
 canonical evidence items. The model cites opaque evidence IDs only; application
-code maps those IDs back to stored paths and line ranges. If retrieval or
-citation validation is insufficient, the command returns an explicit
-`insufficient_evidence` answer instead of an unsupported claim.
+code maps those IDs back to stored paths and line ranges. Direct RAG preserves
+the result order returned by the selected retrieval mode; it does not apply a
+second answer-time reranking heuristic. If retrieval or citation validation is
+insufficient, the command returns an explicit `insufficient_evidence` answer
+instead of an unsupported claim.
 
 Run the minimal backend for future UI integration:
 
@@ -73,7 +76,7 @@ Then, in another terminal, exercise the same RAG service through FastAPI:
 
 ```bash
 make api-rag QUESTION="where is repository configuration validated?" \
-  RESEARCH_MODE=locate
+  RAG_MODE=locate
 ```
 
 ## Evaluate answers
