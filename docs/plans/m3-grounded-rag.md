@@ -80,12 +80,23 @@ Terminology cleanup before M4:
   `POST /rag`;
 - reserved "research" for the future M4 agentic investigation workflow.
 
+Live smoke hardening before M4:
+
+- added deterministic mode inference so common "where is" questions run as
+  locate answers even when the request uses auto mode;
+- tightened direct-RAG prompt rules so locate/flow answers do not emit change
+  targets and do not ask whether the user wants paths or citations already
+  returned by the application;
+- added deterministic post-generation cleanup that removes change targets
+  outside change mode and drops metadata-preference unresolved questions while
+  preserving real evidence gaps.
+
 Cleanup validation completed locally:
 
 - `uv run ruff check src tests scripts` — passed;
 - `uv run ruff format --check src tests scripts` — passed;
 - `uv run mypy` — passed (strict mypy, 19 source files);
-- `uv run pytest` — passed (35 tests).
+- `uv run pytest` — passed (40 tests).
 
 ## Validation
 

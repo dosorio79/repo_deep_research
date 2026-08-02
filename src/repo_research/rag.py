@@ -103,6 +103,7 @@ class DirectRagService:
         request: RagRequest,
     ) -> RagAnswer:
         """Return a direct-RAG answer with citations validated against retrieval."""
+        request = request.model_copy(update={"mode": infer_rag_mode(request)})
         results = self._database.search(
             SearchQuery(
                 text=request.question,
@@ -259,6 +260,22 @@ def insufficient_evidence_rag_answer(
     )
 
 
+def infer_rag_mode(request: RagRequest) -> RagMode:
+    """Resolve auto mode from common repository-question wording."""
+    if request.mode is not RagMode.AUTO:
+        return request.mode
+    question = request.question.strip().lower()
+    if question.startswith(("where is", "where are", "where does")):
+        return RagMode.LOCATE
+    if question.startswith(("how does", "how do")) or "flow" in question:
+        return RagMode.FLOW
+    if question.startswith(
+        ("what change", "what changes", "which files", "where to modify")
+    ) or any(term in question for term in (" add ", " support ", " modify ")):
+        return RagMode.CHANGE
+    return RagMode.AUTO
+
+
 def _build_validated_answer(
     *,
     request: RagRequest,
@@ -298,7 +315,11 @@ def _build_validated_answer(
     ]
     relevant_files = sorted({item.path for item in evidence})
     relevant_symbols = sorted({item.symbol for item in evidence if item.symbol})
-    change_targets = _canonical_change_targets(draft.change_targets, evidence_by_id)
+    change_targets = (
+        _canonical_change_targets(draft.change_targets, evidence_by_id)
+        if request.mode is RagMode.CHANGE
+        else []
+    )
     return RagAnswer(
         question=request.question,
         mode=request.mode,
@@ -310,7 +331,7 @@ def _build_validated_answer(
         change_targets=change_targets,
         risks=draft.risks,
         confidence=draft.confidence,
-        unresolved_questions=draft.unresolved_questions,
+        unresolved_questions=_filtered_unresolved_questions(draft.unresolved_questions),
         insufficient_evidence=draft.insufficient_evidence,
     )
 
@@ -380,12 +401,39 @@ def _answer_prompt(*, request: RagRequest, evidence_context: str) -> str:
             "or line numbers; the application maps evidence IDs to canonical "
             "citations. If the evidence is insufficient, set insufficient_evidence "
             "to true and explain what is missing.",
+            "Use change_targets only when RAG mode is change. For locate and flow "
+            "modes, leave change_targets empty.",
+            "Do not ask whether the user wants paths, line numbers, or citations; "
+            "the application returns canonical evidence separately.",
+            "For locate questions, prefer evidence containing concrete symbols, "
+            "classes, functions, validators, or assignments over module docstrings "
+            "or import-only chunks.",
             f"RAG mode: {request.mode.value}",
             f"Question: {request.question}",
             "Evidence:",
             evidence_context,
         ]
     )
+
+
+def _filtered_unresolved_questions(questions: list[str]) -> list[str]:
+    filtered: list[str] = []
+    for question in questions:
+        lowered = question.lower()
+        asks_preference = "do you want" in lowered or "would you like" in lowered
+        asks_for_returned_metadata = any(
+            fragment in lowered
+            for fragment in (
+                "path",
+                "line",
+                "citation",
+                "file reference",
+            )
+        )
+        if asks_preference and asks_for_returned_metadata:
+            continue
+        filtered.append(question)
+    return filtered
 
 
 def _judge_prompt(*, record: EvaluationRecord, answer: RagAnswer) -> str:

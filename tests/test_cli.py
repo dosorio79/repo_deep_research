@@ -140,7 +140,7 @@ def test_cli_rag_emits_grounded_answer_without_live_model(
     cli.main()
 
     result = RagAnswer.model_validate_json(capsys.readouterr().out)
-    assert result.mode is RagMode.AUTO
+    assert result.mode is RagMode.LOCATE
     assert result.insufficient_evidence is True
 
 

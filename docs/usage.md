@@ -63,9 +63,11 @@ implementation flow, files and symbols, risks, unresolved questions, and
 canonical evidence items. The model cites opaque evidence IDs only; application
 code maps those IDs back to stored paths and line ranges. Direct RAG preserves
 the result order returned by the selected retrieval mode; it does not apply a
-second answer-time reranking heuristic. If retrieval or citation validation is
-insufficient, the command returns an explicit `insufficient_evidence` answer
-instead of an unsupported claim.
+second answer-time reranking heuristic. Auto mode deterministically resolves
+common "where is" questions to locate mode, and locate/flow answers do not
+return change targets. If retrieval or citation validation is insufficient, the
+command returns an explicit `insufficient_evidence` answer instead of an
+unsupported claim.
 
 Run the minimal backend for future UI integration:
 

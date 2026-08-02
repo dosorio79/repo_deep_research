@@ -13,10 +13,12 @@ from repo_research.models import (
     SearchResult,
 )
 from repo_research.rag import (
+    ChangeTargetDraft,
     DirectRagService,
     EvidenceReference,
     RagAnswerDraft,
     evaluate_answers,
+    infer_rag_mode,
     write_answer_evaluation_report,
 )
 
@@ -201,6 +203,88 @@ def test_rag_preserves_selected_retrieval_order(tmp_path: Path) -> None:
 
     assert answer.evidence[0].path == "README.md"
     assert answer.relevant_symbols == ["Quick start"]
+
+
+def test_auto_mode_infers_locate_for_where_questions(tmp_path: Path) -> None:
+    request = RagRequest(question="where is repository configuration validated?")
+
+    assert infer_rag_mode(request) is RagMode.LOCATE
+
+
+def test_locate_mode_removes_change_targets_and_metadata_prompts(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    service = DirectRagService(
+        database=FakeDatabase(
+            [SearchResult(chunk=_chunk(repository, symbol="Settings"), score=0.9)]
+        ),
+        generator=FakeGenerator(
+            RagAnswerDraft(
+                summary="Configuration is validated in Settings.",
+                evidence=[
+                    EvidenceReference(
+                        evidence_id="E1",
+                        reason="Defines the settings validation boundary.",
+                    )
+                ],
+                change_targets=[
+                    ChangeTargetDraft(
+                        reason="Add tests.",
+                        evidence_ids=["E1"],
+                    )
+                ],
+                unresolved_questions=[
+                    "Do you want an exact file path or line reference?",
+                    "The evidence does not show deployment overrides.",
+                ],
+                confidence=0.8,
+            )
+        ),
+    )
+
+    answer = service.answer(
+        repository=repository,
+        request=RagRequest(question="where is repository configuration validated?"),
+    )
+
+    assert answer.mode is RagMode.LOCATE
+    assert answer.change_targets == []
+    assert answer.unresolved_questions == [
+        "The evidence does not show deployment overrides."
+    ]
+
+
+def test_change_mode_keeps_change_targets(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    service = DirectRagService(
+        database=FakeDatabase([SearchResult(chunk=_chunk(repository), score=0.9)]),
+        generator=FakeGenerator(
+            RagAnswerDraft(
+                summary="Update Settings.",
+                evidence=[
+                    EvidenceReference(
+                        evidence_id="E1",
+                        reason="Defines the settings validation boundary.",
+                    )
+                ],
+                change_targets=[
+                    ChangeTargetDraft(reason="Add a new setting.", evidence_ids=["E1"])
+                ],
+                confidence=0.8,
+            )
+        ),
+    )
+
+    answer = service.answer(
+        repository=repository,
+        request=RagRequest(
+            question="which files should change to add a new setting?",
+            mode=RagMode.CHANGE,
+        ),
+    )
+
+    assert answer.change_targets[0].path == "src/repo_research/config.py"
 
 
 def test_answer_evaluation_writes_stable_report(tmp_path: Path) -> None:
