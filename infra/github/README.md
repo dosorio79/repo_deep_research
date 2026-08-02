@@ -28,13 +28,17 @@ repository:
 ```bash
 export GITHUB_TOKEN="..."
 terraform -chdir=infra/github init
-terraform -chdir=infra/github plan
+terraform -chdir=infra/github plan \
+  -var github_owner=dosorio79 \
+  -var repository_name=repo_deep_research
 ```
 
 Apply only after reviewing the plan:
 
 ```bash
-terraform -chdir=infra/github apply
+terraform -chdir=infra/github apply \
+  -var github_owner=dosorio79 \
+  -var repository_name=repo_deep_research
 ```
 
 The first release for the current M3 direct-RAG state is `v0.3.0`.

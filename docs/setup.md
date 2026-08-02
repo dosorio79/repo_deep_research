@@ -80,7 +80,9 @@ GitHub branch protection and environments are managed by Terraform:
 ```bash
 export GITHUB_TOKEN="..."
 terraform -chdir=infra/github init
-terraform -chdir=infra/github plan
+terraform -chdir=infra/github plan \
+  -var github_owner=dosorio79 \
+  -var repository_name=repo_deep_research
 ```
 
 Review the plan before applying it. The current M3 direct-RAG release is
