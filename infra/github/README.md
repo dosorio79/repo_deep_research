@@ -13,7 +13,7 @@ There is no separate `preprod` branch.
 
 ## Managed resources
 
-- Creates `dev` from `main` when it does not exist.
+- Manages a `dev` branch created from `main`.
 - Keeps `main` as the default branch.
 - Protects `main` with required CI, pull-request review, linear history, and
   conversation resolution.
@@ -31,6 +31,17 @@ terraform -chdir=infra/github init
 terraform -chdir=infra/github plan \
   -var github_owner=dosorio79 \
   -var repository_name=repo_deep_research
+```
+
+If the remote repository already has a `dev` branch, import it before the first
+plan or apply. Terraform cannot discover and conditionally adopt an existing
+branch from the `github_branch` resource definition alone:
+
+```bash
+terraform -chdir=infra/github import \
+  -var github_owner=dosorio79 \
+  -var repository_name=repo_deep_research \
+  github_branch.dev repo_deep_research:dev
 ```
 
 Apply only after reviewing the plan:
