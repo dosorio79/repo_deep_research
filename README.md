@@ -1,5 +1,9 @@
 # Repo Deep Research
 
+[![CI](https://github.com/dosorio79/repo_deep_research/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dosorio79/repo_deep_research/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/dosorio79/repo_deep_research)](https://github.com/dosorio79/repo_deep_research/releases)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/downloads/release/python-3120/)
+
 Repo Deep Research is an evidence-grounded research tool for Python
 repositories. It is the LLM Zoomcamp capstone: users can locate implementation
 logic, understand module flow, and assess change impact using answers that cite
