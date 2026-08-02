@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
 from typing import Protocol
 
 from fastapi import FastAPI, HTTPException
@@ -32,6 +33,14 @@ class RagDatabase(Protocol):
         """Return repository search results."""
 
 
+def package_version() -> str:
+    """Return the installed package version used by FastAPI metadata."""
+    try:
+        return version("repo-deep-research")
+    except PackageNotFoundError:
+        return "0.0.0"
+
+
 def create_app(
     *,
     settings: Settings | None = None,
@@ -40,7 +49,7 @@ def create_app(
 ) -> FastAPI:
     """Create a FastAPI app with injectable runtime dependencies."""
     app_settings = settings or Settings()
-    app = FastAPI(title="Repo Deep Research", version="0.1.0")
+    app = FastAPI(title="Repo Deep Research", version=package_version())
 
     def get_database() -> RagDatabase:
         return database or create_database(app_settings)

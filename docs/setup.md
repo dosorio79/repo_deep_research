@@ -64,3 +64,26 @@ Run the minimal API with:
 ```bash
 make api
 ```
+
+## Repository workflow
+
+The project uses two long-lived branches:
+
+- `main`: production.
+- `dev`: integration and dev/preprod.
+
+Feature branches should start from `dev`. Promote to production with a pull
+request from `dev` to `main`, then tag `main` with the release version.
+
+GitHub branch protection and environments are managed by Terraform:
+
+```bash
+export GITHUB_TOKEN="..."
+terraform -chdir=infra/github init
+terraform -chdir=infra/github plan \
+  -var github_owner=dosorio79 \
+  -var repository_name=repo_deep_research
+```
+
+Review the plan before applying it. The current M3 direct-RAG release is
+`v0.3.0`.

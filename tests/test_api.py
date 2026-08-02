@@ -1,5 +1,6 @@
 """Contract tests for the minimal M3 FastAPI backend."""
 
+from importlib.metadata import version
 from pathlib import Path
 
 import httpx
@@ -39,6 +40,16 @@ class FakeGenerator:
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
+
+
+def test_app_uses_package_version() -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+    )
+
+    assert app.version == version("repo-deep-research")
 
 
 @pytest.mark.anyio

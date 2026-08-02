@@ -1,5 +1,9 @@
 # Repo Deep Research
 
+[![CI](https://github.com/dosorio79/repo_deep_research/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dosorio79/repo_deep_research/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/dosorio79/repo_deep_research)](https://github.com/dosorio79/repo_deep_research/releases)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/downloads/release/python-3120/)
+
 Repo Deep Research is an evidence-grounded research tool for Python
 repositories. It is the LLM Zoomcamp capstone: users can locate implementation
 logic, understand module flow, and assess change impact using answers that cite
@@ -99,6 +103,20 @@ The M2 implementation and evaluation procedure are in
 [docs/plans/m2-evaluated-hybrid-retrieval.md](docs/plans/m2-evaluated-hybrid-retrieval.md)
 and [docs/evaluation.md](docs/evaluation.md). The M3 implementation record is
 in [docs/plans/m3-grounded-rag.md](docs/plans/m3-grounded-rag.md).
+
+## Branches and releases
+
+`main` is production. `dev` is the integration branch and dev/preprod
+environment. Feature work should branch from `dev`, merge back to `dev`, and
+promote to `main` by pull request when ready for production.
+
+Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`; pushing a version tag
+creates a GitHub Release. The first release for the M3 grounded direct-RAG state
+is `v0.3.0`.
+
+GitHub branch protection and repository environments are managed with Terraform
+under [infra/github](infra/github/). The workflow details are recorded in
+[docs/plans/release-branching.md](docs/plans/release-branching.md).
 
 ## M2 migration
 

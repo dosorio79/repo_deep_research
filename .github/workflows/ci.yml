@@ -2,7 +2,13 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
+      - dev
   pull_request:
+    branches:
+      - main
+      - dev
 
 jobs:
   quality:
@@ -13,7 +19,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
-      - run: uv sync --extra dev
+      - run: uv sync --dev
       - run: make lint
       - run: make typecheck
       - run: make test
