@@ -57,6 +57,24 @@ def test_cli_parses_rag_request() -> None:
     assert arguments.retrieval_mode == "dense"
 
 
+def test_cli_parses_ask_request() -> None:
+    arguments = build_parser().parse_args(
+        [
+            "ask",
+            "where is configuration validated?",
+            "--mode",
+            "locate",
+            "--retrieval-mode",
+            "dense",
+        ]
+    )
+
+    assert arguments.command == "ask"
+    assert arguments.question == "where is configuration validated?"
+    assert arguments.mode == "locate"
+    assert arguments.retrieval_mode == "dense"
+
+
 def test_cli_parses_answer_evaluation_request() -> None:
     arguments = build_parser().parse_args(
         ["evaluate-answers", "--dataset", "eval/held_out.json", "--limit", "3"]
@@ -124,6 +142,33 @@ def test_cli_rag_emits_grounded_answer_without_live_model(
     result = RagAnswer.model_validate_json(capsys.readouterr().out)
     assert result.mode is RagMode.AUTO
     assert result.insufficient_evidence is True
+
+
+def test_cli_ask_ingests_then_emits_grounded_answer_without_live_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "valid.py").write_text("value = 1\n", encoding="utf-8")
+    database = FakeDatabase()
+    monkeypatch.setattr(cli, "Settings", FakeSettings)
+    monkeypatch.setattr(runtime, "create_database", lambda _: database)
+    monkeypatch.setattr(runtime, "create_answer_model", lambda _: FakeOpenAIModel())
+    monkeypatch.setattr(cli, "_start_qdrant_if_available", lambda: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["repo-research", "ask", "where is missing logic?", "--path", str(tmp_path)],
+    )
+
+    cli.main()
+
+    captured = capsys.readouterr()
+    result = RagAnswer.model_validate_json(captured.out)
+    assert database.replacements[0][1] == 1
+    assert result.insufficient_evidence is True
+    assert "[repo-research] ingesting repository" in captured.err
+    assert "[repo-research] running direct rag" in captured.err
 
 
 def test_cli_ingest_emits_skipped_file_diagnostics(

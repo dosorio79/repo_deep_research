@@ -29,11 +29,7 @@ remain deliberately deferred.
 cp .env.example .env
 make install
 make test
-make docker-up
-make ingest-self
-make evidence QUESTION="where is configuration validated?"
-make rag QUESTION="where is configuration validated?" RAG_MODE=locate
-make evaluate-retrieval
+make rag QUESTION="where is configuration validated?"
 ```
 
 Qdrant is then available at `http://localhost:6333`; its local dashboard is at
@@ -50,22 +46,21 @@ Stop the local service with `make docker-down`.
 | `make lint` | Check formatting and lint rules. |
 | `make typecheck` | Run strict mypy checks. |
 | `make test` | Run the unit test suite. |
-| `make validate` | Run lint, typecheck, and tests. |
-| `make docker-up` | Start the local Qdrant service. |
-| `make docker-down` | Stop the local Qdrant service. |
+| `make validate` / `make check` | Run lint, typecheck, and tests. |
+| `make qdrant` / `make docker-up` | Start the local Qdrant service. |
+| `make stop` / `make docker-down` | Stop the local Qdrant service. |
 | `make ready` | Install dependencies, start Qdrant, and ingest this repository. |
-| `make ingest REPO_PATH=PATH` | Parse and index a local repository. |
-| `make ingest-self` | Parse and index this repository. |
+| `make ingest` / `make ingest-self` | Parse and index this repository. |
 | `make evidence QUESTION="..."` | Start Qdrant and return repository evidence using dense retrieval by default. |
-| `make rag QUESTION="..."` | Start Qdrant and return a grounded direct-RAG answer. |
+| `make rag QUESTION="..."` | Ingest this repo if needed and return a grounded direct-RAG answer. |
 | `make api-rag QUESTION="..."` | Start Qdrant and return a grounded answer through the local FastAPI `/rag` endpoint. |
 | `make evaluate-retrieval` | Evaluate dense, sparse, and hybrid retrieval on the development records. |
 | `make evaluate-answers` | Run opt-in live answer judging with OpenAI. |
 | `make api` | Run the minimal FastAPI backend on localhost. |
 
-The main Make targets accept optional variables: `QUESTION`, `REPO_PATH`,
-`LIMIT`, `RETRIEVAL_MODE`, `RAG_MODE`, `DATASET`, and `API_URL`. Run
-`make help` for examples.
+The simplest user path is `make rag QUESTION="..."`. Use
+`uv run repo-research ...` directly for path, mode, limit, dataset, and output
+options.
 
 ## Configuration
 

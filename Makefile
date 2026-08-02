@@ -1,77 +1,82 @@
 .DEFAULT_GOAL := help
+.SILENT:
 
-REPO_PATH ?= .
 QUESTION ?= where is repository configuration validated?
-LIMIT ?= 5
-RETRIEVAL_MODE ?= dense
-RAG_MODE ?= auto
-DATASET ?= eval/development.json
-API_URL ?= http://127.0.0.1:8000
+UV_CACHE_DIR ?= /tmp/repo_deep_research_uv_cache
+UV := UV_CACHE_DIR=$(UV_CACHE_DIR) uv
+RUN := $(UV) run
 
-.PHONY: help install format lint typecheck test validate docker-up docker-down ready ingest ingest-self evidence rag api-rag evaluate-retrieval evaluate-answers api
+.PHONY: help install format lint typecheck test validate check qdrant stop ready ingest ingest-self evidence rag api-rag evaluate-retrieval evaluate-answers api docker-up docker-down
 
 help:
-	@printf '%s\n' 'Common workflow:'
-	@printf '%s\n' '  make ready'
-	@printf '%s\n' '  make evidence QUESTION="where is configuration validated?"'
-	@printf '%s\n' '  make rag QUESTION="where is configuration validated?"'
-	@printf '%s\n' '  make api       # run in one terminal'
-	@printf '%s\n' '  make api-rag QUESTION="where is configuration validated?"'
-	@printf '%s\n' ''
-	@printf '%s\n' 'Other targets:'
-	@printf '%s\n' '  make install | make validate | make docker-up | make docker-down'
-	@printf '%s\n' '  make ingest REPO_PATH=/path/to/repo'
-	@printf '%s\n' '  make evaluate-retrieval'
-	@printf '%s\n' '  make evaluate-answers'
-	@printf '%s\n' '  make api'
+	printf '%s\n' 'Common:'
+	printf '%s\n' '  make ready       install deps, start Qdrant, ingest this repo'
+	printf '%s\n' '  make check       lint, typecheck, and test'
+	printf '%s\n' '  make evidence    retrieve evidence for QUESTION'
+	printf '%s\n' '  make rag         ingest if needed, then answer QUESTION'
+	printf '%s\n' '  make api         run FastAPI locally'
+	printf '%s\n' ''
+	printf '%s\n' 'Operations:'
+	printf '%s\n' '  make qdrant | make stop | make ingest | make api-rag'
+	printf '%s\n' '  make evaluate-retrieval | make evaluate-answers'
+	printf '%s\n' ''
+	printf '%s\n' 'Example:'
+	printf '%s\n' '  make rag QUESTION="where is configuration validated?"'
+	printf '%s\n' ''
+	printf '%s\n' 'Use uv run repo-research ... directly for path, mode, limit, or dataset options.'
 
 install:
-	uv sync --dev
+	$(UV) sync --dev
 
 format:
-	uv run ruff format src tests scripts
-	uv run ruff check --fix src tests scripts
+	$(RUN) ruff format src tests scripts
+	$(RUN) ruff check --fix src tests scripts
 
 lint:
-	uv run ruff format --check src tests scripts
-	uv run ruff check src tests scripts
+	$(RUN) ruff format --check src tests scripts
+	$(RUN) ruff check src tests scripts
 
 typecheck:
-	uv run mypy
+	$(RUN) mypy
 
 test:
-	uv run pytest
+	$(RUN) pytest
 
 validate: lint typecheck test
 
-docker-up:
+check: validate
+
+qdrant:
 	docker compose up -d --wait qdrant
 
-docker-down:
+stop:
 	docker compose down
 
-ready: install docker-up ingest-self
+docker-up: qdrant
+
+docker-down: stop
+
+ready: install qdrant ingest
 
 ingest:
-	uv run repo-research ingest "$(REPO_PATH)"
+	$(RUN) repo-research ingest .
 
-ingest-self:
-	uv run repo-research ingest .
+ingest-self: ingest
 
-evidence: docker-up
-	uv run repo-research search "$(QUESTION)" --path "$(REPO_PATH)" --limit "$(LIMIT)" --mode "$(RETRIEVAL_MODE)"
+evidence: qdrant
+	$(RUN) repo-research search "$(QUESTION)"
 
-rag: docker-up
-	uv run repo-research rag "$(QUESTION)" --path "$(REPO_PATH)" --mode "$(RAG_MODE)" --limit "$(LIMIT)" --retrieval-mode "$(RETRIEVAL_MODE)"
+rag:
+	$(RUN) repo-research ask "$(QUESTION)"
 
-api-rag: docker-up
-	QUESTION="$(QUESTION)" REPO_PATH="$(REPO_PATH)" LIMIT="$(LIMIT)" RETRIEVAL_MODE="$(RETRIEVAL_MODE)" RAG_MODE="$(RAG_MODE)" API_URL="$(API_URL)" uv run python scripts/api_rag.py
+api-rag: qdrant
+	QUESTION="$(QUESTION)" $(RUN) python scripts/api_rag.py
 
 evaluate-retrieval:
-	uv run repo-research evaluate-retrieval --path "$(REPO_PATH)" --dataset "$(DATASET)" --output eval/results/retrieval-development.json --limit "$(LIMIT)"
+	$(RUN) repo-research evaluate-retrieval
 
 evaluate-answers:
-	uv run repo-research evaluate-answers --path "$(REPO_PATH)" --dataset "$(DATASET)" --output eval/results/answer-development.json --limit "$(LIMIT)" --retrieval-mode "$(RETRIEVAL_MODE)"
+	$(RUN) repo-research evaluate-answers
 
 api:
-	uv run uvicorn repo_research.api:app --reload
+	$(RUN) uvicorn repo_research.api:app --reload

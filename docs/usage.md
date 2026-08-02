@@ -53,8 +53,9 @@ After Qdrant is running, the repository is ingested, and `OPENAI_API_KEY` is set
 ask for a grounded answer:
 
 ```bash
-make rag QUESTION="where is repository configuration validated?" \
-  RAG_MODE=locate
+make rag QUESTION="where is repository configuration validated?"
+# or: uv run repo-research ask "where is repository configuration validated?" \
+#       --mode locate --retrieval-mode dense --limit 5
 ```
 
 The command emits a `RagAnswer` JSON document with a summary,
@@ -75,8 +76,7 @@ make api
 Then, in another terminal, exercise the same RAG service through FastAPI:
 
 ```bash
-make api-rag QUESTION="where is repository configuration validated?" \
-  RAG_MODE=locate
+make api-rag QUESTION="where is repository configuration validated?"
 ```
 
 ## Evaluate answers
