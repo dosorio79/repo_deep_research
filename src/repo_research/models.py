@@ -191,7 +191,14 @@ class ResearchAnswer(BaseModel):
     @model_validator(mode="after")
     def validate_evidence_references(self) -> ResearchAnswer:
         """Ensure process steps and change targets cite returned evidence only."""
-        evidence_ids = {item.evidence_id for item in self.evidence}
+        evidence_ids: set[str] = set()
+        duplicates: set[str] = set()
+        for item in self.evidence:
+            if item.evidence_id in evidence_ids:
+                duplicates.add(item.evidence_id)
+            evidence_ids.add(item.evidence_id)
+        if duplicates:
+            raise ValueError(f"duplicate evidence IDs: {sorted(duplicates)}")
         referenced_ids = {
             evidence_id
             for step in self.research_steps
