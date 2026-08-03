@@ -96,6 +96,34 @@ class RagRequest(BaseModel):
     limit: int = Field(default=5, ge=1, le=20)
 
 
+class ResearchBudget(BaseModel):
+    """Configurable tool-call limits for one bounded research run."""
+
+    max_searches: int = Field(default=3, ge=1, le=20)
+    max_file_reads: int = Field(default=5, ge=0, le=20)
+    max_total_tool_calls: int = Field(default=8, ge=1, le=40)
+
+    @model_validator(mode="after")
+    def validate_total_budget(self) -> ResearchBudget:
+        """Ensure each per-tool allowance can fit under the total call limit."""
+        if self.max_total_tool_calls < self.max_searches:
+            raise ValueError("max_total_tool_calls must cover max_searches")
+        if self.max_total_tool_calls < self.max_file_reads:
+            raise ValueError("max_total_tool_calls must cover max_file_reads")
+        return self
+
+
+class ResearchRequest(BaseModel):
+    """An agentic-research request scoped by CLI or API orchestration."""
+
+    question: str = Field(min_length=1)
+    repository_path: Path | None = None
+    mode: RagMode = RagMode.CHANGE
+    retrieval_mode: RetrievalMode = RetrievalMode.DENSE
+    retrieval_limit: int = Field(default=5, ge=1, le=20)
+    budget: ResearchBudget = Field(default_factory=ResearchBudget)
+
+
 class EvidenceItem(BaseModel):
     """A canonical citation derived from a retrieved repository chunk."""
 
@@ -132,6 +160,59 @@ class RagAnswer(BaseModel):
     confidence: float = Field(ge=0, le=1)
     unresolved_questions: list[str] = Field(default_factory=list)
     insufficient_evidence: bool = False
+
+
+class ResearchStep(BaseModel):
+    """One application-recorded step in a bounded research process."""
+
+    sequence: int = Field(ge=1)
+    action: str = Field(min_length=1)
+    rationale: str = Field(min_length=1)
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+class ResearchAnswer(BaseModel):
+    """A grounded agentic-research answer with explicit process steps."""
+
+    question: str = Field(min_length=1)
+    mode: RagMode = RagMode.CHANGE
+    summary: str = Field(min_length=1)
+    research_steps: list[ResearchStep] = Field(default_factory=list)
+    implementation_flow: list[str] = Field(default_factory=list)
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+    relevant_files: list[str] = Field(default_factory=list)
+    relevant_symbols: list[str] = Field(default_factory=list)
+    change_targets: list[ChangeTarget] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0, le=1)
+    unresolved_questions: list[str] = Field(default_factory=list)
+    insufficient_evidence: bool = False
+
+    @model_validator(mode="after")
+    def validate_evidence_references(self) -> ResearchAnswer:
+        """Ensure process steps and change targets cite returned evidence only."""
+        evidence_ids: set[str] = set()
+        duplicates: set[str] = set()
+        for item in self.evidence:
+            if item.evidence_id in evidence_ids:
+                duplicates.add(item.evidence_id)
+            evidence_ids.add(item.evidence_id)
+        if duplicates:
+            raise ValueError(f"duplicate evidence IDs: {sorted(duplicates)}")
+        referenced_ids = {
+            evidence_id
+            for step in self.research_steps
+            for evidence_id in step.evidence_ids
+        }
+        referenced_ids.update(
+            evidence_id
+            for target in self.change_targets
+            for evidence_id in target.evidence_ids
+        )
+        unknown_ids = sorted(referenced_ids - evidence_ids)
+        if unknown_ids:
+            raise ValueError(f"unknown evidence IDs: {unknown_ids}")
+        return self
 
 
 class ModelUsage(BaseModel):
@@ -180,6 +261,13 @@ class RagRunResult(BaseModel):
     """A direct-RAG answer plus application-owned runtime trace metadata."""
 
     answer: RagAnswer
+    trace: RagRunTrace
+
+
+class ResearchRunResult(BaseModel):
+    """An agentic-research answer plus application-owned runtime trace metadata."""
+
+    answer: ResearchAnswer
     trace: RagRunTrace
 
 
