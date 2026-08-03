@@ -7,6 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 from openai import OpenAIError
+from qdrant_client.http.exceptions import ResponseHandlingException
 
 import repo_research.api as api_module
 from repo_research.api import create_app
@@ -62,6 +63,13 @@ class OneResultDatabase(FakeDatabase):
                 score=0.9,
             )
         ]
+
+
+class UnavailableDatabase(FakeDatabase):
+    """Fake database that mirrors a refused Qdrant connection."""
+
+    def search(self, query: object) -> list[SearchResult]:
+        raise ResponseHandlingException(Exception("Connection refused"))
 
 
 @pytest.fixture
@@ -224,5 +232,31 @@ async def test_rag_returns_stable_error_when_openai_client_is_unavailable(
         "detail": (
             "OpenAI client is unavailable; check local credentials and service "
             "configuration."
+        )
+    }
+
+
+@pytest.mark.anyio
+async def test_rag_returns_stable_error_when_qdrant_is_unavailable() -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=UnavailableDatabase(healthy=False),
+        generator=FakeGenerator(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/rag",
+            json={"question": "Where is example logic?", "limit": 5},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": (
+            "Repository vector store is unavailable; start Qdrant and retry the "
+            "request."
         )
     }

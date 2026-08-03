@@ -8,6 +8,7 @@ from typing import Protocol
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAIError
+from qdrant_client.http.exceptions import ResponseHandlingException
 
 from repo_research.config import Settings, load_dotenv_environment
 from repo_research.ingestion import discover_repository
@@ -94,6 +95,14 @@ def create_app(
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
+        except ResponseHandlingException as error:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Repository vector store is unavailable; start Qdrant and "
+                    "retry the request."
+                ),
+            ) from error
         except OpenAIError as error:
             raise HTTPException(
                 status_code=503,
