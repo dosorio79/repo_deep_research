@@ -58,6 +58,9 @@ make rag QUESTION="where is repository configuration validated?"
 #       --mode locate --retrieval-mode dense --limit 5
 ```
 
+Prefer keeping `OPENAI_API_KEY` in ignored `.env.local`; keep `.env` for
+non-secret local defaults.
+
 The command emits a `RagRunResult` JSON document with:
 
 - `answer`: the grounded `RagAnswer` content, including summary, implementation

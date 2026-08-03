@@ -1,6 +1,7 @@
 """Validated runtime configuration for Repo Deep Research."""
 
 import os
+from collections.abc import Iterable
 from pathlib import Path
 
 from pydantic import AliasChoices, Field, field_validator
@@ -8,20 +9,28 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from repo_research.models import RetrievalMode
 
+DEFAULT_DOTENV_PATHS = (Path(".env"), Path(".env.local"))
 
-def load_dotenv_environment(path: Path = Path(".env")) -> None:
-    """Load simple KEY=VALUE entries from .env into os.environ when missing."""
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+
+def load_dotenv_environment(
+    paths: Path | Iterable[Path] = DEFAULT_DOTENV_PATHS,
+) -> None:
+    """Load local KEY=VALUE files while preserving exported environment values."""
+    dotenv_paths = (paths,) if isinstance(paths, Path) else tuple(paths)
+    protected_keys = set(os.environ)
+    for path in dotenv_paths:
+        if not path.exists():
             continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if not key or key in os.environ:
-            continue
-        os.environ[key] = _strip_env_quotes(value.strip())
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            parsed_value = _strip_env_quotes(value.strip())
+            if not key or key in protected_keys or parsed_value == "":
+                continue
+            os.environ[key] = parsed_value
 
 
 def _strip_env_quotes(value: str) -> str:
@@ -34,7 +43,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables and an optional .env."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", ".env.local"),
         env_prefix="RDR_",
         env_ignore_empty=True,
         extra="ignore",

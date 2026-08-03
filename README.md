@@ -32,6 +32,7 @@ feedback persistence, and monitoring dashboards remain deliberately deferred.
 
 ```bash
 cp .env.example .env
+cp .env.local.example .env.local
 make install
 make test
 make rag QUESTION="where is configuration validated?"
@@ -75,8 +76,11 @@ options.
 
 ## Configuration
 
-Copy `.env.example` to `.env` for local overrides. All runtime settings use the
-`RDR_` prefix and are validated by `repo_research.config.Settings`.
+Copy `.env.example` to `.env` for non-secret local defaults. Copy
+`.env.local.example` to `.env.local` for secrets and machine-local overrides.
+Both `.env` and `.env.local` are ignored; exported shell variables override both.
+All runtime settings use the `RDR_` prefix and are validated by
+`repo_research.config.Settings`.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -96,6 +100,7 @@ Copy `.env.example` to `.env` for local overrides. All runtime settings use the
 | `RDR_ANSWER_EVALUATION_LIMIT` | `5` | Default retrieved evidence limit during answer evaluation. |
 | `RDR_CORS_ALLOWED_ORIGINS` | `[]` | JSON list of browser origins allowed to call FastAPI. `.env.example` opts in local frontend origins. |
 | `RDR_LOG_LEVEL` | `INFO` | Application log level. |
+| `OPENAI_API_KEY` | unset | OpenAI API key for live direct RAG and answer evaluation. Prefer `.env.local` or an exported shell variable. |
 
 Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 `RDR_ANSWER_EVAL_LIMIT` remain accepted for existing local `.env` files, but new

@@ -48,6 +48,25 @@ def test_settings_read_prefixed_environment_values(
     assert settings.log_level == "DEBUG"
 
 
+def test_settings_read_env_local_after_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(
+        "RDR_QDRANT_URL=http://env.example.test\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".env.local").write_text(
+        "RDR_QDRANT_URL=http://local.example.test\n",
+        encoding="utf-8",
+    )
+
+    settings = Settings()
+
+    assert settings.qdrant_url == "http://local.example.test"
+
+
 def test_settings_read_grouped_openai_and_limit_names(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -116,19 +135,24 @@ def test_settings_reject_non_positive_file_size() -> None:
         Settings(max_file_size_bytes=0)
 
 
-def test_load_dotenv_environment_loads_unprefixed_openai_key(
+def test_load_dotenv_environment_loads_unprefixed_openai_key_and_local_overrides(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(
-        'OPENAI_API_KEY="test-key"\nRDR_QDRANT_URL=http://example.test\n',
+        "OPENAI_API_KEY=\nRDR_QDRANT_URL=http://example.test\n",
+        encoding="utf-8",
+    )
+    local_env_file = tmp_path / ".env.local"
+    local_env_file.write_text(
+        'OPENAI_API_KEY="local-test-key"\nRDR_QDRANT_URL=http://local.test\n',
         encoding="utf-8",
     )
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("RDR_QDRANT_URL", "http://already-set.test")
 
-    load_dotenv_environment(env_file)
+    load_dotenv_environment((env_file, local_env_file))
 
-    assert os.environ["OPENAI_API_KEY"] == "test-key"
+    assert os.environ["OPENAI_API_KEY"] == "local-test-key"
     assert os.environ["RDR_QDRANT_URL"] == "http://already-set.test"
