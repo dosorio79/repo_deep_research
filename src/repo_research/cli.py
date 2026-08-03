@@ -14,9 +14,9 @@ from repo_research.evaluation import evaluate_records, load_records, write_repor
 from repo_research.ingestion import discover_repository, parse_files
 from repo_research.models import (
     IngestSummary,
-    RagAnswer,
     RagMode,
     RagRequest,
+    RagRunResult,
     RepositoryIdentity,
     RetrievalMode,
     SearchQuery,
@@ -118,7 +118,7 @@ def main() -> None:
             return
         _report_step(f"indexed {summary.indexed_chunks} chunks")
         _report_step("running direct rag")
-        answer = _run_direct_rag(
+        run_result = _run_direct_rag(
             database=database,
             repository=repository,
             root_path=root_path,
@@ -131,7 +131,7 @@ def main() -> None:
             limit=arguments.limit or settings.retrieval_limit,
         )
         _report_step("done")
-        print(json.dumps(answer.model_dump(mode="json"), indent=2))
+        print(json.dumps(run_result.model_dump(mode="json"), indent=2))
         return
 
     repository, _ = discover_repository(root_path, settings.max_file_size_bytes)
@@ -153,7 +153,7 @@ def main() -> None:
         return
 
     if arguments.command == "rag":
-        answer = _run_direct_rag(
+        run_result = _run_direct_rag(
             database=database,
             repository=repository,
             root_path=root_path,
@@ -165,7 +165,7 @@ def main() -> None:
             else settings.retrieval_mode,
             limit=arguments.limit or settings.retrieval_limit,
         )
-        print(json.dumps(answer.model_dump(mode="json"), indent=2))
+        print(json.dumps(run_result.model_dump(mode="json"), indent=2))
         return
 
     if arguments.command == "evaluate-answers":
@@ -218,13 +218,13 @@ def _run_direct_rag(
     mode: RagMode,
     retrieval_mode: RetrievalMode,
     limit: int,
-) -> RagAnswer:
+) -> RagRunResult:
     service = runtime.create_direct_rag_service(
         settings=settings,
         database=database,
         generator=runtime.create_answer_model(settings),
     )
-    return service.answer(
+    return service.run(
         repository=repository,
         request=RagRequest(
             question=question,

@@ -58,17 +58,24 @@ make rag QUESTION="where is repository configuration validated?"
 #       --mode locate --retrieval-mode dense --limit 5
 ```
 
-The command emits a `RagAnswer` JSON document with a summary,
-implementation flow, files and symbols, risks, unresolved questions, and
-canonical evidence items. The model cites opaque evidence IDs only; application
-code maps those IDs back to stored paths and line ranges. Direct RAG preserves
-the result order returned by the selected retrieval mode; it does not apply a
-second answer-time reranking heuristic. Auto mode deterministically resolves
-common locate, flow, and change-impact question wording, and locate/flow
-answers do not return change targets. If retrieval or citation validation is
-insufficient, the command returns an explicit `insufficient_evidence` answer
-instead of an unsupported claim; when retrieval found nearby context, the answer
-still includes that closest evidence for inspection.
+The command emits a `RagRunResult` JSON document with:
+
+- `answer`: the grounded `RagAnswer` content, including summary, implementation
+  flow, files and symbols, risks, unresolved questions, and canonical evidence
+  items;
+- `trace`: application-owned metadata for the run, including repository
+  identity, retrieval settings, retrieved chunk count, unique file count, latency,
+  model usage, estimated cost where pricing is known, and tool-call count.
+
+The model cites opaque evidence IDs only; application code maps those IDs back to
+stored paths and line ranges. Direct RAG preserves the result order returned by
+the selected retrieval mode; it does not apply a second answer-time reranking
+heuristic. Auto mode deterministically resolves common locate, flow, and
+change-impact question wording, and locate/flow answers do not return change
+targets. If retrieval or citation validation is insufficient, the command returns
+an explicit `insufficient_evidence` answer instead of an unsupported claim; when
+retrieval found nearby context, the answer still includes that closest evidence
+for inspection.
 
 Run the minimal backend for future UI integration:
 

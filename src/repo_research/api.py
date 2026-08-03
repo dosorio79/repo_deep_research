@@ -10,8 +10,8 @@ from fastapi import FastAPI, HTTPException
 from repo_research.config import Settings
 from repo_research.ingestion import discover_repository
 from repo_research.models import (
-    RagAnswer,
     RagRequest,
+    RagRunResult,
     SearchQuery,
     SearchResult,
 )
@@ -66,8 +66,8 @@ def create_app(
             qdrant_ok = False
         return {"status": "ok" if qdrant_ok else "degraded", "qdrant": qdrant_ok}
 
-    @app.post("/rag", response_model=RagAnswer)
-    async def rag(request: RagRequest) -> RagAnswer:
+    @app.post("/rag", response_model=RagRunResult)
+    async def rag(request: RagRequest) -> RagRunResult:
         root_path = (request.repository_path or app_settings.repository_root).resolve()
         try:
             repository, _ = discover_repository(
@@ -78,7 +78,7 @@ def create_app(
                 database=get_database(),
                 generator=get_generator(),
             )
-            return service.answer(
+            return service.run(
                 repository=repository,
                 request=request.model_copy(update={"repository_path": root_path}),
             )

@@ -9,7 +9,7 @@ import pytest
 from repo_research.api import create_app
 from repo_research.config import Settings
 from repo_research.models import RagRequest, SearchResult
-from repo_research.rag import RagAnswerDraft
+from repo_research.rag import AnswerGenerationResult
 
 
 class FakeDatabase:
@@ -33,7 +33,7 @@ class FakeGenerator:
         *,
         request: RagRequest,
         evidence_context: str,
-    ) -> RagAnswerDraft:
+    ) -> AnswerGenerationResult:
         raise AssertionError("empty retrieval should not call the model")
 
 
@@ -89,5 +89,7 @@ async def test_rag_returns_insufficient_evidence_shape() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["insufficient_evidence"] is True
-    assert body["evidence"] == []
+    assert body["answer"]["insufficient_evidence"] is True
+    assert body["answer"]["evidence"] == []
+    assert body["trace"]["retrieved_chunk_count"] == 0
+    assert body["trace"]["tool_call_count"] == 0

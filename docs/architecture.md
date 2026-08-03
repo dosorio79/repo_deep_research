@@ -68,10 +68,14 @@ those diagnostics alongside the repository identity and indexed-chunk count.
 mode, and writes deterministic file- and symbol-level metric reports. It uses a
 small search protocol, so metric tests require neither a model nor Qdrant.
 
-`rag.py` adds the M3 direct-RAG layer. It preserves the result order
-returned by the selected retrieval mode, assigns opaque evidence IDs to
-retrieved chunks, asks the answer model to cite only those IDs, then maps valid
-IDs back to canonical paths, symbols, and line ranges from storage. Unknown
-citations or empty retrieval results return explicit insufficient-evidence
-answers. The minimal FastAPI app keeps routes thin and delegates orchestration
-to the same service used by the CLI.
+`rag.py` adds the direct-RAG layer. It preserves the result order returned by the
+selected retrieval mode, assigns opaque evidence IDs to retrieved chunks, asks
+the answer model to cite only those IDs, then maps valid IDs back to canonical
+paths, symbols, and line ranges from storage. Unknown citations or empty
+retrieval results return explicit insufficient-evidence answers. RAG runs return
+`RagRunResult`, keeping model-authored answer content under `answer` and
+application-owned telemetry under `trace`. The trace records repository identity,
+retrieval settings, retrieved chunk counts, latency, model usage, estimated cost
+where pricing is known, and direct-RAG tool-call count. The minimal FastAPI app
+keeps routes thin and delegates orchestration to the same service used by the
+CLI.
