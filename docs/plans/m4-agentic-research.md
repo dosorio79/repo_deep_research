@@ -26,6 +26,11 @@ This branch should deliver the smallest useful vertical slice:
   evidence;
 - a `ResearchRunResult` response envelope that follows the M3.5 trace contract;
 - a CLI command for local reviewer smoke testing;
+- a stable API/CLI naming decision that lets the frontend harness distinguish
+  direct RAG from agentic research without changing the existing `/rag`
+  contract: reserve `POST /research` and `repo-research research` for the M4
+  `ResearchRunResult` surface while keeping `POST /rag` and `repo-research rag`
+  direct-RAG only;
 - focused offline tests using fake model/tool dependencies.
 
 ## Non-goals
@@ -40,7 +45,9 @@ This branch must not add:
 - Logfire instrumentation;
 - monitoring dashboards;
 - new language support;
-- broad API expansion beyond what is needed for the M4 slice.
+- broad API expansion beyond what is needed for the M4 slice;
+- frontend implementation, except for documenting the future Direct/Agentic
+  harness toggle contract.
 
 ## Proposed implementation order
 
@@ -53,7 +60,10 @@ This branch must not add:
 6. Add the live PydanticAI adapter behind the same service boundary.
 7. Return the M3.5-style response envelope with agentic trace metadata.
 8. Add the CLI command and README usage notes.
-9. Run narrow tests first, then the standard validation commands.
+9. Record the frontend harness follow-up: a Direct/Agentic segmented control
+   should call `/rag` for direct RAG and `/research` for agentic
+   `ResearchRunResult` once that contract exists.
+10. Run narrow tests first, then the standard validation commands.
 
 ## Acceptance criteria
 
@@ -102,4 +112,29 @@ changed.
 
 ## Status
 
-Deferred until M3.5 is complete.
+In progress on `feat/m4-agentic-research-tools`.
+
+## Progress log
+
+### 2026-08-03 - Branch start
+
+- Rebasing this branch onto `dev` is required before M4 implementation so the
+  agentic response envelope can reuse the implemented M3.5 trace contract and
+  coexist with the M3.6 frontend harness.
+- Started with the lowest-risk contract slice: typed research request, budget,
+  process-step, answer, and run-result models plus central settings for the
+  default tool-call bounds.
+- Kept repository tools, live PydanticAI integration, API expansion, and CLI
+  behavior out of this first checkpoint.
+
+Current next step: implement the fakeable bounded research service around the
+new models, then add repository tool tests for search, chunk reads, file reads,
+and symbol lookup.
+
+Frontend note: after the M4 service exposes a stable agentic backend contract,
+the existing frontend harness should add a compact Direct/Agentic selector.
+Direct should preserve the current `POST /rag` behavior and response rendering;
+Agentic should call `POST /research` and render `ResearchRunResult`, including
+`research_steps`, bounded `tool_call_count`, evidence, change targets, and the
+reused trace metadata. The matching local smoke command should be
+`repo-research research`.

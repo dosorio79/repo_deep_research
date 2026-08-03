@@ -4,6 +4,11 @@
 
 Implemented as a vendored React TypeScript frontend under `frontend/`.
 
+Post-M4 follow-up: after the M4 agentic research backend contract is stable,
+extend the Research view with a compact Direct/Agentic selector. Direct keeps
+the current `POST /rag` behavior; Agentic calls `POST /research` and renders
+`ResearchRunResult` without moving tool logic into the frontend.
+
 ## Goal
 
 Build a thin React TypeScript frontend that makes the current direct-RAG backend
@@ -192,6 +197,7 @@ not contain fake charts, fake eval results, or invented operational data.
 
 Controls:
 
+- research type segmented control after M4 is available: Direct, Agentic;
 - question textarea;
 - mode segmented control: Auto, Locate, Flow, Change;
 - retrieval mode segmented control: Dense, Sparse, Hybrid;
@@ -249,7 +255,8 @@ Do not add:
 - backoffice data tables;
 - authentication;
 - repository ingestion UI;
-- agentic research UI beyond the current `POST /rag` contract;
+- agentic research UI before the M4 backend exposes a stable
+  `ResearchRunResult` contract;
 - fake answers or mocked backend data as the primary experience;
 - frontend-side retrieval or answer-generation logic.
 
