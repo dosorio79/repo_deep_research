@@ -14,9 +14,12 @@ DEFAULT_DOTENV_PATHS = (Path(".env"), Path(".env.local"))
 
 def load_dotenv_environment(
     paths: Path | Iterable[Path] = DEFAULT_DOTENV_PATHS,
+    *,
+    keys: Iterable[str] | None = None,
 ) -> None:
     """Load local KEY=VALUE files while preserving exported environment values."""
     dotenv_paths = (paths,) if isinstance(paths, Path) else tuple(paths)
+    allowed_keys = set(keys) if keys is not None else None
     protected_keys = set(os.environ)
     for path in dotenv_paths:
         if not path.exists():
@@ -27,6 +30,8 @@ def load_dotenv_environment(
                 continue
             key, value = line.split("=", 1)
             key = key.strip()
+            if allowed_keys is not None and key not in allowed_keys:
+                continue
             parsed_value = _strip_env_quotes(value.strip())
             if not key or key in protected_keys or parsed_value == "":
                 continue
