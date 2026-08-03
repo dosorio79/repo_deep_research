@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
@@ -130,6 +132,55 @@ class RagAnswer(BaseModel):
     confidence: float = Field(ge=0, le=1)
     unresolved_questions: list[str] = Field(default_factory=list)
     insufficient_evidence: bool = False
+
+
+class ModelUsage(BaseModel):
+    """Application-owned model usage and price telemetry for one model call."""
+
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+    cached_input_tokens: int | None = Field(default=None, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+    pricing_source: str = Field(default="unknown", min_length=1)
+    pricing_version: str = Field(default="unknown", min_length=1)
+
+
+class RagRunTrace(BaseModel):
+    """Application-owned trace metadata for one direct-RAG run."""
+
+    request_id: str = Field(min_length=1)
+    started_at: datetime
+    completed_at: datetime
+    repository_id: str = Field(min_length=1)
+    repository_name: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    commit_hash: str = Field(min_length=1)
+    question_mode: RagMode
+    retrieval_mode: RetrievalMode
+    retrieval_limit: int = Field(ge=1)
+    retrieved_chunk_count: int = Field(ge=0)
+    unique_file_count: int = Field(ge=0)
+    evidence_ids: list[str] = Field(default_factory=list)
+    latency_ms_total: int = Field(ge=0)
+    latency_ms_retrieval: int = Field(ge=0)
+    latency_ms_model: int | None = Field(default=None, ge=0)
+    model_usage: list[ModelUsage] = Field(default_factory=list)
+    total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+    insufficient_evidence: bool = False
+    error_type: str | None = None
+    error_message: str | None = None
+    tool_call_count: int = Field(default=0, ge=0)
+
+
+class RagRunResult(BaseModel):
+    """A direct-RAG answer plus application-owned runtime trace metadata."""
+
+    answer: RagAnswer
+    trace: RagRunTrace
 
 
 class EvaluationRecord(BaseModel):

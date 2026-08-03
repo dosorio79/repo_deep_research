@@ -14,10 +14,12 @@ repository paths, symbols, and line ranges.
 M3 — Grounded direct RAG backend is implemented. The project supports dense,
 sparse, and Qdrant RRF-hybrid retrieval, then uses a direct OpenAI Responses API
 RAG baseline to produce structured answers with application-validated
-citations. A minimal FastAPI backend exposes `/health` and `/rag`.
-CLI and API entry points share the same backend composition. Direct RAG preserves
-the selected retrieval mode's result order; evaluation chooses the default mode,
-not a hidden answer-time reranker.
+citations. CLI and API RAG runs now return an answer-plus-trace envelope with
+repository identity, retrieval settings, latency, model usage, and estimated cost
+metadata where pricing is known. A minimal FastAPI backend exposes `/health` and
+`/rag`. CLI and API entry points share the same backend composition. Direct RAG
+preserves the selected retrieval mode's result order; evaluation chooses the
+default mode, not a hidden answer-time reranker.
 PydanticAI agent loops, feedback, monitoring, and the React/Lovable frontend
 remain deliberately deferred.
 
@@ -57,7 +59,7 @@ Stop the local service with `make docker-down`.
 | `make ingest` / `make ingest-self` | Parse and index this repository. |
 | `make evidence QUESTION="..."` | Start Qdrant and return repository evidence using dense retrieval by default. |
 | `make rag QUESTION="..."` | Ingest this repo if needed and return a grounded direct-RAG answer. |
-| `make api-rag QUESTION="..."` | Start Qdrant and return a grounded answer through the local FastAPI `/rag` endpoint. |
+| `make api-rag QUESTION="..."` | Start Qdrant and return answer-plus-trace JSON through the local FastAPI `/rag` endpoint. |
 | `make evaluate-retrieval` | Evaluate dense, sparse, and hybrid retrieval on the development records. |
 | `make evaluate-answers` | Run opt-in live answer judging with OpenAI. |
 | `make api` | Run the minimal FastAPI backend on localhost. |
@@ -126,8 +128,9 @@ ingestion before searching or evaluating M2 modes.
 
 ## Roadmap
 
-Before M4, the M3 cleanup keeps the shared backend, CLI/API parity, stable API
-tests, and direct-RAG retrieval behavior clear. M4 adds bounded agentic
-research. Later milestones add feedback, monitoring, and the product
-interface/operations stack.
+M3.5 adds an application-owned observability and price-logging contract around
+direct-RAG runs without adding dashboards or persistence. M3.6 is a Lovable
+frontend testing harness and remains on hold until explicitly resumed. M4 then
+adds bounded agentic research. M5 adds feedback persistence, Logfire, dashboards,
+and the complete product operations stack.
 The complete scope is in [docs/PRD.md](docs/PRD.md).

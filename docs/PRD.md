@@ -693,13 +693,40 @@ A production retrieval mode is selected from measured results.
 
 The system answers locate and flow questions with verifiable evidence.
 
+### M3.5 — Observability contract
+
+- response envelope around direct-RAG answers;
+- application-owned run trace metadata;
+- latency, retrieval, repository identity, model usage, and error fields;
+- estimated price logging for known configured models;
+- no frontend, persistence, Logfire, dashboard, or agentic behavior.
+
+**Exit condition**
+
+CLI and API direct-RAG responses expose stable answer-plus-trace JSON that can
+later be logged or rendered without changing answer content.
+
+### M3.6 — Lovable frontend testing harness
+
+- React TypeScript frontend built with Lovable;
+- question input;
+- mode and retrieval selectors;
+- answer and evidence rendering;
+- trace/debug panel.
+
+**Status**
+
+On hold until M3.5 is complete. This is a manual testing harness, not the full
+M5 product and operations milestone.
+
 ### M4 — Agentic deep research
 
 - PydanticAI agent;
 - typed dependencies;
 - bounded tools;
 - follow-up search;
-- change-impact output.
+- change-impact output;
+- agentic trace metadata using the M3.5 response pattern.
 
 **Exit condition**
 
@@ -708,7 +735,7 @@ The system produces a useful, evidence-backed change plan for its own repository
 ### M5 — Product and operations
 
 - FastAPI;
-- React TypeScript frontend built with Lovable;
+- product hardening for the React TypeScript frontend built with Lovable;
 - feedback;
 - Logfire;
 - automated ingestion orchestration;
