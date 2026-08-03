@@ -3,11 +3,12 @@
 import os
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Self
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from repo_research.models import RetrievalMode
+from repo_research.models import ResearchBudget, RetrievalMode
 
 DEFAULT_DOTENV_PATHS = (Path(".env"), Path(".env.local"))
 
@@ -94,6 +95,33 @@ class Settings(BaseSettings):
             "RDR_ANSWER_EVAL_LIMIT",
         ),
     )
+    research_max_searches: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        validation_alias=AliasChoices(
+            "research_max_searches",
+            "RDR_RESEARCH_MAX_SEARCHES",
+        ),
+    )
+    research_max_file_reads: int = Field(
+        default=5,
+        ge=0,
+        le=20,
+        validation_alias=AliasChoices(
+            "research_max_file_reads",
+            "RDR_RESEARCH_MAX_FILE_READS",
+        ),
+    )
+    research_max_total_tool_calls: int = Field(
+        default=8,
+        ge=1,
+        le=40,
+        validation_alias=AliasChoices(
+            "research_max_total_tool_calls",
+            "RDR_RESEARCH_MAX_TOTAL_TOOL_CALLS",
+        ),
+    )
     cors_allowed_origins: list[str] = Field(
         default_factory=list,
         validation_alias=AliasChoices(
@@ -117,6 +145,21 @@ class Settings(BaseSettings):
     def answer_eval_limit(self) -> int:
         """Backward-compatible name for the answer-evaluation retrieval limit."""
         return self.answer_evaluation_limit
+
+    @property
+    def research_budget(self) -> ResearchBudget:
+        """Return the validated default budget for an agentic research run."""
+        return ResearchBudget(
+            max_searches=self.research_max_searches,
+            max_file_reads=self.research_max_file_reads,
+            max_total_tool_calls=self.research_max_total_tool_calls,
+        )
+
+    @model_validator(mode="after")
+    def validate_research_budget(self) -> Self:
+        """Reject default tool bounds that cannot form a valid research budget."""
+        _ = self.research_budget
+        return self
 
     @field_validator("qdrant_url")
     @classmethod
