@@ -33,6 +33,9 @@ def test_settings_use_local_defaults(
     assert settings.research_limit == 5
     assert settings.answer_evaluation_limit == 5
     assert settings.answer_eval_limit == 5
+    assert settings.research_max_searches == 3
+    assert settings.research_max_file_reads == 5
+    assert settings.research_max_total_tool_calls == 8
     assert settings.cors_allowed_origins == []
 
 
@@ -73,12 +76,18 @@ def test_settings_read_grouped_openai_and_limit_names(
     monkeypatch.setenv("RDR_OPENAI_ANSWER_MODEL", "answer-model")
     monkeypatch.setenv("RDR_RETRIEVAL_LIMIT", "7")
     monkeypatch.setenv("RDR_ANSWER_EVALUATION_LIMIT", "3")
+    monkeypatch.setenv("RDR_RESEARCH_MAX_SEARCHES", "2")
+    monkeypatch.setenv("RDR_RESEARCH_MAX_FILE_READS", "4")
+    monkeypatch.setenv("RDR_RESEARCH_MAX_TOTAL_TOOL_CALLS", "6")
 
     settings = Settings()
 
     assert settings.openai_answer_model == "answer-model"
     assert settings.retrieval_limit == 7
     assert settings.answer_evaluation_limit == 3
+    assert settings.research_max_searches == 2
+    assert settings.research_max_file_reads == 4
+    assert settings.research_max_total_tool_calls == 6
 
 
 def test_settings_parses_json_cors_origins(
