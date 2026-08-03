@@ -56,7 +56,7 @@ M3 direct RAG uses the OpenAI Responses API only when running `rag`,
 answer generation:
 
 ```bash
-OPENAI_API_KEY=...
+export OPENAI_API_KEY=...
 ```
 
 The default answer model is `RDR_OPENAI_ANSWER_MODEL=gpt-5-mini`; the default
