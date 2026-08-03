@@ -91,8 +91,10 @@ app:
 	api_pid=""; \
 	cleanup() { [ -n "$$api_pid" ] && kill "$$api_pid" 2>/dev/null || true; }; \
 	trap cleanup INT TERM EXIT; \
-	$(MAKE) api & \
-	api_pid=$$!; \
+	if ! curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then \
+		$(MAKE) api & \
+		api_pid=$$!; \
+	fi; \
 	for attempt in $$(seq 1 30); do \
 		curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 && break; \
 		sleep 1; \
