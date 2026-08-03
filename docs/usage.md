@@ -108,7 +108,13 @@ make frontend-typecheck
 make frontend-build
 ```
 
-Run the backend and frontend in separate terminals:
+Run the backend and frontend together:
+
+```bash
+make app
+```
+
+Or run them in separate terminals:
 
 ```bash
 make api
