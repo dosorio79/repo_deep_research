@@ -84,7 +84,7 @@ where pricing is known, and direct-RAG tool-call count. The minimal FastAPI app
 keeps routes thin and delegates orchestration to the same service used by the
 CLI.
 
-`frontend/` is a vendored Lovable-built React TypeScript app. It is deliberately
+`frontend/` is a vendored React TypeScript app. It is deliberately
 a client of the FastAPI `/rag` contract: it submits question mode, retrieval
 mode, limit, optional repository path, and API base URL, then renders
 `RagRunResult.answer`, evidence, trace metadata, model usage, cost telemetry,

@@ -24,7 +24,7 @@ auditable by separating answer content from runtime telemetry.
 
 M3.5 must not add:
 
-- React or Lovable frontend work;
+- React frontend work;
 - feedback persistence;
 - Logfire instrumentation;
 - dashboards;

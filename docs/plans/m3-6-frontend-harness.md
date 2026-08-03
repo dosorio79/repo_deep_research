@@ -1,8 +1,8 @@
-# M3.6 - Lovable Frontend Testing Harness
+# M3.6 - Frontend Testing Harness
 
 ## Status
 
-Implemented as a vendored Lovable-built frontend under `frontend/`.
+Implemented as a vendored React TypeScript frontend under `frontend/`.
 
 ## Goal
 
@@ -164,7 +164,7 @@ Cost fields are telemetry only. They may be null when pricing is unknown,
 pricing is deliberately disabled, or provider usage metadata is inconsistent.
 The UI must not present null cost as zero.
 
-## Lovable Build Brief
+## Frontend Build Brief
 
 Build a quiet, utilitarian React TypeScript app for testing Repo Deep Research.
 The app should feel like a focused developer tool: dense, scannable, and
@@ -182,7 +182,7 @@ Navigation:
 
 - Research: active M3.6 direct-RAG testing view;
 - Evaluations: disabled or placeholder route labeled as planned;
-- Monitoring: disabled or placeholder route labeled as planned;
+- Monitoring: active latest-run view using the browser-local `RagRunResult`;
 - Feedback: disabled or placeholder route labeled as planned;
 - Settings: minimal local API configuration, or planned if configuration lives
   in the research view.
@@ -255,8 +255,7 @@ Do not add:
 
 ## Suggested File Shape
 
-Let Lovable choose the exact frontend scaffold, but keep these logical
-components:
+The exact frontend scaffold can vary, but keep these logical components:
 
 ```text
 App
@@ -297,8 +296,8 @@ M3.6 is complete when:
 
 ## Implementation Notes
 
-- The Lovable-generated TanStack Start / React TypeScript project is vendored
-  under `frontend/`, not kept as a nested Git checkout.
+- The TanStack Start / React TypeScript project is vendored under `frontend/`,
+  not kept as a nested Git checkout.
 - The UI posts to the configured API base URL plus `/rag` and renders the
   M3.5 `RagRunResult` envelope.
 - `change_targets[]` render as grounded objects with path, optional symbol,

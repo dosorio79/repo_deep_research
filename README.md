@@ -117,7 +117,7 @@ The M2 implementation and evaluation procedure are in
 and [docs/evaluation.md](docs/evaluation.md). The M3 implementation record is
 in [docs/plans/m3-grounded-rag.md](docs/plans/m3-grounded-rag.md). The M3.6
 frontend implementation is recorded in
-[docs/plans/m3-6-lovable-frontend.md](docs/plans/m3-6-lovable-frontend.md).
+[docs/plans/m3-6-frontend-harness.md](docs/plans/m3-6-frontend-harness.md).
 
 ## Branches and releases
 

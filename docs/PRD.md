@@ -138,7 +138,7 @@ This is the default capstone demonstration because reviewers can verify answers 
 - Retrieval evaluation
 - LLM answer evaluation
 - FastAPI application interface
-- React TypeScript user interface built with Lovable
+- React TypeScript user interface
 - User feedback collection
 - Logfire observability
 - Monitoring dashboard with at least five useful charts
@@ -492,7 +492,7 @@ Repository path or public GitHub URL
 | Fusion | Reciprocal Rank Fusion |
 | Reranking | Local cross-encoder, deferred until baseline works |
 | API | FastAPI |
-| UI | React TypeScript built with Lovable |
+| UI | React TypeScript |
 | Monitoring and traces | Logfire |
 | Feedback store | SQLite initially |
 | Evaluation | Python, pytest, pandas |
@@ -706,9 +706,9 @@ The system answers locate and flow questions with verifiable evidence.
 CLI and API direct-RAG responses expose stable answer-plus-trace JSON that can
 later be logged or rendered without changing answer content.
 
-### M3.6 — Lovable frontend testing harness
+### M3.6 — Frontend testing harness
 
-- React TypeScript frontend built with Lovable;
+- React TypeScript frontend;
 - question input;
 - mode and retrieval selectors;
 - answer and evidence rendering;
@@ -735,7 +735,7 @@ The system produces a useful, evidence-backed change plan for its own repository
 ### M5 — Product and operations
 
 - FastAPI;
-- product hardening for the React TypeScript frontend built with Lovable;
+- product hardening for the React TypeScript frontend;
 - feedback;
 - Logfire;
 - automated ingestion orchestration;

@@ -90,7 +90,7 @@ Use these unless the current code or an accepted architecture decision says othe
 - PydanticAI for the research agent
 - Qdrant for dense and sparse retrieval
 - FastAPI for the API
-- React TypeScript UI built with lovable
+- React TypeScript UI
 - Logfire for tracing and monitoring
 - SQLite for initial feedback persistence
 - pytest for testing

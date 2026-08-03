@@ -20,8 +20,8 @@ Visual style: quiet utilitarian developer tool, dense and scannable, neutral bas
 
 Suggested components: App, AppShell, Navigation, RagQueryForm, AnswerPanel, EvidencePanel, TracePanel, RawJsonPanel, ApiError, PlannedBackofficePanel. Keep explicit TypeScript API types. No auth, no backend persistence, no Logfire, no evaluation execution UI, no historical monitoring charts, no ingestion UI, no frontend RAG logic.
 
-This project was initially built with [Lovable](https://lovable.dev), then
-vendored into the main `repo_deep_research` repository under `frontend/`.
+This frontend is vendored into the main `repo_deep_research` repository under
+`frontend/`.
 
 ## Development
 
