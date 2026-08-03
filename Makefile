@@ -5,6 +5,9 @@ QUESTION ?= where is repository configuration validated?
 UV_CACHE_DIR ?= /tmp/repo_deep_research_uv_cache
 UV := UV_CACHE_DIR=$(UV_CACHE_DIR) uv
 RUN := $(UV) run
+FRONTEND_NODE_VERSION := $(shell cat frontend/.nvmrc 2>/dev/null)
+FRONTEND_NODE_BIN := $(HOME)/.nvm/versions/node/v$(FRONTEND_NODE_VERSION)/bin
+FRONTEND_NPM := PATH=$(FRONTEND_NODE_BIN):$$PATH npm
 
 .PHONY: help install format lint typecheck test validate check qdrant stop ready ingest ingest-self evidence rag api-rag evaluate-retrieval evaluate-answers api app frontend-install frontend-lint frontend-typecheck frontend-test frontend-build frontend-dev docker-up docker-down
 
@@ -97,19 +100,19 @@ app:
 	$(MAKE) frontend-dev
 
 frontend-install:
-	cd frontend && npm install
+	cd frontend && $(FRONTEND_NPM) install
 
 frontend-lint:
-	cd frontend && npm run lint
+	cd frontend && $(FRONTEND_NPM) run lint
 
 frontend-typecheck:
-	cd frontend && npm run typecheck
+	cd frontend && $(FRONTEND_NPM) run typecheck
 
 frontend-test:
-	cd frontend && npm test
+	cd frontend && $(FRONTEND_NPM) test
 
 frontend-build:
-	cd frontend && npm run build
+	cd frontend && $(FRONTEND_NPM) run build
 
 frontend-dev:
-	cd frontend && npm run dev
+	cd frontend && $(FRONTEND_NPM) run dev

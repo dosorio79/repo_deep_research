@@ -111,6 +111,9 @@ make frontend-typecheck
 make frontend-build
 ```
 
+Frontend Make targets use the Node version declared in `frontend/.nvmrc` when it
+is installed under nvm.
+
 Run the backend and frontend together:
 
 ```bash
