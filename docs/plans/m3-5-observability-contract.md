@@ -104,7 +104,11 @@ Rules:
 
 - extract token usage from provider responses when available;
 - estimate cost only for known configured models;
+- use the default pricing table only when no override is supplied, so explicit
+  empty pricing tables can disable estimates in tests or controlled runs;
 - return `estimated_cost_usd = null` when pricing is unknown;
+- treat pricing and usage enrichment as telemetry-only; malformed or
+  inconsistent usage metadata must not suppress an otherwise valid answer;
 - version the local pricing table so later reports can explain historical
   estimates;
 - never ask the LLM to calculate or emit price fields.

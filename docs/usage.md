@@ -67,6 +67,10 @@ The command emits a `RagRunResult` JSON document with:
   identity, retrieval settings, retrieved chunk count, unique file count, latency,
   model usage, estimated cost where pricing is known, and tool-call count.
 
+Cost fields are telemetry only. They may be `null` when model pricing is
+unknown, pricing is deliberately disabled, or provider usage metadata is
+inconsistent; a pricing issue does not suppress a grounded answer.
+
 The model cites opaque evidence IDs only; application code maps those IDs back to
 stored paths and line ranges. Direct RAG preserves the result order returned by
 the selected retrieval mode; it does not apply a second answer-time reranking
@@ -88,6 +92,32 @@ Then, in another terminal, exercise the same RAG service through FastAPI:
 ```bash
 make api-rag QUESTION="where is repository configuration validated?"
 ```
+
+## Use the frontend harness
+
+M3.6 includes a vendored React TypeScript frontend under `frontend/`. It is a
+browser client for the existing FastAPI `/rag` contract; it does not ingest
+repositories, run retrieval locally, or generate answers in the browser.
+
+Install and check the frontend:
+
+```bash
+make frontend-install
+make frontend-test
+make frontend-typecheck
+make frontend-build
+```
+
+Run the backend and frontend in separate terminals:
+
+```bash
+make api
+make frontend-dev
+```
+
+The frontend defaults to `http://localhost:8000` and posts to `/rag`. The API
+allows local browser origins through `RDR_CORS_ALLOWED_ORIGINS`, configured as a
+JSON list; keep that value restricted to trusted development origins.
 
 ## Evaluate answers
 

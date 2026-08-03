@@ -11,17 +11,16 @@ repository paths, symbols, and line ranges.
 
 ## Current status
 
-M3 — Grounded direct RAG backend is implemented. The project supports dense,
+M3.6 — Frontend testing harness is implemented. The project supports dense,
 sparse, and Qdrant RRF-hybrid retrieval, then uses a direct OpenAI Responses API
 RAG baseline to produce structured answers with application-validated
-citations. CLI and API RAG runs now return an answer-plus-trace envelope with
+citations. CLI and API RAG runs return an answer-plus-trace envelope with
 repository identity, retrieval settings, latency, model usage, and estimated cost
 metadata where pricing is known. A minimal FastAPI backend exposes `/health` and
-`/rag`. CLI and API entry points share the same backend composition. Direct RAG
-preserves the selected retrieval mode's result order; evaluation chooses the
-default mode, not a hidden answer-time reranker.
-PydanticAI agent loops, feedback, monitoring, and the React/Lovable frontend
-remain deliberately deferred.
+`/rag`, with local CORS origins for browser testing. The vendored React
+TypeScript frontend under `frontend/` calls that `/rag` API and renders answer,
+evidence, trace, cost telemetry, errors, and raw JSON. PydanticAI agent loops,
+feedback persistence, and monitoring dashboards remain deliberately deferred.
 
 ## Requirements
 
@@ -63,6 +62,11 @@ Stop the local service with `make docker-down`.
 | `make evaluate-retrieval` | Evaluate dense, sparse, and hybrid retrieval on the development records. |
 | `make evaluate-answers` | Run opt-in live answer judging with OpenAI. |
 | `make api` | Run the minimal FastAPI backend on localhost. |
+| `make frontend-install` | Install the vendored frontend dependencies with npm. |
+| `make frontend-dev` | Run the M3.6 frontend locally. |
+| `make frontend-test` | Run frontend unit and contract tests. |
+| `make frontend-typecheck` | Run TypeScript checks for the frontend. |
+| `make frontend-build` | Build the frontend production bundle. |
 
 The simplest user path is `make rag QUESTION="..."`. Use
 `uv run repo-research ...` directly for path, mode, limit, dataset, and output
@@ -89,6 +93,7 @@ Copy `.env.example` to `.env` for local overrides. All runtime settings use the
 | `RDR_OPENAI_ANSWER_MODEL` | `gpt-5-mini` | Default direct-RAG answer model. |
 | `RDR_OPENAI_JUDGE_MODEL` | `gpt-5.1` | Default answer-evaluation judge model. |
 | `RDR_ANSWER_EVALUATION_LIMIT` | `5` | Default retrieved evidence limit during answer evaluation. |
+| `RDR_CORS_ALLOWED_ORIGINS` | local frontend origins | JSON list of browser origins allowed to call FastAPI. |
 | `RDR_LOG_LEVEL` | `INFO` | Application log level. |
 
 Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
@@ -104,7 +109,9 @@ Reliability work completed before M2 is recorded in
 The M2 implementation and evaluation procedure are in
 [docs/plans/m2-evaluated-hybrid-retrieval.md](docs/plans/m2-evaluated-hybrid-retrieval.md)
 and [docs/evaluation.md](docs/evaluation.md). The M3 implementation record is
-in [docs/plans/m3-grounded-rag.md](docs/plans/m3-grounded-rag.md).
+in [docs/plans/m3-grounded-rag.md](docs/plans/m3-grounded-rag.md). The M3.6
+frontend implementation is recorded in
+[docs/plans/m3-6-lovable-frontend.md](docs/plans/m3-6-lovable-frontend.md).
 
 ## Branches and releases
 
@@ -128,9 +135,6 @@ ingestion before searching or evaluating M2 modes.
 
 ## Roadmap
 
-M3.5 adds an application-owned observability and price-logging contract around
-direct-RAG runs without adding dashboards or persistence. M3.6 is a Lovable
-frontend testing harness and remains on hold until explicitly resumed. M4 then
-adds bounded agentic research. M5 adds feedback persistence, Logfire, dashboards,
-and the complete product operations stack.
+M4 adds bounded agentic research. M5 adds feedback persistence, Logfire,
+dashboards, and the complete product operations stack.
 The complete scope is in [docs/PRD.md](docs/PRD.md).
