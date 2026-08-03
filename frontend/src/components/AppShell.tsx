@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { to: "/", label: "Research", icon: Search, status: "active" },
   { to: "/evaluations", label: "Evaluations", icon: FlaskConical, status: "planned" },
-  { to: "/monitoring", label: "Monitoring", icon: Activity, status: "planned" },
+  { to: "/monitoring", label: "Monitoring", icon: Activity, status: "active" },
   { to: "/feedback", label: "Feedback", icon: MessageSquare, status: "planned" },
   { to: "/settings", label: "Settings", icon: Settings, status: "planned" },
 ] as const;

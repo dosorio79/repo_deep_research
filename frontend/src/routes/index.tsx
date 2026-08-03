@@ -8,6 +8,7 @@ import { EvidencePanel } from "@/components/EvidencePanel";
 import { RagQueryForm, type QueryFormState } from "@/components/RagQueryForm";
 import { RawJsonPanel } from "@/components/RawJsonPanel";
 import { TracePanel } from "@/components/TracePanel";
+import { saveLatestRagRun } from "@/lib/latest-rag-run";
 import { runRagQuery } from "@/lib/rag-client";
 import type { ApiErrorShape, RagRequest, RagRunResult } from "@/lib/rag-types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,6 +52,7 @@ function ResearchView() {
     mutationFn: (payload: { baseUrl: string; body: RagRequest; signal: AbortSignal }) =>
       runRagQuery(payload.baseUrl, payload.body, payload.signal),
     onSuccess: (data) => {
+      saveLatestRagRun(data);
       setResult(data);
       setError(null);
     },

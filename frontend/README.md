@@ -10,7 +10,7 @@ Response: RagRunResult with { answer, trace }. Render both clearly. answer inclu
 
 Cost fields are telemetry only. If null, show Unknown or Unavailable, never zero.
 
-Layout: compact app shell with persistent header and navigation. Navigation entries: Research active, Evaluations planned, Monitoring planned, Feedback planned, Settings planned/minimal. Planned backoffice panels must be clearly non-functional and contain no fake charts, fake evals, or invented operational data.
+Layout: compact app shell with persistent header and navigation. Navigation entries: Research active, Monitoring active for the latest browser-local RAG response, Evaluations planned, Feedback planned, Settings planned/minimal. Planned backoffice panels must be clearly non-functional and contain no fake charts, fake evals, or invented operational data.
 
 Research view controls: question textarea, mode segmented control, retrieval mode segmented control, limit stepper/slider, API base URL input, optional advanced repository path, submit button with loading state.
 
@@ -18,7 +18,7 @@ Results: answer summary, implementation flow, relevant files/symbols, change tar
 
 Visual style: quiet utilitarian developer tool, dense and scannable, neutral base with one or two accents, compact panels, radius 8px or less, no hero, no marketing copy, no decorative gradients, no fake data. Use icons where appropriate. Long paths must wrap/truncate cleanly.
 
-Suggested components: App, AppShell, Navigation, RagQueryForm, AnswerPanel, EvidencePanel, TracePanel, RawJsonPanel, ApiError, PlannedBackofficePanel. Keep explicit TypeScript API types. No auth, no persistence, no Logfire, no evaluation execution UI, no monitoring charts, no ingestion UI, no frontend RAG logic.
+Suggested components: App, AppShell, Navigation, RagQueryForm, AnswerPanel, EvidencePanel, TracePanel, RawJsonPanel, ApiError, PlannedBackofficePanel. Keep explicit TypeScript API types. No auth, no backend persistence, no Logfire, no evaluation execution UI, no historical monitoring charts, no ingestion UI, no frontend RAG logic.
 
 This project was initially built with [Lovable](https://lovable.dev), then
 vendored into the main `repo_deep_research` repository under `frontend/`.

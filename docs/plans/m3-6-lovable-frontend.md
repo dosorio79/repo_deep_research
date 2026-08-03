@@ -286,11 +286,14 @@ M3.6 is complete when:
 - loading, success, insufficient-evidence, validation-error, and network-error
   states are implemented;
 - raw JSON can be inspected for debugging;
-- the app shell leaves obvious room for future Evaluations, Monitoring,
-  Feedback, and Settings areas without implementing their data flows;
+- the app shell leaves obvious room for future Evaluations, Feedback, and
+  Settings areas without implementing their data flows;
+- Monitoring shows the latest browser-local `RagRunResult` outcome, retrieval,
+  latency, token usage, and cost metadata without backend persistence or
+  invented historical data;
 - the app runs locally with documented commands;
-- no feedback, persistence, Logfire, evaluation execution, monitoring charts,
-  authentication, or ingestion UI is added.
+- no feedback, backend persistence, Logfire, evaluation execution, historical
+  monitoring charts, authentication, or ingestion UI is added.
 
 ## Implementation Notes
 
@@ -305,9 +308,10 @@ M3.6 is complete when:
 - FastAPI allows configured local browser origins through
   `RDR_CORS_ALLOWED_ORIGINS` so the frontend can call `/rag` during local
   development; the runtime default is empty, so CORS is opt-in.
-- Evaluations, Monitoring, Feedback, and Settings routes are intentionally
-  placeholder backoffice surfaces with no fake charts, persisted data, or
-  operational workflows.
+- Evaluations, Feedback, and Settings routes remain placeholder backoffice
+  surfaces with no fake charts, persisted data, or operational workflows.
+- Monitoring is a lightweight latest-run view sourced from the browser-local
+  response JSON already produced by the Research route.
 
 ## Validation
 
