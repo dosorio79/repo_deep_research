@@ -16,7 +16,7 @@ M4.
 - OpenAI Responses API adapter with `gpt-5-mini` for answers and `gpt-5.1` for
   opt-in judge evaluation;
 - CLI commands for `rag` and `evaluate-answers`;
-- minimal FastAPI `/health` and `/rag` endpoints for future React/Lovable
+- minimal FastAPI `/health` and `/rag` endpoints for future React
   frontend integration.
 
 ## Decisions

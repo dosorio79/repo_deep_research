@@ -1,6 +1,7 @@
 """Validated runtime configuration for Repo Deep Research."""
 
 import os
+from collections.abc import Iterable
 from pathlib import Path
 
 from pydantic import AliasChoices, Field, field_validator
@@ -8,20 +9,33 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from repo_research.models import RetrievalMode
 
+DEFAULT_DOTENV_PATHS = (Path(".env"), Path(".env.local"))
 
-def load_dotenv_environment(path: Path = Path(".env")) -> None:
-    """Load simple KEY=VALUE entries from .env into os.environ when missing."""
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+
+def load_dotenv_environment(
+    paths: Path | Iterable[Path] = DEFAULT_DOTENV_PATHS,
+    *,
+    keys: Iterable[str] | None = None,
+) -> None:
+    """Load local KEY=VALUE files while preserving exported environment values."""
+    dotenv_paths = (paths,) if isinstance(paths, Path) else tuple(paths)
+    allowed_keys = set(keys) if keys is not None else None
+    protected_keys = {key for key, value in os.environ.items() if value != ""}
+    for path in dotenv_paths:
+        if not path.exists():
             continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if not key or key in os.environ:
-            continue
-        os.environ[key] = _strip_env_quotes(value.strip())
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if allowed_keys is not None and key not in allowed_keys:
+                continue
+            parsed_value = _strip_env_quotes(value.strip())
+            if not key or key in protected_keys or parsed_value == "":
+                continue
+            os.environ[key] = parsed_value
 
 
 def _strip_env_quotes(value: str) -> str:
@@ -34,7 +48,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables and an optional .env."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", ".env.local"),
         env_prefix="RDR_",
         env_ignore_empty=True,
         extra="ignore",
@@ -78,6 +92,13 @@ class Settings(BaseSettings):
             "answer_evaluation_limit",
             "RDR_ANSWER_EVALUATION_LIMIT",
             "RDR_ANSWER_EVAL_LIMIT",
+        ),
+    )
+    cors_allowed_origins: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices(
+            "cors_allowed_origins",
+            "RDR_CORS_ALLOWED_ORIGINS",
         ),
     )
     log_level: str = "INFO"

@@ -6,12 +6,15 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Protocol
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAIError
+from qdrant_client.http.exceptions import ResponseHandlingException
 
-from repo_research.config import Settings
+from repo_research.config import Settings, load_dotenv_environment
 from repo_research.ingestion import discover_repository
 from repo_research.models import (
-    RagAnswer,
     RagRequest,
+    RagRunResult,
     SearchQuery,
     SearchResult,
 )
@@ -48,8 +51,16 @@ def create_app(
     generator: AnswerGenerator | None = None,
 ) -> FastAPI:
     """Create a FastAPI app with injectable runtime dependencies."""
+    load_dotenv_environment(keys=("OPENAI_API_KEY", "OPENAI_ADMIN_KEY"))
     app_settings = settings or Settings()
     app = FastAPI(title="Repo Deep Research", version=package_version())
+    if app_settings.cors_allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=app_settings.cors_allowed_origins,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["content-type"],
+        )
 
     def get_database() -> RagDatabase:
         return database or create_database(app_settings)
@@ -66,8 +77,8 @@ def create_app(
             qdrant_ok = False
         return {"status": "ok" if qdrant_ok else "degraded", "qdrant": qdrant_ok}
 
-    @app.post("/rag", response_model=RagAnswer)
-    async def rag(request: RagRequest) -> RagAnswer:
+    @app.post("/rag", response_model=RagRunResult)
+    async def rag(request: RagRequest) -> RagRunResult:
         root_path = (request.repository_path or app_settings.repository_root).resolve()
         try:
             repository, _ = discover_repository(
@@ -78,12 +89,28 @@ def create_app(
                 database=get_database(),
                 generator=get_generator(),
             )
-            return service.answer(
+            return service.run(
                 repository=repository,
                 request=request.model_copy(update={"repository_path": root_path}),
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
+        except ResponseHandlingException as error:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Repository vector store is unavailable; start Qdrant and "
+                    "retry the request."
+                ),
+            ) from error
+        except OpenAIError as error:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "OpenAI client is unavailable; check local credentials and "
+                    "service configuration."
+                ),
+            ) from error
 
     return app
 

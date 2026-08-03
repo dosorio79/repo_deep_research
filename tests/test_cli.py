@@ -10,12 +10,12 @@ from repo_research import cli, runtime
 from repo_research.cli import build_parser
 from repo_research.models import (
     ParsedChunk,
-    RagAnswer,
     RagMode,
     RagRequest,
+    RagRunResult,
     SearchResult,
 )
-from repo_research.rag import RagAnswerDraft
+from repo_research.rag import AnswerGenerationResult
 
 
 def test_cli_parses_search_request() -> None:
@@ -119,7 +119,7 @@ class FakeOpenAIModel:
         *,
         request: RagRequest,
         evidence_context: str,
-    ) -> RagAnswerDraft:
+    ) -> AnswerGenerationResult:
         raise AssertionError("no evidence should skip model generation")
 
 
@@ -139,9 +139,10 @@ def test_cli_rag_emits_grounded_answer_without_live_model(
 
     cli.main()
 
-    result = RagAnswer.model_validate_json(capsys.readouterr().out)
-    assert result.mode is RagMode.LOCATE
-    assert result.insufficient_evidence is True
+    result = RagRunResult.model_validate_json(capsys.readouterr().out)
+    assert result.answer.mode is RagMode.LOCATE
+    assert result.answer.insufficient_evidence is True
+    assert result.trace.retrieved_chunk_count == 0
 
 
 def test_cli_ask_ingests_then_emits_grounded_answer_without_live_model(
@@ -164,9 +165,10 @@ def test_cli_ask_ingests_then_emits_grounded_answer_without_live_model(
     cli.main()
 
     captured = capsys.readouterr()
-    result = RagAnswer.model_validate_json(captured.out)
+    result = RagRunResult.model_validate_json(captured.out)
     assert database.replacements[0][1] == 1
-    assert result.insufficient_evidence is True
+    assert result.answer.insufficient_evidence is True
+    assert result.trace.tool_call_count == 0
     assert "[repo-research] ingesting repository" in captured.err
     assert "[repo-research] running direct rag" in captured.err
 

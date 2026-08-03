@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol, cast
+from uuid import uuid4
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -18,14 +23,34 @@ from repo_research.models import (
     ChangeTarget,
     EvaluationRecord,
     EvidenceItem,
+    ModelUsage,
     RagAnswer,
     RagMode,
     RagRequest,
+    RagRunResult,
+    RagRunTrace,
     RepositoryIdentity,
     RetrievalMode,
     SearchQuery,
     SearchResult,
 )
+from repo_research.pricing import estimate_openai_price
+
+
+@dataclass(frozen=True)
+class StructuredResponseResult[TModel: BaseModel]:
+    """Parsed structured model output plus optional model usage telemetry."""
+
+    parsed: TModel
+    usage: ModelUsage | None = None
+
+
+@dataclass(frozen=True)
+class AnswerGenerationResult:
+    """Direct-RAG model draft plus application-owned model usage telemetry."""
+
+    draft: RagAnswerDraft
+    usage: ModelUsage | None = None
 
 
 class RepositorySearcher(Protocol):
@@ -43,7 +68,7 @@ class AnswerGenerator(Protocol):
         *,
         request: RagRequest,
         evidence_context: str,
-    ) -> RagAnswerDraft:
+    ) -> AnswerGenerationResult:
         """Return a model draft that cites opaque evidence IDs only."""
 
 
@@ -105,7 +130,25 @@ class DirectRagService:
         request: RagRequest,
     ) -> RagAnswer:
         """Return a direct-RAG answer with citations validated against retrieval."""
+        return self.run(repository=repository, request=request).answer
+
+    def run(
+        self,
+        *,
+        repository: RepositoryIdentity,
+        request: RagRequest,
+    ) -> RagRunResult:
+        """Return a direct-RAG answer plus application-owned trace metadata."""
+        total_start = time.perf_counter()
+        started_at = datetime.now(UTC)
         request = request.model_copy(update={"mode": infer_rag_mode(request)})
+        results: list[SearchResult] = []
+        model_usage: list[ModelUsage] = []
+        latency_ms_model: int | None = None
+        error_type: str | None = None
+        error_message: str | None = None
+
+        retrieval_start = time.perf_counter()
         results = self._database.search(
             SearchQuery(
                 text=request.question,
@@ -115,29 +158,94 @@ class DirectRagService:
                 mode=request.retrieval_mode,
             )
         )
+        latency_ms_retrieval = _elapsed_ms(retrieval_start)
         if not results:
-            return insufficient_evidence_rag_answer(
+            answer = insufficient_evidence_rag_answer(
                 request=request,
                 reason="No repository evidence was retrieved for the question.",
+            )
+            completed_at = datetime.now(UTC)
+            return RagRunResult(
+                answer=answer,
+                trace=_build_rag_trace(
+                    request_id=uuid4().hex,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    repository=repository,
+                    request=request,
+                    results=results,
+                    answer=answer,
+                    latency_ms_total=_elapsed_ms(total_start),
+                    latency_ms_retrieval=latency_ms_retrieval,
+                    latency_ms_model=latency_ms_model,
+                    model_usage=model_usage,
+                    error_type=error_type,
+                    error_message=error_message,
+                ),
             )
         evidence_by_id = _evidence_by_id(results)
         evidence_context = _format_evidence_context(evidence_by_id, results)
         try:
-            draft = self._generator.generate_answer(
+            model_start = time.perf_counter()
+            generation = self._generator.generate_answer(
                 request=request,
                 evidence_context=evidence_context,
             )
+            latency_ms_model = _elapsed_ms(model_start)
+            if generation.usage is not None:
+                model_usage.append(generation.usage)
         except ValueError as error:
-            return insufficient_evidence_rag_answer(
+            latency_ms_model = _elapsed_ms(model_start)
+            error_type = type(error).__name__
+            error_message = str(error)
+            answer = insufficient_evidence_rag_answer(
                 request=request,
                 reason=f"Answer generation failed validation: {error}",
                 closest_evidence=evidence_by_id.values(),
             )
+            completed_at = datetime.now(UTC)
+            return RagRunResult(
+                answer=answer,
+                trace=_build_rag_trace(
+                    request_id=uuid4().hex,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    repository=repository,
+                    request=request,
+                    results=results,
+                    answer=answer,
+                    latency_ms_total=_elapsed_ms(total_start),
+                    latency_ms_retrieval=latency_ms_retrieval,
+                    latency_ms_model=latency_ms_model,
+                    model_usage=model_usage,
+                    error_type=error_type,
+                    error_message=error_message,
+                ),
+            )
 
-        return _build_validated_answer(
+        answer = _build_validated_answer(
             request=request,
-            draft=draft,
+            draft=generation.draft,
             evidence_by_id=evidence_by_id,
+        )
+        completed_at = datetime.now(UTC)
+        return RagRunResult(
+            answer=answer,
+            trace=_build_rag_trace(
+                request_id=uuid4().hex,
+                started_at=started_at,
+                completed_at=completed_at,
+                repository=repository,
+                request=request,
+                results=results,
+                answer=answer,
+                latency_ms_total=_elapsed_ms(total_start),
+                latency_ms_retrieval=latency_ms_retrieval,
+                latency_ms_model=latency_ms_model,
+                model_usage=model_usage,
+                error_type=error_type,
+                error_message=error_message,
+            ),
         )
 
 
@@ -155,15 +263,16 @@ class OpenAIResponsesModel:
         *,
         request: RagRequest,
         evidence_context: str,
-    ) -> RagAnswerDraft:
+    ) -> AnswerGenerationResult:
         """Generate a structured answer draft with the configured answer model."""
         prompt = _answer_prompt(request=request, evidence_context=evidence_context)
-        return _create_structured_response(
+        result = _create_structured_response(
             client=self._client,
             model=self._answer_model,
             prompt=prompt,
             response_model=RagAnswerDraft,
         )
+        return AnswerGenerationResult(draft=result.parsed, usage=result.usage)
 
     def judge_answer(
         self,
@@ -179,9 +288,9 @@ class OpenAIResponsesModel:
             prompt=prompt,
             response_model=AnswerEvaluationResult,
         )
-        if result.record_id != record.id:
+        if result.parsed.record_id != record.id:
             raise ValueError("judge returned a record_id that does not match input")
-        return result
+        return result.parsed
 
 
 def evaluate_answers(
@@ -239,6 +348,66 @@ def write_answer_evaluation_report(
         + "\n",
         encoding="utf-8",
     )
+
+
+def _build_rag_trace(
+    *,
+    request_id: str,
+    started_at: datetime,
+    completed_at: datetime,
+    repository: RepositoryIdentity,
+    request: RagRequest,
+    results: list[SearchResult],
+    answer: RagAnswer,
+    latency_ms_total: int,
+    latency_ms_retrieval: int,
+    latency_ms_model: int | None,
+    model_usage: list[ModelUsage],
+    error_type: str | None,
+    error_message: str | None,
+) -> RagRunTrace:
+    evidence_ids = [item.evidence_id for item in answer.evidence]
+    unique_files = {result.chunk.path for result in results}
+    total_estimated_cost = _total_estimated_cost(model_usage)
+    return RagRunTrace(
+        request_id=request_id,
+        started_at=started_at,
+        completed_at=completed_at,
+        repository_id=repository.repository_id,
+        repository_name=repository.name,
+        branch=repository.branch,
+        commit_hash=repository.commit_hash,
+        question_mode=request.mode,
+        retrieval_mode=request.retrieval_mode,
+        retrieval_limit=request.limit,
+        retrieved_chunk_count=len(results),
+        unique_file_count=len(unique_files),
+        evidence_ids=evidence_ids,
+        latency_ms_total=latency_ms_total,
+        latency_ms_retrieval=latency_ms_retrieval,
+        latency_ms_model=latency_ms_model,
+        model_usage=model_usage,
+        total_estimated_cost_usd=total_estimated_cost,
+        insufficient_evidence=answer.insufficient_evidence,
+        error_type=error_type,
+        error_message=error_message,
+        tool_call_count=0,
+    )
+
+
+def _total_estimated_cost(model_usage: list[ModelUsage]) -> Decimal | None:
+    if not model_usage:
+        return None
+    total = Decimal("0")
+    for usage in model_usage:
+        if usage.estimated_cost_usd is None:
+            return None
+        total += usage.estimated_cost_usd
+    return total
+
+
+def _elapsed_ms(start: float) -> int:
+    return max(0, round((time.perf_counter() - start) * 1000))
 
 
 def insufficient_evidence_rag_answer(
@@ -485,7 +654,7 @@ def _create_structured_response[T: BaseModel](
     model: str,
     prompt: str,
     response_model: type[T],
-) -> T:
+) -> StructuredResponseResult[T]:
     parse = cast(Any, client.responses.parse)
     response = parse(
         model=model,
@@ -495,7 +664,67 @@ def _create_structured_response[T: BaseModel](
     parsed = cast(T | None, response.output_parsed)
     if parsed is None:
         raise ValueError("model returned no parsed structured output")
-    return parsed
+    return StructuredResponseResult(
+        parsed=parsed,
+        usage=_model_usage_from_response(model=model, response=response),
+    )
+
+
+def _model_usage_from_response(*, model: str, response: object) -> ModelUsage | None:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    input_tokens = _usage_int(usage, "input_tokens")
+    output_tokens = _usage_int(usage, "output_tokens")
+    total_tokens = _usage_int(usage, "total_tokens")
+    cached_input_tokens = _cached_input_tokens(usage)
+    reasoning_tokens = _reasoning_tokens(usage)
+    estimated_cost = None
+    pricing_source = "unknown"
+    pricing_version = "unknown"
+    if input_tokens is not None and output_tokens is not None:
+        try:
+            estimate = estimate_openai_price(
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_input_tokens=cached_input_tokens or 0,
+            )
+        except ValueError:
+            estimate = None
+        if estimate is not None:
+            estimated_cost = estimate.total_cost_usd
+            pricing_source = estimate.pricing_source
+            pricing_version = estimate.pricing_version
+    return ModelUsage(
+        provider="openai",
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        cached_input_tokens=cached_input_tokens,
+        reasoning_tokens=reasoning_tokens,
+        estimated_cost_usd=estimated_cost,
+        pricing_source=pricing_source,
+        pricing_version=pricing_version,
+    )
+
+
+def _usage_int(usage: object, field_name: str) -> int | None:
+    value = getattr(usage, field_name, None)
+    return value if isinstance(value, int) else None
+
+
+def _cached_input_tokens(usage: object) -> int | None:
+    input_details = getattr(usage, "input_tokens_details", None)
+    value = getattr(input_details, "cached_tokens", None)
+    return value if isinstance(value, int) else None
+
+
+def _reasoning_tokens(usage: object) -> int | None:
+    output_details = getattr(usage, "output_tokens_details", None)
+    value = getattr(output_details, "reasoning_tokens", None)
+    return value if isinstance(value, int) else None
 
 
 def _rag_mode_from_question_type(question_type: str) -> RagMode:

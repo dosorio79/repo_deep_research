@@ -138,7 +138,7 @@ This is the default capstone demonstration because reviewers can verify answers 
 - Retrieval evaluation
 - LLM answer evaluation
 - FastAPI application interface
-- React TypeScript user interface built with Lovable
+- React TypeScript user interface
 - User feedback collection
 - Logfire observability
 - Monitoring dashboard with at least five useful charts
@@ -492,7 +492,7 @@ Repository path or public GitHub URL
 | Fusion | Reciprocal Rank Fusion |
 | Reranking | Local cross-encoder, deferred until baseline works |
 | API | FastAPI |
-| UI | React TypeScript built with Lovable |
+| UI | React TypeScript |
 | Monitoring and traces | Logfire |
 | Feedback store | SQLite initially |
 | Evaluation | Python, pytest, pandas |
@@ -693,13 +693,40 @@ A production retrieval mode is selected from measured results.
 
 The system answers locate and flow questions with verifiable evidence.
 
+### M3.5 — Observability contract
+
+- response envelope around direct-RAG answers;
+- application-owned run trace metadata;
+- latency, retrieval, repository identity, model usage, and error fields;
+- estimated price logging for known configured models;
+- no frontend, persistence, Logfire, dashboard, or agentic behavior.
+
+**Exit condition**
+
+CLI and API direct-RAG responses expose stable answer-plus-trace JSON that can
+later be logged or rendered without changing answer content.
+
+### M3.6 — Frontend testing harness
+
+- React TypeScript frontend;
+- question input;
+- mode and retrieval selectors;
+- answer and evidence rendering;
+- trace/debug panel.
+
+**Status**
+
+On hold until M3.5 is complete. This is a manual testing harness, not the full
+M5 product and operations milestone.
+
 ### M4 — Agentic deep research
 
 - PydanticAI agent;
 - typed dependencies;
 - bounded tools;
 - follow-up search;
-- change-impact output.
+- change-impact output;
+- agentic trace metadata using the M3.5 response pattern.
 
 **Exit condition**
 
@@ -708,7 +735,7 @@ The system produces a useful, evidence-backed change plan for its own repository
 ### M5 — Product and operations
 
 - FastAPI;
-- React TypeScript frontend built with Lovable;
+- product hardening for the React TypeScript frontend;
 - feedback;
 - Logfire;
 - automated ingestion orchestration;
