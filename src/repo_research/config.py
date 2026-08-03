@@ -20,7 +20,7 @@ def load_dotenv_environment(
     """Load local KEY=VALUE files while preserving exported environment values."""
     dotenv_paths = (paths,) if isinstance(paths, Path) else tuple(paths)
     allowed_keys = set(keys) if keys is not None else None
-    protected_keys = set(os.environ)
+    protected_keys = {key for key, value in os.environ.items() if value != ""}
     for path in dotenv_paths:
         if not path.exists():
             continue
