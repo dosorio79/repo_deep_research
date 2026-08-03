@@ -4,11 +4,12 @@
 
 ```text
 Makefile
-  Thin developer shortcuts: ready, evidence, rag, api, api-rag.
+  Thin developer shortcuts: ready, evidence, rag, api, api-rag, frontend-*.
 
 Entry points
   repo-research CLI for local commands.
-  FastAPI for the future frontend and HTTP contract tests.
+  FastAPI for the browser frontend and HTTP contract tests.
+  React TypeScript frontend under frontend/ for manual RAG testing.
 
 Runtime composition
   runtime.py creates shared database, model, and direct-RAG dependencies.
@@ -26,7 +27,7 @@ Ingestion
 Both `make rag` and `make api-rag` reach the same `DirectRagService` through the
 same runtime composition module. The difference is the entry point: `rag` calls
 the CLI directly, while `api-rag` posts to FastAPI `/rag` and exercises the
-HTTP contract that the frontend will use.
+HTTP contract that the frontend uses.
 
 ## Data Flow
 
@@ -44,6 +45,9 @@ rag.py -- direct RAG, citation validation, and answer evaluation
         |
         v
 repo-research CLI / FastAPI -- JSON evidence and grounded answers
+        |
+        v
+frontend/ -- browser RAG testing harness for answer, evidence, and trace display
 ```
 
 `ParsedChunk` is the boundary between parsing and storage. It carries the
@@ -79,3 +83,15 @@ retrieval settings, retrieved chunk counts, latency, model usage, estimated cost
 where pricing is known, and direct-RAG tool-call count. The minimal FastAPI app
 keeps routes thin and delegates orchestration to the same service used by the
 CLI.
+
+`frontend/` is a vendored React TypeScript app. It is deliberately
+a client of the FastAPI `/rag` contract: it submits question mode, retrieval
+mode, limit, optional repository path, and API base URL, then renders
+`RagRunResult.answer`, evidence, trace metadata, model usage, cost telemetry,
+and raw JSON. Planned Evaluations, Monitoring, Feedback, and Settings routes
+reserve backoffice navigation space without fake operational data or persistence
+flows. Browser access is enabled only when FastAPI CORS origins are configured.
+
+`pricing.py` keeps OpenAI cost estimation separate from answer generation.
+Unknown model prices, explicit empty pricing overrides, and inconsistent provider
+usage metadata produce unknown cost fields rather than failing the RAG run.

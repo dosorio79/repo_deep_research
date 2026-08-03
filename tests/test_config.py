@@ -10,7 +10,12 @@ from repo_research.config import Settings, load_dotenv_environment
 from repo_research.models import RetrievalMode
 
 
-def test_settings_use_local_defaults() -> None:
+def test_settings_use_local_defaults(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
     settings = Settings()
 
     assert settings.environment == "local"
@@ -28,6 +33,7 @@ def test_settings_use_local_defaults() -> None:
     assert settings.research_limit == 5
     assert settings.answer_evaluation_limit == 5
     assert settings.answer_eval_limit == 5
+    assert settings.cors_allowed_origins == []
 
 
 def test_settings_read_prefixed_environment_values(
@@ -42,6 +48,25 @@ def test_settings_read_prefixed_environment_values(
     assert settings.log_level == "DEBUG"
 
 
+def test_settings_read_env_local_after_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(
+        "RDR_QDRANT_URL=http://env.example.test\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".env.local").write_text(
+        "RDR_QDRANT_URL=http://local.example.test\n",
+        encoding="utf-8",
+    )
+
+    settings = Settings()
+
+    assert settings.qdrant_url == "http://local.example.test"
+
+
 def test_settings_read_grouped_openai_and_limit_names(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -54,6 +79,22 @@ def test_settings_read_grouped_openai_and_limit_names(
     assert settings.openai_answer_model == "answer-model"
     assert settings.retrieval_limit == 7
     assert settings.answer_evaluation_limit == 3
+
+
+def test_settings_parses_json_cors_origins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "RDR_CORS_ALLOWED_ORIGINS",
+        '["http://localhost:5173", "http://127.0.0.1:5173"]',
+    )
+
+    settings = Settings()
+
+    assert settings.cors_allowed_origins == [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
 
 def test_settings_keep_legacy_openai_and_limit_aliases(
@@ -75,11 +116,13 @@ def test_settings_accept_field_name_overrides() -> None:
         openai_answer_model="custom-answer-model",
         retrieval_limit=2,
         answer_evaluation_limit=3,
+        cors_allowed_origins=["http://localhost:8080"],
     )
 
     assert settings.openai_answer_model == "custom-answer-model"
     assert settings.retrieval_limit == 2
     assert settings.answer_evaluation_limit == 3
+    assert settings.cors_allowed_origins == ["http://localhost:8080"]
 
 
 def test_settings_reject_invalid_qdrant_url() -> None:
@@ -92,19 +135,24 @@ def test_settings_reject_non_positive_file_size() -> None:
         Settings(max_file_size_bytes=0)
 
 
-def test_load_dotenv_environment_loads_unprefixed_openai_key(
+def test_load_dotenv_environment_loads_unprefixed_openai_key_and_local_overrides(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(
-        'OPENAI_API_KEY="test-key"\nRDR_QDRANT_URL=http://example.test\n',
+        "OPENAI_API_KEY=\nRDR_QDRANT_URL=http://example.test\n",
+        encoding="utf-8",
+    )
+    local_env_file = tmp_path / ".env.local"
+    local_env_file.write_text(
+        'OPENAI_API_KEY="local-test-key"\nRDR_QDRANT_URL=http://local.test\n',
         encoding="utf-8",
     )
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("RDR_QDRANT_URL", "http://already-set.test")
 
-    load_dotenv_environment(env_file)
+    load_dotenv_environment((env_file, local_env_file))
 
-    assert os.environ["OPENAI_API_KEY"] == "test-key"
+    assert os.environ["OPENAI_API_KEY"] == "local-test-key"
     assert os.environ["RDR_QDRANT_URL"] == "http://already-set.test"

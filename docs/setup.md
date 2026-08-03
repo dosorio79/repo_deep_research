@@ -2,13 +2,18 @@
 
 ## Local development
 
-Install Python 3.12 and uv, then create a local environment file and sync the
+Install Python 3.12 and uv, then create local environment files and sync the
 pinned development dependencies:
 
 ```bash
 cp .env.example .env
+cp .env.local.example .env.local
 make install
 ```
+
+Use `.env` for stable non-secret defaults. Use `.env.local` for
+`OPENAI_API_KEY` and other machine-local overrides. The application reads `.env`
+first and `.env.local` second; exported shell variables still take precedence.
 
 Run the required local validation suite:
 
@@ -47,10 +52,11 @@ predictable memory use during local repository indexing.
 
 M3 direct RAG uses the OpenAI Responses API only when running `rag`,
 `api-rag`, `evaluate-answers`, or the `/rag` API endpoint. Set
-`OPENAI_API_KEY` in the environment or in `.env` before live answer generation:
+`OPENAI_API_KEY` in `.env.local` or as an exported shell variable before live
+answer generation:
 
 ```bash
-export OPENAI_API_KEY="..."
+export OPENAI_API_KEY=...
 ```
 
 The default answer model is `RDR_OPENAI_ANSWER_MODEL=gpt-5-mini`; the default
