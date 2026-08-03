@@ -6,7 +6,7 @@ UV_CACHE_DIR ?= /tmp/repo_deep_research_uv_cache
 UV := UV_CACHE_DIR=$(UV_CACHE_DIR) uv
 RUN := $(UV) run
 
-.PHONY: help install format lint typecheck test validate check qdrant stop ready ingest ingest-self evidence rag api-rag evaluate-retrieval evaluate-answers api docker-up docker-down
+.PHONY: help install format lint typecheck test validate check qdrant stop ready ingest ingest-self evidence rag api-rag evaluate-retrieval evaluate-answers api frontend-install frontend-lint frontend-typecheck frontend-test frontend-build frontend-dev docker-up docker-down
 
 help:
 	printf '%s\n' 'Common:'
@@ -15,6 +15,8 @@ help:
 	printf '%s\n' '  make evidence    retrieve evidence for QUESTION'
 	printf '%s\n' '  make rag         ingest if needed, then answer QUESTION'
 	printf '%s\n' '  make api         run FastAPI locally'
+	printf '%s\n' '  make frontend-dev run the M3.6 frontend locally'
+	printf '%s\n' '  make frontend-test | frontend-build'
 	printf '%s\n' ''
 	printf '%s\n' 'Operations:'
 	printf '%s\n' '  make qdrant | make stop | make ingest | make api-rag'
@@ -80,3 +82,21 @@ evaluate-answers:
 
 api:
 	$(RUN) uvicorn repo_research.api:app --reload
+
+frontend-install:
+	cd frontend && npm install
+
+frontend-lint:
+	cd frontend && npm run lint
+
+frontend-typecheck:
+	cd frontend && npm run typecheck
+
+frontend-test:
+	cd frontend && npm test
+
+frontend-build:
+	cd frontend && npm run build
+
+frontend-dev:
+	cd frontend && npm run dev
