@@ -3,11 +3,12 @@
 import os
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Self
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from repo_research.models import RetrievalMode
+from repo_research.models import ResearchBudget, RetrievalMode
 
 DEFAULT_DOTENV_PATHS = (Path(".env"), Path(".env.local"))
 
@@ -144,6 +145,21 @@ class Settings(BaseSettings):
     def answer_eval_limit(self) -> int:
         """Backward-compatible name for the answer-evaluation retrieval limit."""
         return self.answer_evaluation_limit
+
+    @property
+    def research_budget(self) -> ResearchBudget:
+        """Return the validated default budget for an agentic research run."""
+        return ResearchBudget(
+            max_searches=self.research_max_searches,
+            max_file_reads=self.research_max_file_reads,
+            max_total_tool_calls=self.research_max_total_tool_calls,
+        )
+
+    @model_validator(mode="after")
+    def validate_research_budget(self) -> Self:
+        """Reject default tool bounds that cannot form a valid research budget."""
+        _ = self.research_budget
+        return self
 
     @field_validator("qdrant_url")
     @classmethod

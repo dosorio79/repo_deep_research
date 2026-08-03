@@ -169,3 +169,37 @@ def test_research_run_result_reuses_trace_contract() -> None:
 
     assert result.answer.research_steps[0].action == "search_repository"
     assert result.trace.tool_call_count == 1
+
+
+def test_research_answer_rejects_unknown_step_evidence_ids() -> None:
+    with pytest.raises(ValidationError, match="unknown evidence IDs"):
+        ResearchAnswer(
+            question="Which modules change for bounded research?",
+            summary="A step cannot cite evidence that is not returned.",
+            research_steps=[
+                ResearchStep(
+                    sequence=1,
+                    action="search_repository",
+                    rationale="Find current direct-RAG contracts.",
+                    evidence_ids=["E99"],
+                )
+            ],
+            confidence=0.0,
+        )
+
+
+def test_research_answer_rejects_unknown_change_target_evidence_ids() -> None:
+    with pytest.raises(ValidationError, match="unknown evidence IDs"):
+        ResearchAnswer(
+            question="Which modules change for bounded research?",
+            summary="A change target cannot cite evidence that is not returned.",
+            change_targets=[
+                ChangeTarget(
+                    path="src/repo_research/research.py",
+                    symbol=None,
+                    reason="Add the M4 service next to direct RAG.",
+                    evidence_ids=["E99"],
+                )
+            ],
+            confidence=0.0,
+        )

@@ -188,6 +188,25 @@ class ResearchAnswer(BaseModel):
     unresolved_questions: list[str] = Field(default_factory=list)
     insufficient_evidence: bool = False
 
+    @model_validator(mode="after")
+    def validate_evidence_references(self) -> ResearchAnswer:
+        """Ensure process steps and change targets cite returned evidence only."""
+        evidence_ids = {item.evidence_id for item in self.evidence}
+        referenced_ids = {
+            evidence_id
+            for step in self.research_steps
+            for evidence_id in step.evidence_ids
+        }
+        referenced_ids.update(
+            evidence_id
+            for target in self.change_targets
+            for evidence_id in target.evidence_ids
+        )
+        unknown_ids = sorted(referenced_ids - evidence_ids)
+        if unknown_ids:
+            raise ValueError(f"unknown evidence IDs: {unknown_ids}")
+        return self
+
 
 class ModelUsage(BaseModel):
     """Application-owned model usage and price telemetry for one model call."""

@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from repo_research.config import Settings, load_dotenv_environment
-from repo_research.models import RetrievalMode
+from repo_research.models import ResearchBudget, RetrievalMode
 
 
 def test_settings_use_local_defaults(
@@ -36,6 +36,11 @@ def test_settings_use_local_defaults(
     assert settings.research_max_searches == 3
     assert settings.research_max_file_reads == 5
     assert settings.research_max_total_tool_calls == 8
+    assert settings.research_budget == ResearchBudget(
+        max_searches=3,
+        max_file_reads=5,
+        max_total_tool_calls=8,
+    )
     assert settings.cors_allowed_origins == []
 
 
@@ -88,6 +93,27 @@ def test_settings_read_grouped_openai_and_limit_names(
     assert settings.research_max_searches == 2
     assert settings.research_max_file_reads == 4
     assert settings.research_max_total_tool_calls == 6
+    assert settings.research_budget == ResearchBudget(
+        max_searches=2,
+        max_file_reads=4,
+        max_total_tool_calls=6,
+    )
+
+
+def test_settings_reject_research_budget_that_exceeds_total_calls() -> None:
+    with pytest.raises(ValidationError, match="max_searches"):
+        Settings(
+            research_max_searches=4,
+            research_max_file_reads=2,
+            research_max_total_tool_calls=3,
+        )
+
+    with pytest.raises(ValidationError, match="max_file_reads"):
+        Settings(
+            research_max_searches=2,
+            research_max_file_reads=4,
+            research_max_total_tool_calls=3,
+        )
 
 
 def test_settings_parses_json_cors_origins(
