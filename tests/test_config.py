@@ -10,7 +10,12 @@ from repo_research.config import Settings, load_dotenv_environment
 from repo_research.models import RetrievalMode
 
 
-def test_settings_use_local_defaults() -> None:
+def test_settings_use_local_defaults(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
     settings = Settings()
 
     assert settings.environment == "local"
@@ -28,7 +33,7 @@ def test_settings_use_local_defaults() -> None:
     assert settings.research_limit == 5
     assert settings.answer_evaluation_limit == 5
     assert settings.answer_eval_limit == 5
-    assert "http://localhost:8080" in settings.cors_allowed_origins
+    assert settings.cors_allowed_origins == []
 
 
 def test_settings_read_prefixed_environment_values(
@@ -92,11 +97,13 @@ def test_settings_accept_field_name_overrides() -> None:
         openai_answer_model="custom-answer-model",
         retrieval_limit=2,
         answer_evaluation_limit=3,
+        cors_allowed_origins=["http://localhost:8080"],
     )
 
     assert settings.openai_answer_model == "custom-answer-model"
     assert settings.retrieval_limit == 2
     assert settings.answer_evaluation_limit == 3
+    assert settings.cors_allowed_origins == ["http://localhost:8080"]
 
 
 def test_settings_reject_invalid_qdrant_url() -> None:

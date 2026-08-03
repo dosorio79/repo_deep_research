@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { AnswerPanel } from "@/components/AnswerPanel";
 import { ApiError } from "@/components/ApiError";
@@ -43,15 +43,19 @@ function ResearchView() {
   });
   const [result, setResult] = useState<RagRunResult | null>(null);
   const [error, setError] = useState<ApiErrorShape | null>(null);
+  const activeRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => () => activeRequest.current?.abort(), []);
 
   const mutation = useMutation({
-    mutationFn: (payload: { baseUrl: string; body: RagRequest }) =>
-      runRagQuery(payload.baseUrl, payload.body),
+    mutationFn: (payload: { baseUrl: string; body: RagRequest; signal: AbortSignal }) =>
+      runRagQuery(payload.baseUrl, payload.body, payload.signal),
     onSuccess: (data) => {
       setResult(data);
       setError(null);
     },
     onError: (err: unknown) => {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       const shape = err as Partial<ApiErrorShape>;
       setError({
         title: shape?.title ?? "Request failed",
@@ -62,6 +66,9 @@ function ResearchView() {
   });
 
   const submit = () => {
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
     const body: RagRequest = {
       question: form.question.trim(),
       mode: form.mode,
@@ -69,7 +76,7 @@ function ResearchView() {
       limit: form.limit,
       ...(form.repositoryPath.trim() ? { repository_path: form.repositoryPath.trim() } : {}),
     };
-    mutation.mutate({ baseUrl: form.baseUrl, body });
+    mutation.mutate({ baseUrl: form.baseUrl, body, signal: controller.signal });
   };
 
   return (

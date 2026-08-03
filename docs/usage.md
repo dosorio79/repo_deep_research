@@ -122,8 +122,9 @@ make frontend-dev
 ```
 
 The frontend defaults to `http://localhost:8000` and posts to `/rag`. The API
-allows local browser origins through `RDR_CORS_ALLOWED_ORIGINS`, configured as a
-JSON list; keep that value restricted to trusted development origins.
+allows browser origins only when `RDR_CORS_ALLOWED_ORIGINS` is configured as a
+JSON list. `.env.example` opts in local frontend origins; keep that value
+restricted to trusted development origins.
 
 ## Evaluate answers
 

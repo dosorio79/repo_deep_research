@@ -45,6 +45,7 @@ describe("runRagQuery", () => {
   });
 
   it("posts a RAG request to the backend /rag endpoint", async () => {
+    const controller = new AbortController();
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(okResult), {
         status: 200,
@@ -54,12 +55,16 @@ describe("runRagQuery", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      runRagQuery("http://localhost:8000///", {
-        question: "Where is config validated?",
-        mode: "locate",
-        retrieval_mode: "hybrid",
-        limit: 5,
-      }),
+      runRagQuery(
+        "http://localhost:8000///",
+        {
+          question: "Where is config validated?",
+          mode: "locate",
+          retrieval_mode: "hybrid",
+          limit: 5,
+        },
+        controller.signal,
+      ),
     ).resolves.toEqual(okResult);
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -73,6 +78,7 @@ describe("runRagQuery", () => {
           retrieval_mode: "hybrid",
           limit: 5,
         }),
+        signal: controller.signal,
       }),
     );
   });

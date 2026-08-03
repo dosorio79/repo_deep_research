@@ -90,6 +90,10 @@ app:
 	trap cleanup INT TERM EXIT; \
 	$(MAKE) api & \
 	api_pid=$$!; \
+	for attempt in $$(seq 1 30); do \
+		curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done; \
 	$(MAKE) frontend-dev
 
 frontend-install:

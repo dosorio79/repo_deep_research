@@ -17,7 +17,7 @@ RAG baseline to produce structured answers with application-validated
 citations. CLI and API RAG runs return an answer-plus-trace envelope with
 repository identity, retrieval settings, latency, model usage, and estimated cost
 metadata where pricing is known. A minimal FastAPI backend exposes `/health` and
-`/rag`, with local CORS origins for browser testing. The vendored React
+`/rag`; browser CORS is opt-in through local configuration. The vendored React
 TypeScript frontend under `frontend/` calls that `/rag` API and renders answer,
 evidence, trace, cost telemetry, errors, and raw JSON. PydanticAI agent loops,
 feedback persistence, and monitoring dashboards remain deliberately deferred.
@@ -94,7 +94,7 @@ Copy `.env.example` to `.env` for local overrides. All runtime settings use the
 | `RDR_OPENAI_ANSWER_MODEL` | `gpt-5-mini` | Default direct-RAG answer model. |
 | `RDR_OPENAI_JUDGE_MODEL` | `gpt-5.1` | Default answer-evaluation judge model. |
 | `RDR_ANSWER_EVALUATION_LIMIT` | `5` | Default retrieved evidence limit during answer evaluation. |
-| `RDR_CORS_ALLOWED_ORIGINS` | local frontend origins | JSON list of browser origins allowed to call FastAPI. |
+| `RDR_CORS_ALLOWED_ORIGINS` | `[]` | JSON list of browser origins allowed to call FastAPI. `.env.example` opts in local frontend origins. |
 | `RDR_LOG_LEVEL` | `INFO` | Application log level. |
 
 Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and

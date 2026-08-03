@@ -304,7 +304,7 @@ M3.6 is complete when:
   either numeric values or stringified decimals.
 - FastAPI allows configured local browser origins through
   `RDR_CORS_ALLOWED_ORIGINS` so the frontend can call `/rag` during local
-  development.
+  development; the runtime default is empty, so CORS is opt-in.
 - Evaluations, Monitoring, Feedback, and Settings routes are intentionally
   placeholder backoffice surfaces with no fake charts, persisted data, or
   operational workflows.

@@ -100,6 +100,36 @@ async def test_rag_allows_configured_frontend_origin() -> None:
 
 
 @pytest.mark.anyio
+async def test_rag_does_not_allow_frontend_origin_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.options(
+            "/rag",
+            headers={
+                "Origin": "http://localhost:8080",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+    assert response.status_code == 405
+    assert "access-control-allow-origin" not in response.headers
+
+
+@pytest.mark.anyio
 async def test_rag_returns_insufficient_evidence_shape() -> None:
     app = create_app(
         settings=Settings(repository_root=Path(".")),

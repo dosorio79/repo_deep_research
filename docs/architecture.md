@@ -90,7 +90,7 @@ mode, limit, optional repository path, and API base URL, then renders
 `RagRunResult.answer`, evidence, trace metadata, model usage, cost telemetry,
 and raw JSON. Planned Evaluations, Monitoring, Feedback, and Settings routes
 reserve backoffice navigation space without fake operational data or persistence
-flows. Local browser access is enabled by configured FastAPI CORS origins.
+flows. Browser access is enabled only when FastAPI CORS origins are configured.
 
 `pricing.py` keeps OpenAI cost estimation separate from answer generation.
 Unknown model prices, explicit empty pricing overrides, and inconsistent provider

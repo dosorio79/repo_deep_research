@@ -1,5 +1,7 @@
 import type { ApiErrorShape, RagRequest, RagRunResult } from "./rag-types";
 
+const ERROR_BODY_PREVIEW_LIMIT = 1200;
+
 function extractDetail(body: unknown): string | null {
   if (!body || typeof body !== "object") return null;
   const detail = (body as { detail?: unknown }).detail;
@@ -38,7 +40,8 @@ export async function runRagQuery(
       body: JSON.stringify(payload),
       signal: signal ?? null,
     });
-  } catch {
+  } catch (error) {
+    if (signal?.aborted) throw error;
     throw {
       title: "Network error",
       detail: `Could not reach the backend at ${url}. Check that the API is running and the base URL is correct.`,
@@ -58,7 +61,7 @@ export async function runRagQuery(
       title: `Backend returned ${response.status} ${response.statusText}`.trim(),
       detail:
         extractDetail(parsed) ??
-        (text ? text.slice(0, 1200) : "The backend returned no response body."),
+        (text ? text.slice(0, ERROR_BODY_PREVIEW_LIMIT) : "The backend returned no response body."),
       status: response.status,
     } satisfies ApiErrorShape;
   }

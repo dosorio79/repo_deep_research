@@ -12,7 +12,7 @@ function List({ items }: { items: string[] }) {
   return (
     <ul className="space-y-1">
       {items.map((item, i) => (
-        <li key={`${item}-${i}`} className="flex gap-2 text-[13px]">
+        <li key={i} className="flex gap-2 text-[13px]">
           <span className="mono text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
           <span className="min-w-0 break-words">{item}</span>
         </li>
@@ -26,7 +26,7 @@ function Chips({ items, copyable }: { items: string[]; copyable?: boolean }) {
     <div className="flex flex-wrap gap-1.5">
       {items.map((item, i) => (
         <span
-          key={`${item}-${i}`}
+          key={i}
           className="group inline-flex max-w-full items-center gap-1 rounded-sm border border-border bg-secondary/60 px-1.5 py-0.5 mono text-[12px]"
         >
           <span className="path-text truncate" title={item}>
