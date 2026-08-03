@@ -87,7 +87,7 @@ evaluate-answers:
 api:
 	$(RUN) uvicorn repo_research.api:app --reload
 
-app: qdrant
+app: qdrant ingest
 	api_pid=""; \
 	cleanup() { [ -n "$$api_pid" ] && kill "$$api_pid" 2>/dev/null || true; }; \
 	trap cleanup INT TERM EXIT; \
