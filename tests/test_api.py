@@ -71,6 +71,35 @@ async def test_health_reports_qdrant_status() -> None:
 
 
 @pytest.mark.anyio
+async def test_rag_allows_configured_frontend_origin() -> None:
+    app = create_app(
+        settings=Settings(
+            repository_root=Path("."),
+            cors_allowed_origins=["http://localhost:5173"],
+        ),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.options(
+            "/rag",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert "POST" in response.headers["access-control-allow-methods"]
+
+
+@pytest.mark.anyio
 async def test_rag_returns_insufficient_evidence_shape() -> None:
     app = create_app(
         settings=Settings(repository_root=Path(".")),

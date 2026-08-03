@@ -28,6 +28,7 @@ def test_settings_use_local_defaults() -> None:
     assert settings.research_limit == 5
     assert settings.answer_evaluation_limit == 5
     assert settings.answer_eval_limit == 5
+    assert "http://localhost:8080" in settings.cors_allowed_origins
 
 
 def test_settings_read_prefixed_environment_values(
@@ -54,6 +55,22 @@ def test_settings_read_grouped_openai_and_limit_names(
     assert settings.openai_answer_model == "answer-model"
     assert settings.retrieval_limit == 7
     assert settings.answer_evaluation_limit == 3
+
+
+def test_settings_parses_json_cors_origins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "RDR_CORS_ALLOWED_ORIGINS",
+        '["http://localhost:5173", "http://127.0.0.1:5173"]',
+    )
+
+    settings = Settings()
+
+    assert settings.cors_allowed_origins == [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
 
 def test_settings_keep_legacy_openai_and_limit_aliases(

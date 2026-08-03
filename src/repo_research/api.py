@@ -6,6 +6,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Protocol
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from repo_research.config import Settings
 from repo_research.ingestion import discover_repository
@@ -50,6 +51,13 @@ def create_app(
     """Create a FastAPI app with injectable runtime dependencies."""
     app_settings = settings or Settings()
     app = FastAPI(title="Repo Deep Research", version=package_version())
+    if app_settings.cors_allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=app_settings.cors_allowed_origins,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["content-type"],
+        )
 
     def get_database() -> RagDatabase:
         return database or create_database(app_settings)
