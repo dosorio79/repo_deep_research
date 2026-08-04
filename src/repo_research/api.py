@@ -15,14 +15,19 @@ from repo_research.ingestion import discover_repository
 from repo_research.models import (
     RagRequest,
     RagRunResult,
+    ResearchRequest,
+    ResearchRunResult,
     SearchQuery,
     SearchResult,
 )
 from repo_research.rag import AnswerGenerator
+from repo_research.research import ResearchAgentRunner
 from repo_research.runtime import (
     create_answer_model,
+    create_bounded_research_service,
     create_database,
     create_direct_rag_service,
+    create_research_agent,
 )
 
 
@@ -49,6 +54,7 @@ def create_app(
     settings: Settings | None = None,
     database: RagDatabase | None = None,
     generator: AnswerGenerator | None = None,
+    research_agent: ResearchAgentRunner | None = None,
 ) -> FastAPI:
     """Create a FastAPI app with injectable runtime dependencies."""
     load_dotenv_environment(keys=("OPENAI_API_KEY", "OPENAI_ADMIN_KEY"))
@@ -67,6 +73,9 @@ def create_app(
 
     def get_generator() -> AnswerGenerator:
         return generator or create_answer_model(app_settings)
+
+    def get_research_agent() -> ResearchAgentRunner:
+        return research_agent or create_research_agent(app_settings)
 
     @app.get("/health")
     async def health() -> dict[str, str | bool]:
@@ -88,6 +97,41 @@ def create_app(
                 settings=app_settings,
                 database=get_database(),
                 generator=get_generator(),
+            )
+            return service.run(
+                repository=repository,
+                request=request.model_copy(update={"repository_path": root_path}),
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        except ResponseHandlingException as error:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Repository vector store is unavailable; start Qdrant and "
+                    "retry the request."
+                ),
+            ) from error
+        except OpenAIError as error:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "OpenAI client is unavailable; check local credentials and "
+                    "service configuration."
+                ),
+            ) from error
+
+    @app.post("/research", response_model=ResearchRunResult)
+    async def research(request: ResearchRequest) -> ResearchRunResult:
+        root_path = (request.repository_path or app_settings.repository_root).resolve()
+        try:
+            repository, _ = discover_repository(
+                root_path, app_settings.max_file_size_bytes
+            )
+            service = create_bounded_research_service(
+                settings=app_settings,
+                database=get_database(),
+                agent=get_research_agent(),
             )
             return service.run(
                 repository=repository,

@@ -13,9 +13,13 @@ from repo_research.models import (
     RagMode,
     RagRequest,
     RagRunResult,
+    ResearchAnswer,
+    ResearchRequest,
+    ResearchRunResult,
     SearchResult,
 )
 from repo_research.rag import AnswerGenerationResult
+from repo_research.research import ResearchAgentResult
 
 
 def test_cli_parses_search_request() -> None:
@@ -55,6 +59,27 @@ def test_cli_parses_rag_request() -> None:
     assert arguments.question == "where is configuration validated?"
     assert arguments.mode == "locate"
     assert arguments.retrieval_mode == "dense"
+
+
+def test_cli_parses_research_request() -> None:
+    arguments = build_parser().parse_args(
+        [
+            "research",
+            "which modules change for bounded research?",
+            "--mode",
+            "change",
+            "--retrieval-mode",
+            "dense",
+            "--max-searches",
+            "2",
+        ]
+    )
+
+    assert arguments.command == "research"
+    assert arguments.question == "which modules change for bounded research?"
+    assert arguments.mode == "change"
+    assert arguments.retrieval_mode == "dense"
+    assert arguments.max_searches == 2
 
 
 def test_cli_parses_ask_request() -> None:
@@ -107,6 +132,9 @@ class FakeSettings:
     retrieval_mode = "dense"
     retrieval_limit = 5
     answer_evaluation_limit = 5
+    research_max_searches = 3
+    research_max_file_reads = 5
+    research_max_total_tool_calls = 8
     openai_model = "gpt-5-mini"
     openai_judge_model = "gpt-5.1"
 
@@ -121,6 +149,27 @@ class FakeOpenAIModel:
         evidence_context: str,
     ) -> AnswerGenerationResult:
         raise AssertionError("no evidence should skip model generation")
+
+
+class FakeResearchAgent:
+    """Fake agentic research model used by CLI tests."""
+
+    def run_research(
+        self,
+        *,
+        request: ResearchRequest,
+        tools: object,
+    ) -> ResearchAgentResult:
+        del tools
+        return ResearchAgentResult(
+            answer=ResearchAnswer(
+                question=request.question,
+                mode=request.mode,
+                summary="Insufficient repository evidence to produce a plan.",
+                confidence=0.0,
+                insufficient_evidence=True,
+            )
+        )
 
 
 def test_cli_rag_emits_grounded_answer_without_live_model(
@@ -171,6 +220,37 @@ def test_cli_ask_ingests_then_emits_grounded_answer_without_live_model(
     assert result.trace.tool_call_count == 0
     assert "[repo-research] ingesting repository" in captured.err
     assert "[repo-research] running direct rag" in captured.err
+
+
+def test_cli_research_emits_agentic_response_without_live_model(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = FakeDatabase()
+    monkeypatch.setattr(cli, "Settings", FakeSettings)
+    monkeypatch.setattr(runtime, "create_database", lambda _: database)
+    monkeypatch.setattr(runtime, "create_research_agent", lambda _: FakeResearchAgent())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "repo-research",
+            "research",
+            "which modules change?",
+            "--path",
+            ".",
+            "--max-searches",
+            "1",
+        ],
+    )
+
+    cli.main()
+
+    result = ResearchRunResult.model_validate_json(capsys.readouterr().out)
+    assert result.answer.mode is RagMode.CHANGE
+    assert result.answer.insufficient_evidence is True
+    assert result.trace.tool_call_count == 0
+    assert database.replacements
 
 
 def test_cli_ingest_emits_skipped_file_diagnostics(

@@ -12,8 +12,16 @@ from qdrant_client.http.exceptions import ResponseHandlingException
 import repo_research.api as api_module
 from repo_research.api import create_app
 from repo_research.config import Settings
-from repo_research.models import ParsedChunk, RagRequest, SearchResult
+from repo_research.models import (
+    ParsedChunk,
+    RagMode,
+    RagRequest,
+    ResearchAnswer,
+    ResearchRequest,
+    SearchResult,
+)
 from repo_research.rag import AnswerGenerationResult
+from repo_research.research import ResearchAgentResult
 
 
 class FakeDatabase:
@@ -39,6 +47,29 @@ class FakeGenerator:
         evidence_context: str,
     ) -> AnswerGenerationResult:
         raise AssertionError("empty retrieval should not call the model")
+
+
+class FakeResearchAgent:
+    """Fake agentic research model for API tests."""
+
+    def run_research(
+        self,
+        *,
+        request: object,
+        tools: object,
+    ) -> ResearchAgentResult:
+        del tools
+        if not isinstance(request, ResearchRequest):
+            raise AssertionError("expected ResearchRequest")
+        return ResearchAgentResult(
+            answer=ResearchAnswer(
+                question=request.question,
+                mode=RagMode.CHANGE,
+                summary="Insufficient repository evidence to produce a plan.",
+                confidence=0.0,
+                insufficient_evidence=True,
+            )
+        )
 
 
 class OneResultDatabase(FakeDatabase):
@@ -82,6 +113,7 @@ def test_app_uses_package_version() -> None:
         settings=Settings(repository_root=Path(".")),
         database=FakeDatabase(healthy=True),
         generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
     )
 
     assert app.version == version("repo-deep-research")
@@ -98,7 +130,11 @@ def test_create_app_loads_env_local_before_runtime_dependencies(
         encoding="utf-8",
     )
 
-    create_app(database=FakeDatabase(healthy=True), generator=FakeGenerator())
+    create_app(
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+    )
 
     assert os.environ["OPENAI_API_KEY"] == "local-test-key"
 
@@ -109,6 +145,7 @@ async def test_health_reports_qdrant_status() -> None:
         settings=Settings(repository_root=Path(".")),
         database=FakeDatabase(healthy=True),
         generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
     )
 
     transport = httpx.ASGITransport(app=app)
@@ -130,6 +167,7 @@ async def test_rag_allows_configured_frontend_origin() -> None:
         ),
         database=FakeDatabase(healthy=True),
         generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
     )
 
     transport = httpx.ASGITransport(app=app)
@@ -161,6 +199,7 @@ async def test_rag_does_not_allow_frontend_origin_by_default(
         settings=Settings(repository_root=Path(".")),
         database=FakeDatabase(healthy=True),
         generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
     )
 
     transport = httpx.ASGITransport(app=app)
@@ -186,6 +225,7 @@ async def test_rag_returns_insufficient_evidence_shape() -> None:
         settings=Settings(repository_root=Path(".")),
         database=FakeDatabase(healthy=True),
         generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
     )
 
     transport = httpx.ASGITransport(app=app)
@@ -206,6 +246,38 @@ async def test_rag_returns_insufficient_evidence_shape() -> None:
 
 
 @pytest.mark.anyio
+async def test_research_returns_agentic_trace_shape() -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/research",
+            json={
+                "question": "Which modules change for bounded research?",
+                "budget": {
+                    "max_searches": 1,
+                    "max_file_reads": 1,
+                    "max_total_tool_calls": 1,
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer"]["insufficient_evidence"] is True
+    assert body["answer"]["mode"] == "change"
+    assert body["trace"]["tool_call_count"] == 0
+
+
+@pytest.mark.anyio
 async def test_rag_returns_stable_error_when_openai_client_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -216,6 +288,7 @@ async def test_rag_returns_stable_error_when_openai_client_is_unavailable(
     app = create_app(
         settings=Settings(repository_root=Path(".")),
         database=OneResultDatabase(healthy=True),
+        research_agent=FakeResearchAgent(),
     )
 
     transport = httpx.ASGITransport(app=app)
@@ -242,6 +315,7 @@ async def test_rag_returns_stable_error_when_qdrant_is_unavailable() -> None:
         settings=Settings(repository_root=Path(".")),
         database=UnavailableDatabase(healthy=False),
         generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
     )
 
     transport = httpx.ASGITransport(app=app)
@@ -251,6 +325,64 @@ async def test_rag_returns_stable_error_when_qdrant_is_unavailable() -> None:
         response = await client.post(
             "/rag",
             json={"question": "Where is example logic?", "limit": 5},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": (
+            "Repository vector store is unavailable; start Qdrant and retry the "
+            "request."
+        )
+    }
+
+
+@pytest.mark.anyio
+async def test_research_returns_stable_error_when_openai_client_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_openai_error(settings: Settings) -> FakeResearchAgent:
+        raise OpenAIError("Missing credentials")
+
+    monkeypatch.setattr(api_module, "create_research_agent", raise_openai_error)
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=OneResultDatabase(healthy=True),
+        generator=FakeGenerator(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/research",
+            json={"question": "Where is example logic?"},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": (
+            "OpenAI client is unavailable; check local credentials and service "
+            "configuration."
+        )
+    }
+
+
+@pytest.mark.anyio
+async def test_research_returns_stable_error_when_qdrant_is_unavailable() -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=UnavailableDatabase(healthy=False),
+        generator=FakeGenerator(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/research",
+            json={"question": "Where is example logic?"},
         )
 
     assert response.status_code == 503

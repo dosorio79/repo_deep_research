@@ -11,7 +11,7 @@ repository paths, symbols, and line ranges.
 
 ## Current status
 
-M3.6 — Frontend testing harness is implemented. The project supports dense,
+M4 — Agentic deep research is in progress. The project supports dense,
 sparse, and Qdrant RRF-hybrid retrieval, then uses a direct OpenAI Responses API
 RAG baseline to produce structured answers with application-validated
 citations. CLI and API RAG runs return an answer-plus-trace envelope with
@@ -19,8 +19,10 @@ repository identity, retrieval settings, latency, model usage, and estimated cos
 metadata where pricing is known. A minimal FastAPI backend exposes `/health` and
 `/rag`; browser CORS is opt-in through local configuration. The vendored React
 TypeScript frontend under `frontend/` calls that `/rag` API and renders answer,
-evidence, trace, cost telemetry, errors, and raw JSON. PydanticAI agent loops,
-feedback persistence, and monitoring dashboards remain deliberately deferred.
+evidence, trace, cost telemetry, errors, and raw JSON. The first M4 agentic
+slice adds a PydanticAI-backed bounded research service at `/research` and
+`repo-research research`; feedback persistence and monitoring dashboards remain
+deliberately deferred.
 
 ## Requirements
 
@@ -59,6 +61,7 @@ Stop the local service with `make docker-down`.
 | `make ingest` / `make ingest-self` | Parse and index this repository. |
 | `make evidence QUESTION="..."` | Start Qdrant and return repository evidence using dense retrieval by default. |
 | `make rag QUESTION="..."` | Ingest this repo if needed and return a grounded direct-RAG answer. |
+| `uv run repo-research research "..."` | Return a bounded agentic research answer through PydanticAI. |
 | `make api-rag QUESTION="..."` | Start Qdrant and return answer-plus-trace JSON through the local FastAPI `/rag` endpoint. |
 | `make evaluate-retrieval` | Evaluate dense, sparse, and hybrid retrieval on the development records. |
 | `make evaluate-answers` | Run opt-in live answer judging with OpenAI. |
@@ -98,6 +101,9 @@ All runtime settings use the `RDR_` prefix and are validated by
 | `RDR_OPENAI_ANSWER_MODEL` | `gpt-5-mini` | Default direct-RAG answer model. |
 | `RDR_OPENAI_JUDGE_MODEL` | `gpt-5.1` | Default answer-evaluation judge model. |
 | `RDR_ANSWER_EVALUATION_LIMIT` | `5` | Default retrieved evidence limit during answer evaluation. |
+| `RDR_RESEARCH_MAX_SEARCHES` | `3` | Default maximum search tool calls for one agentic research run. |
+| `RDR_RESEARCH_MAX_FILE_READS` | `5` | Default maximum repository file-read tool calls for one agentic research run. |
+| `RDR_RESEARCH_MAX_TOTAL_TOOL_CALLS` | `8` | Default maximum total tool calls for one agentic research run. |
 | `RDR_CORS_ALLOWED_ORIGINS` | `[]` | JSON list of browser origins allowed to call FastAPI. `.env.example` opts in local frontend origins. |
 | `RDR_LOG_LEVEL` | `INFO` | Application log level. |
 | `OPENAI_API_KEY` | unset | OpenAI API key for live direct RAG and answer evaluation. Prefer `.env.local` or an exported shell variable. |

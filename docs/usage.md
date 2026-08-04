@@ -96,6 +96,41 @@ Then, in another terminal, exercise the same RAG service through FastAPI:
 make api-rag QUESTION="where is repository configuration validated?"
 ```
 
+## Answer with bounded agentic research
+
+M4 adds a PydanticAI-backed research path for bounded, multi-step repository
+investigation. Ensure Qdrant is running (e.g. `make docker-up`) and
+`OPENAI_API_KEY` is set before running research. It keeps direct RAG on `/rag` and
+reserves `/research` for the agentic `ResearchRunResult` contract:
+
+```bash
+uv run repo-research research "which modules must change to add bounded tools?" \
+  --mode change --retrieval-mode dense --limit 5
+```
+
+The research command exposes optional budget flags:
+
+```bash
+--max-searches 3 --max-file-reads 5 --max-total-tool-calls 8
+```
+
+The service enforces those limits in application code for `search_repository`,
+`read_chunk`, `read_file`, and `find_symbol`. File reads are scoped to the
+requested repository root, and final evidence is canonicalized from tool results
+so the agent cannot invent paths or line ranges. The response is a
+`ResearchRunResult` with:
+
+- `answer`: `ResearchAnswer`, including `research_steps`, implementation flow,
+  evidence, change targets, risks, confidence, and unresolved questions;
+- `trace`: the same application-owned trace metadata shape used by direct RAG,
+  with `tool_call_count` populated for agentic tool use.
+
+With the API running, callers may post the same request shape to:
+
+```text
+POST http://localhost:8000/research
+```
+
 ## Use the frontend harness
 
 M3.6 includes a vendored React TypeScript frontend under `frontend/`. It is a
