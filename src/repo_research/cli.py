@@ -155,10 +155,9 @@ def main() -> None:
         print(json.dumps(run_result.model_dump(mode="json"), indent=2))
         return
 
-    repository, _ = discover_repository(root_path, settings.max_file_size_bytes)
+    repository, files = discover_repository(root_path, settings.max_file_size_bytes)
     if arguments.command == "research":
         _report_step("ingesting repository")
-        repository, files = discover_repository(root_path, settings.max_file_size_bytes)
         parsed_files = parse_files(files, repository)
         if parsed_files.chunks or not parsed_files.skipped_files:
             database.replace(repository.repository_id, parsed_files.chunks)
