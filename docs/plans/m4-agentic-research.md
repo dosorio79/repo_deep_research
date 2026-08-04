@@ -138,3 +138,19 @@ Agentic should call `POST /research` and render `ResearchRunResult`, including
 `research_steps`, bounded `tool_call_count`, evidence, change targets, and the
 reused trace metadata. The matching local smoke command should be
 `repo-research research`.
+
+### 2026-08-04 - Bounded service and PydanticAI adapter
+
+- Added the first bounded service slice on `feat/m4-bounded-research-service`.
+- Implemented application-owned tool bounds for `search_repository`,
+  `read_chunk`, `read_file`, and `find_symbol`.
+- Added root-safe repository file reads and final-answer canonicalization from
+  tool evidence so paths, symbols, and line ranges remain application-owned.
+- Added the live PydanticAI adapter behind a fakeable `ResearchAgentRunner`
+  protocol; default tests use fakes and do not call a paid model.
+- Exposed `POST /research` and `repo-research research` while preserving
+  direct RAG on `/rag` and `repo-research rag`.
+
+Current next step: exercise the live PydanticAI path against an ingested
+self-repository with `OPENAI_API_KEY`, then refine prompts/tool ergonomics based
+on the trace and answer quality.
