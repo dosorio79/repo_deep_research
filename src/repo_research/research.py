@@ -559,7 +559,7 @@ def _build_research_trace(
         question_mode=request.mode,
         retrieval_mode=request.retrieval_mode,
         retrieval_limit=request.retrieval_limit,
-        retrieved_chunk_count=len(evidence),
+        retrieved_chunk_count=sum(1 for item in evidence if item.chunk_id is not None),
         unique_file_count=len(unique_files),
         evidence_ids=[item.evidence_id for item in answer.evidence],
         latency_ms_total=latency_ms_total,
