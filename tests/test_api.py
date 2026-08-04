@@ -334,3 +334,61 @@ async def test_rag_returns_stable_error_when_qdrant_is_unavailable() -> None:
             "request."
         )
     }
+
+
+@pytest.mark.anyio
+async def test_research_returns_stable_error_when_openai_client_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_openai_error(settings: Settings) -> FakeResearchAgent:
+        raise OpenAIError("Missing credentials")
+
+    monkeypatch.setattr(api_module, "create_research_agent", raise_openai_error)
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=OneResultDatabase(healthy=True),
+        generator=FakeGenerator(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/research",
+            json={"question": "Where is example logic?"},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": (
+            "OpenAI client is unavailable; check local credentials and service "
+            "configuration."
+        )
+    }
+
+
+@pytest.mark.anyio
+async def test_research_returns_stable_error_when_qdrant_is_unavailable() -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=UnavailableDatabase(healthy=False),
+        generator=FakeGenerator(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/research",
+            json={"question": "Where is example logic?"},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": (
+            "Repository vector store is unavailable; start Qdrant and retry the "
+            "request."
+        )
+    }
