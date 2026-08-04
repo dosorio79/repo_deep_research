@@ -99,8 +99,9 @@ make api-rag QUESTION="where is repository configuration validated?"
 ## Answer with bounded agentic research
 
 M4 adds a PydanticAI-backed research path for bounded, multi-step repository
-investigation. It keeps direct RAG on `/rag` and reserves `/research` for the
-agentic `ResearchRunResult` contract:
+investigation. Ensure Qdrant is running (e.g. `make docker-up`) and
+`OPENAI_API_KEY` is set before running research. It keeps direct RAG on `/rag` and
+reserves `/research` for the agentic `ResearchRunResult` contract:
 
 ```bash
 uv run repo-research research "which modules must change to add bounded tools?" \
