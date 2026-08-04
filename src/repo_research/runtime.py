@@ -12,6 +12,11 @@ from repo_research.rag import (
     OpenAIResponsesModel,
     RepositorySearcher,
 )
+from repo_research.research import (
+    BoundedResearchService,
+    PydanticAIResearchAgent,
+    ResearchAgentRunner,
+)
 
 
 def create_database(settings: Settings) -> RepositoryDatabase:
@@ -37,6 +42,11 @@ def create_answer_model(settings: Settings) -> OpenAIResponsesModel:
     )
 
 
+def create_research_agent(settings: Settings) -> PydanticAIResearchAgent:
+    """Create the live PydanticAI research agent adapter."""
+    return PydanticAIResearchAgent(model=settings.openai_answer_model)
+
+
 def create_direct_rag_service(
     *,
     settings: Settings,
@@ -47,4 +57,17 @@ def create_direct_rag_service(
     return DirectRagService(
         database=database or create_database(settings),
         generator=generator or create_answer_model(settings),
+    )
+
+
+def create_bounded_research_service(
+    *,
+    settings: Settings,
+    database: RepositorySearcher | None = None,
+    agent: ResearchAgentRunner | None = None,
+) -> BoundedResearchService:
+    """Create the bounded agentic research service used by CLI and API."""
+    return BoundedResearchService(
+        database=database or create_database(settings),
+        agent=agent or create_research_agent(settings),
     )

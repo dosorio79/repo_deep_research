@@ -18,6 +18,9 @@ from repo_research.models import (
     RagRequest,
     RagRunResult,
     RepositoryIdentity,
+    ResearchBudget,
+    ResearchRequest,
+    ResearchRunResult,
     RetrievalMode,
     SearchQuery,
 )
@@ -26,6 +29,7 @@ from repo_research.rag import (
     evaluate_answers_from_dataset,
     write_answer_evaluation_report,
 )
+from repo_research.research import ResearchAgentRunner
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -72,6 +76,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
     )
     rag.add_argument("--limit", type=int, default=None)
+    research = subparsers.add_parser(
+        "research", help="answer with bounded agentic repository research"
+    )
+    research.add_argument("question")
+    research.add_argument("--path", type=Path, default=None)
+    research.add_argument(
+        "--mode", choices=[mode.value for mode in RagMode], default="change"
+    )
+    research.add_argument(
+        "--retrieval-mode",
+        choices=[mode.value for mode in RetrievalMode],
+        default=None,
+    )
+    research.add_argument("--limit", type=int, default=None)
+    research.add_argument("--max-searches", type=int, default=None)
+    research.add_argument("--max-file-reads", type=int, default=None)
+    research.add_argument("--max-total-tool-calls", type=int, default=None)
     answer_eval = subparsers.add_parser(
         "evaluate-answers", help="evaluate grounded answers with an LLM judge"
     )
@@ -135,6 +156,38 @@ def main() -> None:
         return
 
     repository, _ = discover_repository(root_path, settings.max_file_size_bytes)
+    if arguments.command == "research":
+        _report_step("ingesting repository")
+        repository, files = discover_repository(root_path, settings.max_file_size_bytes)
+        parsed_files = parse_files(files, repository)
+        if parsed_files.chunks or not parsed_files.skipped_files:
+            database.replace(repository.repository_id, parsed_files.chunks)
+        _report_step(f"indexed {len(parsed_files.chunks)} chunks")
+        _report_step("running agentic research")
+        research_run_result = _run_agentic_research(
+            database=database,
+            agent=runtime.create_research_agent(settings),
+            repository=repository,
+            root_path=root_path,
+            settings=settings,
+            question=arguments.question,
+            mode=RagMode(arguments.mode),
+            retrieval_mode=RetrievalMode(arguments.retrieval_mode)
+            if arguments.retrieval_mode
+            else settings.retrieval_mode,
+            limit=arguments.limit or settings.retrieval_limit,
+            budget=ResearchBudget(
+                max_searches=arguments.max_searches or settings.research_max_searches,
+                max_file_reads=arguments.max_file_reads
+                or settings.research_max_file_reads,
+                max_total_tool_calls=arguments.max_total_tool_calls
+                or settings.research_max_total_tool_calls,
+            ),
+        )
+        _report_step("done")
+        print(json.dumps(research_run_result.model_dump(mode="json"), indent=2))
+        return
+
     if arguments.command == "evaluate-retrieval":
         evaluation_results = evaluate_records(
             database=database,
@@ -232,6 +285,37 @@ def _run_direct_rag(
             mode=mode,
             retrieval_mode=retrieval_mode,
             limit=limit,
+        ),
+    )
+
+
+def _run_agentic_research(
+    *,
+    database: RepositorySearcher,
+    agent: ResearchAgentRunner,
+    repository: RepositoryIdentity,
+    root_path: Path,
+    settings: Settings,
+    question: str,
+    mode: RagMode,
+    retrieval_mode: RetrievalMode,
+    limit: int,
+    budget: ResearchBudget,
+) -> ResearchRunResult:
+    service = runtime.create_bounded_research_service(
+        settings=settings,
+        database=database,
+        agent=agent,
+    )
+    return service.run(
+        repository=repository,
+        request=ResearchRequest(
+            question=question,
+            repository_path=root_path,
+            mode=mode,
+            retrieval_mode=retrieval_mode,
+            retrieval_limit=limit,
+            budget=budget,
         ),
     )
 
