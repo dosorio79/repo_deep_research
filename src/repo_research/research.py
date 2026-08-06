@@ -29,6 +29,7 @@ from repo_research.models import (
     SearchQuery,
     SearchResult,
 )
+from repo_research.pricing import estimate_openai_price
 from repo_research.rag import RepositorySearcher, infer_rag_mode
 
 
@@ -363,7 +364,10 @@ class PydanticAIResearchAgent:
 
     def __init__(self, *, model: str) -> None:
         load_dotenv_environment()
-        self._model = model if ":" in model else f"openai:{model}"
+        provider, model_name = _split_provider_model(model)
+        self._provider = provider
+        self._model_name = model_name
+        self._model = model if ":" in model else f"{provider}:{model_name}"
         self._agent: Agent[PydanticResearchDeps, ResearchAnswer] = Agent(
             self._model,
             deps_type=PydanticResearchDeps,
@@ -383,7 +387,14 @@ class PydanticAIResearchAgent:
             _research_user_prompt(request=request, evidence=tools.evidence),
             deps=PydanticResearchDeps(tools=tools),
         )
-        return ResearchAgentResult(answer=result.output)
+        return ResearchAgentResult(
+            answer=result.output,
+            usage=_model_usage_from_agent_usage(
+                provider=self._provider,
+                model=self._model_name,
+                usage=result.usage,
+            ),
+        )
 
     def _register_tools(self) -> None:
         @self._agent.tool
@@ -583,6 +594,72 @@ def _total_estimated_cost(model_usage: list[ModelUsage]) -> Decimal | None:
             return None
         total += usage.estimated_cost_usd
     return total
+
+
+def _model_usage_from_agent_usage(
+    *,
+    provider: str,
+    model: str,
+    usage: object | None,
+) -> ModelUsage | None:
+    if usage is None:
+        return None
+    input_tokens = _usage_int(usage, "input_tokens")
+    output_tokens = _usage_int(usage, "output_tokens")
+    total_tokens = _usage_int(usage, "total_tokens")
+    if total_tokens is None and input_tokens is not None and output_tokens is not None:
+        total_tokens = input_tokens + output_tokens
+    cached_input_tokens = _usage_int(usage, "cache_read_tokens")
+    reasoning_tokens = _usage_detail_int(usage, "reasoning_tokens")
+    estimated_cost = None
+    pricing_source = "unknown"
+    pricing_version = "unknown"
+    if provider == "openai" and input_tokens is not None and output_tokens is not None:
+        try:
+            estimate = estimate_openai_price(
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_input_tokens=cached_input_tokens or 0,
+            )
+        except ValueError:
+            estimate = None
+        if estimate is not None:
+            estimated_cost = estimate.total_cost_usd
+            pricing_source = estimate.pricing_source
+            pricing_version = estimate.pricing_version
+    return ModelUsage(
+        provider=provider,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        cached_input_tokens=cached_input_tokens,
+        reasoning_tokens=reasoning_tokens,
+        estimated_cost_usd=estimated_cost,
+        pricing_source=pricing_source,
+        pricing_version=pricing_version,
+    )
+
+
+def _split_provider_model(model: str) -> tuple[str, str]:
+    if ":" not in model:
+        return "openai", model
+    provider, model_name = model.split(":", 1)
+    return provider, model_name
+
+
+def _usage_int(usage: object, field_name: str) -> int | None:
+    value = getattr(usage, field_name, None)
+    return value if isinstance(value, int) else None
+
+
+def _usage_detail_int(usage: object, field_name: str) -> int | None:
+    details = getattr(usage, "details", None)
+    if not isinstance(details, dict):
+        return None
+    value = details.get(field_name)
+    return value if isinstance(value, int) else None
 
 
 def _elapsed_ms(start: float) -> int:
