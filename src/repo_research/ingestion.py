@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import ast
 import subprocess
+from hashlib import sha256
 from pathlib import Path
+from urllib.parse import ParseResult, urlparse
 
 from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
@@ -32,6 +34,20 @@ IGNORED_DIRECTORY_NAMES = {
 }
 
 
+def materialize_repository_address(address: str, cache_dir: Path) -> Path:
+    """Return a local repository path for either a path or public GitHub URL."""
+    stripped = address.strip()
+    if not stripped:
+        raise ValueError("repository address is required")
+    parsed = urlparse(stripped)
+    if parsed.scheme in {"http", "https"}:
+        return _clone_github_repository(stripped, parsed, cache_dir)
+    if parsed.scheme:
+        message = "only local paths and public GitHub HTTPS URLs are supported"
+        raise ValueError(message)
+    return Path(stripped).expanduser().resolve()
+
+
 def discover_repository(
     root_path: Path, max_file_size_bytes: int
 ) -> tuple[RepositoryIdentity, list[Path]]:
@@ -54,6 +70,49 @@ def discover_repository(
         if _is_eligible(path, root, gitignore, max_file_size_bytes)
     ]
     return repository, sorted(files)
+
+
+def _clone_github_repository(
+    address: str, parsed_url: ParseResult, cache_dir: Path
+) -> Path:
+    hostname = parsed_url.hostname
+    path = parsed_url.path
+    if hostname != "github.com" or not path:
+        message = "only public github.com repository URLs are supported"
+        raise ValueError(message)
+    parts = [part for part in path.strip("/").split("/") if part]
+    if len(parts) < 2:
+        message = "GitHub URL must include owner and repository name"
+        raise ValueError(message)
+    owner, repo = parts[0], parts[1].removesuffix(".git")
+    cache_key = sha256(address.encode()).hexdigest()[:16]
+    target = (cache_dir / f"{owner}-{repo}-{cache_key}").resolve()
+    if target.exists():
+        if not (target / ".git").is_dir():
+            message = (
+                f"repository cache path exists but is not a git checkout: {target}"
+            )
+            raise ValueError(message)
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", address, str(target)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        detail = _subprocess_error_message(error)
+        message = f"could not clone repository URL: {detail}"
+        raise ValueError(message) from error
+    return target
+
+
+def _subprocess_error_message(error: OSError | subprocess.CalledProcessError) -> str:
+    if isinstance(error, subprocess.CalledProcessError):
+        return (error.stderr or error.stdout or str(error)).strip()
+    return str(error)
 
 
 def parse_files(paths: list[Path], repository: RepositoryIdentity) -> ParsedFiles:

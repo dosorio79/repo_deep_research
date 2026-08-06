@@ -18,6 +18,19 @@ index. If every eligible file fails to parse, the command reports diagnostics
 without replacing that index. Changed and removed paths do not persist as
 current search results after a successful replacement.
 
+The FastAPI app exposes the same ingestion boundary for the browser UI:
+
+```bash
+curl -s http://localhost:8000/repositories/ingest \
+  -H 'content-type: application/json' \
+  -d '{"repository_address":"/path/to/python-repository"}'
+```
+
+`repository_address` accepts a local path available to the backend. Public
+`https://github.com/owner/repo(.git)` URLs are cloned once into
+`RDR_REPOSITORY_CACHE_DIR` and then ingested through the same parser and Qdrant
+replacement path.
+
 ## Search repository evidence
 
 ```bash
@@ -131,11 +144,29 @@ With the API running, callers may post the same request shape to:
 POST http://localhost:8000/research
 ```
 
+Example JSON body:
+
+```json
+{
+  "question": "which modules must change to add feedback persistence?",
+  "mode": "change",
+  "retrieval_mode": "dense",
+  "retrieval_limit": 5,
+  "budget": {
+    "max_searches": 3,
+    "max_file_reads": 5,
+    "max_total_tool_calls": 8
+  }
+}
+```
+
+Direct RAG uses `limit`; agentic research uses `retrieval_limit`.
+
 ## Use the frontend harness
 
 M3.6 includes a vendored React TypeScript frontend under `frontend/`. It is a
-browser client for the existing FastAPI `/rag` contract; it does not ingest
-repositories, run retrieval locally, or generate answers in the browser.
+browser client for the FastAPI `/repositories/ingest`, `/rag`, and `/research`
+contracts; it does not run retrieval locally or generate answers in the browser.
 
 Install and check the frontend:
 
@@ -162,10 +193,12 @@ make api
 make frontend-dev
 ```
 
-The frontend defaults to `http://localhost:8000` and posts to `/rag`. The API
-allows browser origins only when `RDR_CORS_ALLOWED_ORIGINS` is configured as a
-JSON list. `.env.example` opts in local frontend origins; keep that value
-restricted to trusted development origins.
+The frontend defaults to `http://localhost:8000` and can post to `/rag` or
+`/research`. Leave repository path blank to use the API server checkout, or
+enter an absolute path available to the backend process. The API allows browser
+origins only when `RDR_CORS_ALLOWED_ORIGINS` is configured as a JSON list.
+`.env.example` opts in local frontend origins; keep that value restricted to
+trusted development origins.
 
 ## Evaluate answers
 
