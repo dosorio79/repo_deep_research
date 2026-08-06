@@ -54,21 +54,23 @@ Stop the local service with `make docker-down`.
 | `make lint` | Check formatting and lint rules. |
 | `make typecheck` | Run strict mypy checks. |
 | `make test` | Run the unit test suite. |
-| `make validate` / `make check` | Run lint, typecheck, and tests. |
+| `make validate` / `make check` | Run backend lint, typecheck, and tests. |
+| `make test-all` | Run backend checks plus frontend tests, typecheck, and build. |
 | `make qdrant` / `make docker-up` | Start the local Qdrant service. |
 | `make stop` / `make docker-down` | Stop the local Qdrant service. |
 | `make ready` | Install dependencies, start Qdrant, and ingest this repository. |
 | `make ingest` / `make ingest-self` | Parse and index this repository. |
 | `make evidence QUESTION="..."` | Start Qdrant and return repository evidence using dense retrieval by default. |
 | `make rag QUESTION="..."` | Ingest this repo if needed and return a grounded direct-RAG answer. |
-| `uv run repo-research research "..."` | Return a bounded agentic research answer through PydanticAI. |
+| `make research QUESTION="..."` | Ingest this repo if needed and return a bounded agentic-RAG answer. |
 | `make api-rag QUESTION="..."` | Start Qdrant and return answer-plus-trace JSON through the local FastAPI `/rag` endpoint. |
 | `make evaluate-retrieval` | Evaluate dense, sparse, and hybrid retrieval on the development records. |
 | `make evaluate-answers` | Run opt-in live answer judging with OpenAI. |
 | `make api` | Run the minimal FastAPI backend on localhost. |
-| `make app` | Run FastAPI and the M3.6 frontend together for local browser testing. |
+| `make app` | Run FastAPI and the MVP frontend together for local browser testing. |
 | `make frontend-install` | Install the vendored frontend dependencies with npm. |
-| `make frontend-dev` | Run the M3.6 frontend locally. |
+| `make frontend-dev` | Run the MVP frontend locally. |
+| `make frontend-format` | Format the frontend with Prettier. |
 | `make frontend-test` | Run frontend unit and contract tests. |
 | `make frontend-typecheck` | Run TypeScript checks for the frontend. |
 | `make frontend-build` | Build the frontend production bundle. |
