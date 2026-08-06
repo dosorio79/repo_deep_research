@@ -161,6 +161,10 @@ ingestion before searching or evaluating M2 modes.
 
 ## Roadmap
 
-M4 adds bounded agentic research. M5 adds feedback persistence, Logfire,
-dashboards, and the complete product operations stack.
+Next milestone: Capstone MVP reviewable release. It completes the minimum
+M4/M5 surface needed for LLM Zoomcamp scoring: audited agentic research,
+client-facing research UI, admin backoffice, feedback persistence, monitoring
+dashboard, full Docker Compose, final evaluation, and README rubric mapping.
+Post-MVP work adds query rewriting, reranking, public GitHub ingestion, cloud
+deployment, and production-grade authentication.
 The complete scope is in [docs/PRD.md](docs/PRD.md).
