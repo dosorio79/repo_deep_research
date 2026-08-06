@@ -176,6 +176,21 @@ describe("Research route", () => {
     await screen.findByText("12");
   });
 
+  it("labels an unchanged repository revision as already indexed", async () => {
+    vi.mocked(ingestRepository).mockResolvedValue({
+      ...ingestSummary,
+      index_updated: false,
+    });
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
+    await user.click(screen.getByRole("button", { name: "Ingest repository" }));
+
+    await screen.findByText("already indexed");
+  });
+
   it("shows repository ingest errors beside the repository controls", async () => {
     vi.mocked(ingestRepository).mockRejectedValue({
       title: "Backend returned 400",

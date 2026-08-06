@@ -196,6 +196,7 @@ function ResearchView() {
 
   const canIngest = repositoryAddress.trim().length > 0 && !ingestMutation.isPending;
   const canAsk = question.trim().length > 0 && !queryMutation.isPending;
+  const ingestStatusLabel = ingestSummary?.index_updated ? "indexed" : "already indexed";
 
   return (
     <AppShell>
@@ -241,7 +242,7 @@ function ResearchView() {
                   {ingestSummary ? (
                     <Badge variant="secondary" className="gap-1.5">
                       <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                      indexed
+                      {ingestStatusLabel}
                     </Badge>
                   ) : null}
                 </div>

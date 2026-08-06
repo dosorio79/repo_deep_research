@@ -1,6 +1,7 @@
 """Tests for the command-line boundary."""
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -116,12 +117,16 @@ class FakeDatabase:
     def __init__(self) -> None:
         self.replacements: list[tuple[str, int]] = []
         self.results: list[SearchResult] = []
+        self.existing_chunk_count = 0
 
     def replace(self, repository_id: str, chunks: list[ParsedChunk]) -> None:
         self.replacements.append((repository_id, len(chunks)))
 
     def search(self, query: object) -> list[SearchResult]:
         return self.results
+
+    def indexed_chunk_count(self, repository_id: str, commit_hash: str) -> int:
+        return self.existing_chunk_count
 
 
 class FakeSettings:
@@ -170,6 +175,29 @@ class FakeResearchAgent:
                 insufficient_evidence=True,
             )
         )
+
+
+def commit_test_repo(path: Path) -> None:
+    subprocess.run(["git", "-C", str(path), "init"], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(path), "add", "."], check=True, capture_output=True
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(path),
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "user.name=Test User",
+            "commit",
+            "-m",
+            "initial",
+        ],
+        check=True,
+        capture_output=True,
+    )
 
 
 def test_cli_rag_emits_grounded_answer_without_live_model(
@@ -276,6 +304,28 @@ def test_cli_ingest_emits_skipped_file_diagnostics(
     assert result["indexed_chunks"] == 1
     assert result["index_updated"] is True
     assert result["skipped_files"][0]["path"] == "invalid.py"
+
+
+def test_cli_ingest_skips_existing_git_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "invalid.py").write_text("def broken(:\n", encoding="utf-8")
+    commit_test_repo(tmp_path)
+    database = FakeDatabase()
+    database.existing_chunk_count = 3
+    monkeypatch.setattr(cli, "Settings", FakeSettings)
+    monkeypatch.setattr(runtime, "create_database", lambda _: database)
+    monkeypatch.setattr(sys, "argv", ["repo-research", "ingest", str(tmp_path)])
+
+    cli.main()
+
+    result = json.loads(capsys.readouterr().out)
+    assert database.replacements == []
+    assert result["indexed_chunks"] == 3
+    assert result["index_updated"] is False
+    assert result["skipped_files"] == []
 
 
 def test_cli_keeps_the_existing_index_when_every_file_fails_to_parse(
