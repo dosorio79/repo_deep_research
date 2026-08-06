@@ -90,6 +90,16 @@ def create_app(
     def get_research_agent() -> ResearchAgentRunner:
         return research_agent or create_research_agent(app_settings)
 
+    @app.get("/")
+    async def root() -> dict[str, str]:
+        return {
+            "name": "Repo Deep Research API",
+            "health": "/health",
+            "ingest": "POST /repositories/ingest",
+            "direct_rag": "POST /rag",
+            "agentic_rag": "POST /research",
+        }
+
     @app.get("/health")
     async def health() -> dict[str, str | bool]:
         qdrant_ok = False

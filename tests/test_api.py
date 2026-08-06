@@ -194,6 +194,31 @@ async def test_health_reports_qdrant_status() -> None:
 
 
 @pytest.mark.anyio
+async def test_root_identifies_api_routes() -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get("/")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "Repo Deep Research API",
+        "health": "/health",
+        "ingest": "POST /repositories/ingest",
+        "direct_rag": "POST /rag",
+        "agentic_rag": "POST /research",
+    }
+
+
+@pytest.mark.anyio
 async def test_ingest_repository_indexes_local_repository_path(tmp_path: Path) -> None:
     (tmp_path / "example.py").write_text(
         "def answer() -> int:\n    return 42\n",
