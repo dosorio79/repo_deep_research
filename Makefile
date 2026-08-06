@@ -20,7 +20,7 @@ help:
 	printf '%s\n' '  make rag         direct RAG: ingest if needed, then answer QUESTION'
 	printf '%s\n' '  make research    agentic RAG: ingest if needed, then answer QUESTION'
 	printf '%s\n' '  make api         run FastAPI locally'
-	printf '%s\n' '  make app         run FastAPI and the MVP frontend together'
+	printf '%s\n' '  make app         run FastAPI and the MVP frontend; ingest from the UI'
 	printf '%s\n' '  make frontend-dev run the MVP frontend locally'
 	printf '%s\n' '  make frontend-test | frontend-typecheck | frontend-build'
 	printf '%s\n' ''
@@ -98,7 +98,7 @@ evaluate-answers:
 api:
 	$(RUN) uvicorn repo_research.api:app --reload
 
-app: qdrant ingest
+app: qdrant
 	api_pid=""; \
 	cleanup() { [ -n "$$api_pid" ] && kill "$$api_pid" 2>/dev/null || true; }; \
 	trap cleanup INT TERM EXIT; \
