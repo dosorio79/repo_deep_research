@@ -100,16 +100,29 @@ api:
 
 app: qdrant
 	api_pid=""; \
+	api_ready=""; \
 	cleanup() { [ -n "$$api_pid" ] && kill "$$api_pid" 2>/dev/null || true; }; \
 	trap cleanup INT TERM EXIT; \
 	if ! curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then \
+		printf '%s\n' 'Starting API at http://127.0.0.1:8000'; \
 		$(MAKE) api & \
 		api_pid=$$!; \
+	else \
+		printf '%s\n' 'API already available at http://127.0.0.1:8000'; \
 	fi; \
 	for attempt in $$(seq 1 30); do \
-		curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 && break; \
+		if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then \
+			api_ready=1; \
+			break; \
+		fi; \
 		sleep 1; \
 	done; \
+	if [ -z "$$api_ready" ]; then \
+		printf '%s\n' 'API did not become available at http://127.0.0.1:8000/health' >&2; \
+		exit 1; \
+	fi; \
+	printf '%s\n' 'Open frontend at http://127.0.0.1:5173'; \
+	printf '%s\n' 'API base URL is http://127.0.0.1:8000'; \
 	$(MAKE) frontend-dev
 
 frontend-install:

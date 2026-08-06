@@ -21,7 +21,7 @@ current search results after a successful replacement.
 The FastAPI app exposes the same ingestion boundary for the browser UI:
 
 ```bash
-curl -s http://localhost:8000/repositories/ingest \
+curl -s http://127.0.0.1:8000/repositories/ingest \
   -H 'content-type: application/json' \
   -d '{"repository_address":"/path/to/python-repository"}'
 ```
@@ -141,7 +141,7 @@ so the agent cannot invent paths or line ranges. The response is a
 With the API running, callers may post the same request shape to:
 
 ```text
-POST http://localhost:8000/research
+POST http://127.0.0.1:8000/research
 ```
 
 Example JSON body:
@@ -196,7 +196,7 @@ make api
 make frontend-dev
 ```
 
-The frontend defaults to `http://localhost:8000` and can post to `/rag` or
+The frontend defaults to `http://127.0.0.1:8000` and can post to `/rag` or
 `/research`. Leave repository path blank to use the API server checkout, or
 enter an absolute path available to the backend process. The API allows browser
 origins only when `RDR_CORS_ALLOWED_ORIGINS` is configured as a JSON list.
