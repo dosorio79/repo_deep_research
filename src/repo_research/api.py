@@ -11,10 +11,17 @@ from openai import OpenAIError
 from qdrant_client.http.exceptions import ResponseHandlingException
 
 from repo_research.config import Settings, load_dotenv_environment
-from repo_research.ingestion import discover_repository
+from repo_research.ingestion import (
+    discover_repository,
+    materialize_repository_address,
+    parse_files,
+)
 from repo_research.models import (
+    IngestSummary,
+    ParsedChunk,
     RagRequest,
     RagRunResult,
+    RepositoryIngestRequest,
     ResearchRequest,
     ResearchRunResult,
     SearchQuery,
@@ -39,6 +46,9 @@ class RagDatabase(Protocol):
 
     def search(self, query: SearchQuery) -> list[SearchResult]:
         """Return repository search results."""
+
+    def replace(self, repository_id: str, chunks: list[ParsedChunk]) -> None:
+        """Replace current indexed chunks for one repository identity."""
 
 
 def package_version() -> str:
@@ -85,6 +95,37 @@ def create_app(
         except Exception:
             qdrant_ok = False
         return {"status": "ok" if qdrant_ok else "degraded", "qdrant": qdrant_ok}
+
+    @app.post("/repositories/ingest", response_model=IngestSummary)
+    async def ingest_repository(request: RepositoryIngestRequest) -> IngestSummary:
+        try:
+            root_path = materialize_repository_address(
+                request.repository_address,
+                app_settings.repository_cache_dir,
+            )
+            repository, files = discover_repository(
+                root_path, app_settings.max_file_size_bytes
+            )
+            parsed_files = parse_files(files, repository)
+            index_updated = bool(parsed_files.chunks or not parsed_files.skipped_files)
+            if index_updated:
+                get_database().replace(repository.repository_id, parsed_files.chunks)
+            return IngestSummary(
+                repository=repository,
+                indexed_chunks=len(parsed_files.chunks),
+                skipped_files=parsed_files.skipped_files,
+                index_updated=index_updated,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        except ResponseHandlingException as error:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Repository vector store is unavailable; start Qdrant and "
+                    "retry ingestion."
+                ),
+            ) from error
 
     @app.post("/rag", response_model=RagRunResult)
     async def rag(request: RagRequest) -> RagRunResult:
