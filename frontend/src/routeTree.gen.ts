@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BackofficeRouteImport } from './routes/backoffice'
 import { Route as EvaluationsRouteImport } from './routes/evaluations'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as MonitoringRouteImport } from './routes/monitoring'
@@ -18,6 +19,11 @@ import { Route as SettingsRouteImport } from './routes/settings'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BackofficeRoute = BackofficeRouteImport.update({
+  id: '/backoffice',
+  path: '/backoffice',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EvaluationsRoute = EvaluationsRouteImport.update({
@@ -43,6 +49,7 @@ const SettingsRoute = SettingsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/backoffice': typeof BackofficeRoute
   '/evaluations': typeof EvaluationsRoute
   '/feedback': typeof FeedbackRoute
   '/monitoring': typeof MonitoringRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/backoffice': typeof BackofficeRoute
   '/evaluations': typeof EvaluationsRoute
   '/feedback': typeof FeedbackRoute
   '/monitoring': typeof MonitoringRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/backoffice': typeof BackofficeRoute
   '/evaluations': typeof EvaluationsRoute
   '/feedback': typeof FeedbackRoute
   '/monitoring': typeof MonitoringRoute
@@ -65,12 +74,25 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/evaluations' | '/feedback' | '/monitoring' | '/settings'
+  fullPaths:
+    | '/'
+    | '/backoffice'
+    | '/evaluations'
+    | '/feedback'
+    | '/monitoring'
+    | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/evaluations' | '/feedback' | '/monitoring' | '/settings'
+  to:
+    | '/'
+    | '/backoffice'
+    | '/evaluations'
+    | '/feedback'
+    | '/monitoring'
+    | '/settings'
   id:
     | '__root__'
     | '/'
+    | '/backoffice'
     | '/evaluations'
     | '/feedback'
     | '/monitoring'
@@ -79,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BackofficeRoute: typeof BackofficeRoute
   EvaluationsRoute: typeof EvaluationsRoute
   FeedbackRoute: typeof FeedbackRoute
   MonitoringRoute: typeof MonitoringRoute
@@ -92,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/backoffice': {
+      id: '/backoffice'
+      path: '/backoffice'
+      fullPath: '/backoffice'
+      preLoaderRoute: typeof BackofficeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/evaluations': {
@@ -127,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BackofficeRoute: BackofficeRoute,
   EvaluationsRoute: EvaluationsRoute,
   FeedbackRoute: FeedbackRoute,
   MonitoringRoute: MonitoringRoute,

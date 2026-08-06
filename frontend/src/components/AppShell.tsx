@@ -1,14 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { Search, FlaskConical, Activity, MessageSquare, Settings, Terminal } from "lucide-react";
+import { Search, Activity, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { to: "/", label: "Research", icon: Search, status: "active" },
-  { to: "/evaluations", label: "Evaluations", icon: FlaskConical, status: "planned" },
-  { to: "/monitoring", label: "Monitoring", icon: Activity, status: "active" },
-  { to: "/feedback", label: "Feedback", icon: MessageSquare, status: "planned" },
-  { to: "/settings", label: "Settings", icon: Settings, status: "planned" },
+  { to: "/", label: "Research", icon: Search },
+  { to: "/monitoring", label: "Monitoring", icon: Activity },
 ] as const;
 
 export function Navigation() {
@@ -26,11 +23,6 @@ export function Navigation() {
         >
           <item.icon className="h-3.5 w-3.5" aria-hidden />
           <span>{item.label}</span>
-          {item.status === "planned" ? (
-            <span className="rounded-sm border border-border px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              planned
-            </span>
-          ) : null}
         </Link>
       ))}
     </nav>
