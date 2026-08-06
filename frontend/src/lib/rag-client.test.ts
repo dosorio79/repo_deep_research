@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runRagQuery } from "./rag-client";
-import type { RagRunResult } from "./rag-types";
+import { ingestRepository, runAgenticResearch, runRagQuery } from "./rag-client";
+import type { IngestSummary, RagRunResult, ResearchRunResult } from "./rag-types";
 
 const okResult: RagRunResult = {
   answer: {
@@ -37,6 +37,39 @@ const okResult: RagRunResult = {
     error_message: null,
     tool_call_count: 0,
   },
+};
+
+const agenticResult: ResearchRunResult = {
+  ...okResult,
+  answer: {
+    ...okResult.answer!,
+    mode: "change",
+    research_steps: [
+      {
+        sequence: 1,
+        action: "Search repository evidence.",
+        rationale: "Find code that handles feedback.",
+        evidence_ids: ["E1"],
+      },
+    ],
+  },
+  trace: {
+    ...okResult.trace!,
+    question_mode: "change",
+    tool_call_count: 3,
+  },
+};
+
+const ingestSummary: IngestSummary = {
+  repository: {
+    name: "sample-repo",
+    root_path: "/tmp/sample-repo",
+    branch: "main",
+    commit_hash: "abc123",
+  },
+  indexed_chunks: 12,
+  skipped_files: [],
+  index_updated: true,
 };
 
 describe("runRagQuery", () => {
@@ -79,6 +112,72 @@ describe("runRagQuery", () => {
           limit: 5,
         }),
         signal: controller.signal,
+      }),
+    );
+  });
+
+  it("posts an agentic research request to the backend /research endpoint", async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(agenticResult), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      runAgenticResearch(
+        "http://localhost:8000///",
+        {
+          question: "Which modules must change for feedback?",
+          mode: "change",
+          retrieval_mode: "dense",
+          retrieval_limit: 5,
+        },
+        controller.signal,
+      ),
+    ).resolves.toEqual(agenticResult);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/research",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: "Which modules must change for feedback?",
+          mode: "change",
+          retrieval_mode: "dense",
+          retrieval_limit: 5,
+        }),
+        signal: controller.signal,
+      }),
+    );
+  });
+
+  it("posts a repository ingestion request to the backend ingest endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(ingestSummary), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      ingestRepository("http://localhost:8000///", {
+        repository_address: "/tmp/sample-repo",
+      }),
+    ).resolves.toEqual(ingestSummary);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/repositories/ingest",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repository_address: "/tmp/sample-repo",
+        }),
       }),
     );
   });

@@ -1,15 +1,18 @@
-import { Loader2, Play, SlidersHorizontal } from "lucide-react";
-import { useState } from "react";
+import { Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { QuestionMode, RetrievalMode } from "@/lib/rag-types";
+import type { QuestionMode, ResearchKind, RetrievalMode } from "@/lib/rag-types";
 
 const MODES: QuestionMode[] = ["auto", "locate", "flow", "change"];
 const RETRIEVAL_MODES: RetrievalMode[] = ["dense", "sparse", "hybrid"];
+const RESEARCH_KINDS: ResearchKind[] = ["direct", "agentic"];
+
+function researchKindLabel(kind: ResearchKind): string {
+  return kind === "agentic" ? "agentic RAG" : "direct RAG";
+}
 
 function Segmented<T extends string>({
   value,
@@ -42,7 +45,7 @@ function Segmented<T extends string>({
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          {opt}
+          {name === "research type" ? researchKindLabel(opt as ResearchKind) : opt}
         </button>
       ))}
     </div>
@@ -50,12 +53,11 @@ function Segmented<T extends string>({
 }
 
 export interface QueryFormState {
+  researchKind: ResearchKind;
   question: string;
   mode: QuestionMode;
   retrievalMode: RetrievalMode;
   limit: number;
-  baseUrl: string;
-  repositoryPath: string;
 }
 
 export function RagQueryForm({
@@ -69,7 +71,6 @@ export function RagQueryForm({
   onSubmit: () => void;
   loading: boolean;
 }) {
-  const [advanced, setAdvanced] = useState(false);
   const disabled = loading || state.question.trim().length === 0;
 
   return (
@@ -80,6 +81,30 @@ export function RagQueryForm({
         if (!disabled) onSubmit();
       }}
     >
+      <div className="mb-3 rounded-md border border-border bg-secondary/40 p-2">
+        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          Research type
+        </span>
+        <div className="mt-1.5">
+          <Segmented
+            name="research type"
+            value={state.researchKind}
+            options={RESEARCH_KINDS}
+            onChange={(researchKind) =>
+              onChange({
+                researchKind,
+                mode: researchKind === "agentic" && state.mode === "auto" ? "change" : state.mode,
+              })
+            }
+          />
+        </div>
+        <p className="mt-1.5 text-[12px] text-muted-foreground">
+          {state.researchKind === "agentic"
+            ? "Bounded tool-using research for change-impact questions."
+            : "Grounded answer from retrieved repository evidence."}
+        </p>
+      </div>
+
       <Label
         htmlFor="question"
         className="text-[11px] uppercase tracking-wide text-muted-foreground"
@@ -98,7 +123,11 @@ export function RagQueryForm({
         }}
         rows={5}
         spellCheck={false}
-        placeholder="e.g. Where is retrieval limit validated before the model call?"
+        placeholder={
+          state.researchKind === "agentic"
+            ? "e.g. Which modules must change to add feedback persistence?"
+            : "e.g. Where is retrieval limit validated before the model call?"
+        }
         className="mt-1.5 resize-y mono text-[13px]"
       />
 
@@ -130,7 +159,7 @@ export function RagQueryForm({
               htmlFor="limit"
               className="text-[11px] uppercase tracking-wide text-muted-foreground"
             >
-              Limit
+              {state.researchKind === "agentic" ? "Retrieval limit" : "Limit"}
             </Label>
             <div className="flex items-center gap-1">
               <button
@@ -161,54 +190,6 @@ export function RagQueryForm({
             value={[state.limit]}
             onValueChange={(v) => onChange({ limit: v[0] ?? state.limit })}
           />
-        </div>
-
-        <div>
-          <Label
-            htmlFor="baseUrl"
-            className="text-[11px] uppercase tracking-wide text-muted-foreground"
-          >
-            API base URL
-          </Label>
-          <Input
-            id="baseUrl"
-            value={state.baseUrl}
-            spellCheck={false}
-            onChange={(e) => onChange({ baseUrl: e.target.value })}
-            className="mt-1.5 mono text-[12px]"
-          />
-          <p className="mt-1 mono text-[11px] text-muted-foreground">
-            POST {state.baseUrl.replace(/\/+$/, "")}/rag
-          </p>
-        </div>
-
-        <div className="border-t border-border pt-2">
-          <button
-            type="button"
-            onClick={() => setAdvanced((v) => !v)}
-            className="flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-            Advanced settings
-          </button>
-          {advanced ? (
-            <div className="mt-2">
-              <Label
-                htmlFor="repositoryPath"
-                className="text-[11px] uppercase tracking-wide text-muted-foreground"
-              >
-                Repository path (optional)
-              </Label>
-              <Input
-                id="repositoryPath"
-                value={state.repositoryPath}
-                spellCheck={false}
-                placeholder="/absolute/path/to/repo"
-                onChange={(e) => onChange({ repositoryPath: e.target.value })}
-                className="mt-1.5 mono text-[12px]"
-              />
-            </div>
-          ) : null}
         </div>
 
         <div className="flex items-center gap-2 border-t border-border pt-3">

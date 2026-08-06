@@ -1,4 +1,12 @@
-import type { ApiErrorShape, RagRequest, RagRunResult } from "./rag-types";
+import type {
+  ApiErrorShape,
+  IngestSummary,
+  RagRequest,
+  RagRunResult,
+  RepositoryIngestRequest,
+  ResearchRequest,
+  ResearchRunResult,
+} from "./rag-types";
 
 const ERROR_BODY_PREVIEW_LIMIT = 1200;
 
@@ -25,12 +33,13 @@ function extractDetail(body: unknown): string | null {
   return null;
 }
 
-export async function runRagQuery(
+async function postJson<TPayload, TResult>(
   baseUrl: string,
-  payload: RagRequest,
+  path: "/rag" | "/research" | "/repositories/ingest",
+  payload: TPayload,
   signal?: AbortSignal,
-): Promise<RagRunResult> {
-  const url = `${baseUrl.replace(/\/+$/, "")}/rag`;
+): Promise<TResult> {
+  const url = `${baseUrl.replace(/\/+$/, "")}${path}`;
   let response: Response;
 
   try {
@@ -69,9 +78,38 @@ export async function runRagQuery(
   if (!parsed || typeof parsed !== "object") {
     throw {
       title: "Unexpected response",
-      detail: "The backend response was not valid JSON matching RagRunResult.",
+      detail: "The backend response was not valid JSON matching the expected research result.",
     } satisfies ApiErrorShape;
   }
 
-  return parsed as RagRunResult;
+  return parsed as TResult;
+}
+
+export async function runRagQuery(
+  baseUrl: string,
+  payload: RagRequest,
+  signal?: AbortSignal,
+): Promise<RagRunResult> {
+  return postJson<RagRequest, RagRunResult>(baseUrl, "/rag", payload, signal);
+}
+
+export async function runAgenticResearch(
+  baseUrl: string,
+  payload: ResearchRequest,
+  signal?: AbortSignal,
+): Promise<ResearchRunResult> {
+  return postJson<ResearchRequest, ResearchRunResult>(baseUrl, "/research", payload, signal);
+}
+
+export async function ingestRepository(
+  baseUrl: string,
+  payload: RepositoryIngestRequest,
+  signal?: AbortSignal,
+): Promise<IngestSummary> {
+  return postJson<RepositoryIngestRequest, IngestSummary>(
+    baseUrl,
+    "/repositories/ingest",
+    payload,
+    signal,
+  );
 }
