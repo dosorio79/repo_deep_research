@@ -732,6 +732,32 @@ M5 product and operations milestone.
 
 The system produces a useful, evidence-backed change plan for its own repository.
 
+### MVP — Capstone reviewable release
+
+The Capstone MVP is the next delivery milestone. It bundles the smallest
+remaining M4/M5 surface needed for LLM Zoomcamp peer review:
+
+- audited live agentic research;
+- client-facing research UI;
+- admin-only backoffice routes for monitoring, evaluations, feedback review,
+  settings, traces, and debug views;
+- feedback persistence;
+- monitoring dashboard with at least five useful charts;
+- full Docker Compose for Qdrant, API, and frontend;
+- final retrieval and answer-evaluation summary;
+- README rubric map, screenshots, and reviewer runbook.
+
+It does not replace the product roadmap. It narrows the next implementation
+slice around capstone scoring evidence while preserving post-MVP work for query
+rewriting, reranking, public GitHub ingestion, cloud deployment, and
+production-grade authentication.
+
+**Exit condition**
+
+A peer reviewer can clone the repository, start the full app, ingest the
+self-repository dataset, compare direct and agentic answers, submit feedback,
+inspect monitoring, and score the project using the README.
+
 ### M5 — Product and operations
 
 - FastAPI;
