@@ -9,25 +9,31 @@ FRONTEND_NODE_VERSION := $(shell cat frontend/.nvmrc 2>/dev/null)
 FRONTEND_NODE_BIN := $(HOME)/.nvm/versions/node/v$(FRONTEND_NODE_VERSION)/bin
 FRONTEND_NPM := PATH=$(FRONTEND_NODE_BIN):$$PATH npm
 
-.PHONY: help install format lint typecheck test validate check qdrant stop ready ingest ingest-self evidence rag api-rag evaluate-retrieval evaluate-answers api app frontend-install frontend-lint frontend-typecheck frontend-test frontend-build frontend-dev docker-up docker-down
+.PHONY: help install format lint typecheck test validate check test-all qdrant stop ready ingest ingest-self evidence rag research api-rag evaluate-retrieval evaluate-answers api app frontend-install frontend-format frontend-lint frontend-typecheck frontend-test frontend-build frontend-dev docker-up docker-down
 
 help:
 	printf '%s\n' 'Common:'
 	printf '%s\n' '  make ready       install deps, start Qdrant, ingest this repo'
-	printf '%s\n' '  make check       lint, typecheck, and test'
+	printf '%s\n' '  make check       backend lint, typecheck, and tests'
+	printf '%s\n' '  make test-all    backend check plus frontend test/typecheck/build'
 	printf '%s\n' '  make evidence    retrieve evidence for QUESTION'
-	printf '%s\n' '  make rag         ingest if needed, then answer QUESTION'
+	printf '%s\n' '  make rag         direct RAG: ingest if needed, then answer QUESTION'
+	printf '%s\n' '  make research    agentic RAG: ingest if needed, then answer QUESTION'
 	printf '%s\n' '  make api         run FastAPI locally'
-	printf '%s\n' '  make app         run FastAPI and the M3.6 frontend together'
-	printf '%s\n' '  make frontend-dev run the M3.6 frontend locally'
-	printf '%s\n' '  make frontend-test | frontend-build'
+	printf '%s\n' '  make app         run FastAPI and the MVP frontend together'
+	printf '%s\n' '  make frontend-dev run the MVP frontend locally'
+	printf '%s\n' '  make frontend-test | frontend-typecheck | frontend-build'
 	printf '%s\n' ''
 	printf '%s\n' 'Operations:'
-	printf '%s\n' '  make qdrant | make stop | make ingest | make api-rag'
+	printf '%s\n' '  make qdrant | make docker-up     start Qdrant'
+	printf '%s\n' '  make stop | make docker-down     stop local services'
+	printf '%s\n' '  make ingest | make ingest-self   index this repository'
+	printf '%s\n' '  make api-rag                     exercise FastAPI /rag'
 	printf '%s\n' '  make evaluate-retrieval | make evaluate-answers'
 	printf '%s\n' ''
 	printf '%s\n' 'Example:'
 	printf '%s\n' '  make rag QUESTION="where is configuration validated?"'
+	printf '%s\n' '  make research QUESTION="which modules change for feedback?"'
 	printf '%s\n' ''
 	printf '%s\n' 'Use uv run repo-research ... directly for path, mode, limit, or dataset options.'
 
@@ -52,6 +58,8 @@ validate: lint typecheck test
 
 check: validate
 
+test-all: check frontend-test frontend-typecheck frontend-build
+
 qdrant:
 	docker compose up -d --wait qdrant
 
@@ -74,6 +82,9 @@ evidence: qdrant
 
 rag:
 	$(RUN) repo-research ask "$(QUESTION)"
+
+research:
+	$(RUN) repo-research research "$(QUESTION)"
 
 api-rag: qdrant
 	QUESTION="$(QUESTION)" $(RUN) python scripts/api_rag.py
@@ -103,6 +114,9 @@ app: qdrant ingest
 
 frontend-install:
 	cd frontend && $(FRONTEND_NPM) install
+
+frontend-format:
+	cd frontend && $(FRONTEND_NPM) run format
 
 frontend-lint:
 	cd frontend && $(FRONTEND_NPM) run lint
