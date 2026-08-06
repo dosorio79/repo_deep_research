@@ -102,6 +102,54 @@ def test_replace_repository_is_idempotent_and_search_returns_typed_evidence() ->
         assert results[0].chunk.symbol == "calculate_cost"
 
 
+def test_indexed_chunk_count_returns_existing_revision_count() -> None:
+    repository = RepositoryIdentity(
+        name="sample",
+        root_path=Path("/tmp/sample"),
+        branch="main",
+        commit_hash="abc123",
+    )
+    next_commit = repository.model_copy(update={"commit_hash": "def456"})
+    cost_chunk = create_chunk(
+        repository=repository,
+        path="costs.py",
+        language="python",
+        chunk_type="function",
+        symbol="calculate_cost",
+        start_line=1,
+        end_line=2,
+        content="def calculate_cost():\n    return cost\n",
+    )
+    search_chunk = create_chunk(
+        repository=repository,
+        path="search.py",
+        language="python",
+        chunk_type="function",
+        symbol="search_repository",
+        start_line=1,
+        end_line=2,
+        content="def search_repository():\n    return search\n",
+    )
+    client = QdrantClient(":memory:")
+    database = RepositoryDatabase(client, "chunks", 3, fake_embed, fake_sparse_embed)
+
+    assert (
+        database.indexed_chunk_count(repository.repository_id, repository.commit_hash)
+        == 0
+    )
+
+    database.replace(repository.repository_id, [cost_chunk, search_chunk])
+
+    assert (
+        database.indexed_chunk_count(repository.repository_id, repository.commit_hash)
+        == 2
+    )
+    assert (
+        database.indexed_chunk_count(next_commit.repository_id, next_commit.commit_hash)
+        == 0
+    )
+
+
 def test_replace_preserves_existing_points_when_embedding_validation_fails() -> None:
     repository = RepositoryIdentity(
         name="sample",

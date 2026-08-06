@@ -1,6 +1,7 @@
 """Contract tests for the minimal M3 FastAPI backend."""
 
 import os
+import subprocess
 from importlib.metadata import version
 from pathlib import Path
 
@@ -32,6 +33,7 @@ class FakeDatabase:
         self._healthy = healthy
         self.replaced_repository_id: str | None = None
         self.replaced_chunks: list[ParsedChunk] = []
+        self.existing_chunk_count = 0
 
     def health_check(self) -> bool:
         return self._healthy
@@ -42,6 +44,9 @@ class FakeDatabase:
     def replace(self, repository_id: str, chunks: list[ParsedChunk]) -> None:
         self.replaced_repository_id = repository_id
         self.replaced_chunks = chunks
+
+    def indexed_chunk_count(self, repository_id: str, commit_hash: str) -> int:
+        return self.existing_chunk_count
 
 
 class FakeGenerator:
@@ -113,6 +118,29 @@ class UnavailableDatabase(FakeDatabase):
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
+
+
+def _commit_test_repo(path: Path) -> None:
+    subprocess.run(["git", "-C", str(path), "init"], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(path), "add", "."], check=True, capture_output=True
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(path),
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "user.name=Test User",
+            "commit",
+            "-m",
+            "initial",
+        ],
+        check=True,
+        capture_output=True,
+    )
 
 
 def test_app_uses_package_version() -> None:
@@ -197,6 +225,36 @@ async def test_ingest_repository_indexes_local_repository_path(tmp_path: Path) -
     assert body["skipped_files"] == []
     assert database.replaced_repository_id == repository.repository_id
     assert [chunk.path for chunk in database.replaced_chunks] == ["example.py"]
+
+
+@pytest.mark.anyio
+async def test_ingest_repository_skips_existing_git_revision(tmp_path: Path) -> None:
+    (tmp_path / "invalid.py").write_text("def broken(:\n", encoding="utf-8")
+    _commit_test_repo(tmp_path)
+    database = FakeDatabase(healthy=True)
+    database.existing_chunk_count = 7
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=database,
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/repositories/ingest",
+            json={"repository_address": str(tmp_path)},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["indexed_chunks"] == 7
+    assert body["index_updated"] is False
+    assert body["skipped_files"] == []
+    assert database.replaced_repository_id is None
 
 
 @pytest.mark.anyio

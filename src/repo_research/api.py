@@ -50,6 +50,9 @@ class RagDatabase(Protocol):
     def replace(self, repository_id: str, chunks: list[ParsedChunk]) -> None:
         """Replace current indexed chunks for one repository identity."""
 
+    def indexed_chunk_count(self, repository_id: str, commit_hash: str) -> int:
+        """Return indexed chunk count for one repository revision."""
+
 
 def package_version() -> str:
     """Return the installed package version used by FastAPI metadata."""
@@ -106,6 +109,17 @@ def create_app(
             repository, files = discover_repository(
                 root_path, app_settings.max_file_size_bytes
             )
+            existing_chunk_count = get_database().indexed_chunk_count(
+                repository.repository_id,
+                repository.commit_hash,
+            )
+            if _can_reuse_index(repository.commit_hash, existing_chunk_count):
+                return IngestSummary(
+                    repository=repository,
+                    indexed_chunks=existing_chunk_count,
+                    skipped_files=[],
+                    index_updated=False,
+                )
             parsed_files = parse_files(files, repository)
             index_updated = bool(parsed_files.chunks or not parsed_files.skipped_files)
             if index_updated:
@@ -198,6 +212,10 @@ def create_app(
             ) from error
 
     return app
+
+
+def _can_reuse_index(commit_hash: str, indexed_chunk_count: int) -> bool:
+    return indexed_chunk_count > 0 and not commit_hash.startswith("unknown-")
 
 
 app = create_app()
