@@ -575,11 +575,7 @@ function ReviewerResult({ result }: { result: ResearchResult }) {
           </div>
         </div>
         <div className="space-y-4 p-4">
-          {answer?.insufficient_evidence ? (
-            <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-[13px] text-warning-foreground">
-              The backend could not fully ground this answer in retrieved repository evidence.
-            </div>
-          ) : null}
+          <ResultStatus result={result} />
           <p className="max-w-4xl whitespace-pre-wrap text-[15px] leading-7">
             {answer?.summary ?? "No summary returned."}
           </p>
@@ -605,6 +601,42 @@ function ReviewerResult({ result }: { result: ResearchResult }) {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <EvidenceHighlights evidence={evidence} />
         <RunTraceSummary result={result} />
+      </div>
+    </div>
+  );
+}
+
+function ResultStatus({ result }: { result: ResearchResult }) {
+  const answer = result.answer;
+  const trace = result.trace;
+  if (!answer?.insufficient_evidence && !trace?.error_type) return null;
+
+  const isBudgetExceeded = trace?.error_type === "ResearchBudgetExceeded";
+  const title = isBudgetExceeded ? "Bounded agent stopped at its tool budget" : "Partial result";
+  const detail = isBudgetExceeded
+    ? "The agent returned the strongest grounded evidence it found before hitting its configured search or file-read limit."
+    : "The backend could not fully ground this answer in retrieved repository evidence.";
+  const evidenceCount = trace?.evidence_ids?.length ?? answer?.evidence?.length ?? 0;
+
+  return (
+    <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-warning-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[13px] font-semibold">{title}</p>
+        {trace?.error_message ? (
+          <Badge variant="outline" className="border-warning/50 bg-background/60 mono text-[11px]">
+            {trace.error_message}
+          </Badge>
+        ) : null}
+      </div>
+      <p className="mt-1 text-[13px] leading-5">{detail}</p>
+      <div className="mt-2 flex flex-wrap gap-2 text-[12px]">
+        <span className="rounded-sm bg-background/70 px-2 py-1 mono">
+          tool calls {trace?.tool_call_count ?? 0}
+        </span>
+        <span className="rounded-sm bg-background/70 px-2 py-1 mono">evidence {evidenceCount}</span>
+        {trace?.error_type ? (
+          <span className="rounded-sm bg-background/70 px-2 py-1 mono">{trace.error_type}</span>
+        ) : null}
       </div>
     </div>
   );
