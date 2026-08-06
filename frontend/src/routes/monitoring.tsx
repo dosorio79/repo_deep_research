@@ -9,15 +9,15 @@ import type { RagRunResult } from "@/lib/rag-types";
 export const Route = createFileRoute("/monitoring")({
   head: () => ({
     meta: [
-      { title: "Monitoring — Repo Deep Research M3.6" },
+      { title: "Run info — Repo Deep Research" },
       {
         name: "description",
-        content: "Latest RAG run outcome from the local frontend harness.",
+        content: "Latest repository research run outcome and user-facing telemetry.",
       },
-      { property: "og:title", content: "Monitoring — Repo Deep Research M3.6" },
+      { property: "og:title", content: "Run info — Repo Deep Research" },
       {
         property: "og:description",
-        content: "Latest RAG run telemetry for the Repo Deep Research harness.",
+        content: "Latest repository research run metadata for the active browser.",
       },
     ],
   }),
@@ -33,7 +33,7 @@ function MonitoringView() {
 
   return (
     <AppShell>
-      <h1 className="sr-only">Repo Deep Research monitoring</h1>
+      <h1 className="sr-only">Repo Deep Research run info</h1>
       {latestRun ? <LatestRunMonitoring result={latestRun} /> : <EmptyMonitoring />}
     </AppShell>
   );

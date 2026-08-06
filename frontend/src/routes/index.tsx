@@ -199,9 +199,9 @@ function ResearchView() {
 
   return (
     <AppShell>
-      <div className="space-y-4">
-        <header className="border-b border-border pb-5">
-          <div className="max-w-4xl">
+      <div className="space-y-3">
+        <header className="border-b border-border pb-4">
+          <div className="max-w-5xl">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="gap-1.5 border-primary/30 bg-primary/5">
                 <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
@@ -209,10 +209,10 @@ function ResearchView() {
               </Badge>
               <Badge variant="secondary">Python repositories</Badge>
             </div>
-            <h1 className="mt-4 max-w-4xl text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
+            <h1 className="mt-3 max-w-4xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
               Research a codebase with grounded RAG evidence.
             </h1>
-            <p className="mt-3 max-w-3xl text-[15px] leading-7 text-muted-foreground">
+            <p className="mt-2 max-w-3xl text-[14px] leading-6 text-muted-foreground">
               Ingest a repository, ask a codebase question, and inspect an answer that cites files,
               symbols, line ranges, and change targets.
             </p>
@@ -220,50 +220,58 @@ function ResearchView() {
         </header>
 
         <section className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-          <section
-            aria-labelledby="repository-source-title"
-            className="border-b border-border"
-          >
-            <div className="space-y-3 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-[12px] font-medium uppercase tracking-wide text-primary">
-                    Repository source
-                  </p>
-                  <h2 id="repository-source-title" className="text-xl font-semibold tracking-tight">
-                    Connect the codebase to research.
-                  </h2>
+          <div className="grid lg:grid-cols-[380px_minmax(0,1fr)]">
+            <section
+              aria-labelledby="repository-source-title"
+              className="border-b border-border bg-secondary/20 lg:border-b-0 lg:border-r"
+            >
+              <div className="space-y-3 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[12px] font-medium uppercase tracking-wide text-primary">
+                      Repository source
+                    </p>
+                    <h2
+                      id="repository-source-title"
+                      className="text-lg font-semibold tracking-tight"
+                    >
+                      Connect the codebase.
+                    </h2>
+                  </div>
+                  {ingestSummary ? (
+                    <Badge variant="secondary" className="gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                      indexed
+                    </Badge>
+                  ) : null}
                 </div>
-                {ingestSummary ? (
-                  <Badge variant="secondary" className="gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                    indexed
-                  </Badge>
-                ) : null}
-              </div>
-              <div className="grid gap-3">
-                <div>
-                  <Label
-                    htmlFor="repositoryAddress"
-                    className="text-[11px] uppercase tracking-wide text-muted-foreground"
+                <div className="grid gap-3">
+                  <div>
+                    <Label
+                      htmlFor="repositoryAddress"
+                      className="text-[11px] uppercase tracking-wide text-muted-foreground"
+                    >
+                      Repository address
+                    </Label>
+                    <Input
+                      id="repositoryAddress"
+                      value={repositoryAddress}
+                      spellCheck={false}
+                      placeholder="/path/to/repo or https://github.com/owner/repo"
+                      onChange={(event) => {
+                        setRepositoryAddress(event.target.value);
+                        setIngestSummary(null);
+                        setIngestError(null);
+                      }}
+                      className="mt-1.5 h-10 mono text-[12px]"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={!canIngest}
+                    onClick={ingest}
+                    className="w-full gap-1.5"
                   >
-                    Repository address
-                  </Label>
-                  <Input
-                    id="repositoryAddress"
-                    value={repositoryAddress}
-                    spellCheck={false}
-                    placeholder="/path/to/python-repository or https://github.com/owner/repo"
-                    onChange={(event) => {
-                      setRepositoryAddress(event.target.value);
-                      setIngestSummary(null);
-                      setIngestError(null);
-                    }}
-                    className="mt-1.5 h-11 mono text-[13px]"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button type="button" disabled={!canIngest} onClick={ingest} className="gap-1.5">
                     {ingestMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                     ) : (
@@ -272,171 +280,176 @@ function ResearchView() {
                     {ingestMutation.isPending ? "Ingesting..." : "Ingest repository"}
                   </Button>
                 </div>
+                {ingestError ? <ApiError error={ingestError} /> : null}
+                {ingestSummary ? <RepositoryReceipt summary={ingestSummary} /> : null}
               </div>
-              {ingestError ? <ApiError error={ingestError} /> : null}
-              {ingestSummary ? <RepositoryReceipt summary={ingestSummary} /> : null}
-            </div>
-          </section>
+            </section>
 
-          <form
-            className="p-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (canAsk) submit();
-            }}
-          >
-            <div className="max-w-5xl">
-              <p className="text-[12px] font-medium uppercase tracking-wide text-primary">
-                Research question
-              </p>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                Ask what you need to understand.
-              </h2>
-            </div>
-
-            <div className="mt-4 space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {EXAMPLES.map((example) => (
-                  <button
-                    key={example.label}
-                    type="button"
-                    onClick={() => {
-                      setQuestion(example.question);
-                      setQuestionMode(example.mode);
-                      setResearchKind(example.kind);
+            <form
+              className="p-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (canAsk) submit();
+              }}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[12px] font-medium uppercase tracking-wide text-primary">
+                    Research question
+                  </p>
+                  <h2 className="text-xl font-semibold tracking-tight">
+                    Ask what you need to understand.
+                  </h2>
+                </div>
+                <div className="min-w-[220px]">
+                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Research mode
+                  </span>
+                  <Segmented
+                    label="research type"
+                    value={researchKind}
+                    options={["direct", "agentic"]}
+                    format={(value) => (value === "agentic" ? "agentic RAG" : "direct RAG")}
+                    onChange={(value) => {
+                      setResearchKind(value);
+                      if (value === "agentic" && questionMode === "auto") {
+                        setQuestionMode("change");
+                      }
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-[12px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {EXAMPLES.map((example) => (
+                    <button
+                      key={example.label}
+                      type="button"
+                      onClick={() => {
+                        setQuestion(example.question);
+                        setQuestionMode(example.mode);
+                        setResearchKind(example.kind);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-[12px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                    >
+                      {example.label}
+                      <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  ))}
+                </div>
+
+                <div>
+                  <Label
+                    htmlFor="question"
+                    className="text-[11px] uppercase tracking-wide text-muted-foreground"
                   >
-                    {example.label}
-                    <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                ))}
-              </div>
+                    Question
+                  </Label>
+                  <Textarea
+                    id="question"
+                    value={question}
+                    rows={4}
+                    spellCheck={false}
+                    onChange={(event) => setQuestion(event.target.value)}
+                    onKeyDown={(event) => {
+                      if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && canAsk) {
+                        event.preventDefault();
+                        submit();
+                      }
+                    }}
+                    placeholder="e.g. Which modules must change to add feedback persistence?"
+                    className="mt-1.5 min-h-[116px] resize-y text-[15px] leading-6"
+                  />
+                </div>
 
-              <div>
-                <Label
-                  htmlFor="question"
-                  className="text-[11px] uppercase tracking-wide text-muted-foreground"
+                <Accordion
+                  type="single"
+                  collapsible
+                  className="rounded-md border border-border px-3"
                 >
-                  Question
-                </Label>
-                <Textarea
-                  id="question"
-                  value={question}
-                  rows={5}
-                  spellCheck={false}
-                  onChange={(event) => setQuestion(event.target.value)}
-                  onKeyDown={(event) => {
-                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && canAsk) {
-                      event.preventDefault();
-                      submit();
-                    }
-                  }}
-                  placeholder="e.g. Which modules must change to add feedback persistence?"
-                  className="mt-1.5 min-h-[152px] resize-y text-[15px] leading-7"
-                />
-              </div>
-
-              <div>
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  Research mode
-                </span>
-                <Segmented
-                  label="research type"
-                  value={researchKind}
-                  options={["direct", "agentic"]}
-                  format={(value) => (value === "agentic" ? "agentic RAG" : "direct RAG")}
-                  onChange={(value) => {
-                    setResearchKind(value);
-                    if (value === "agentic" && questionMode === "auto") {
-                      setQuestionMode("change");
-                    }
-                  }}
-                />
-              </div>
-
-              <Accordion type="single" collapsible className="rounded-md border border-border px-3">
-                <AccordionItem value="settings" className="border-0">
-                  <AccordionTrigger className="py-3 text-[13px] hover:no-underline">
-                    Research settings
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-4">
-                    <div>
-                      <Label
-                        htmlFor="baseUrl"
-                        className="text-[11px] uppercase tracking-wide text-muted-foreground"
-                      >
-                        API base URL
-                      </Label>
-                      <Input
-                        id="baseUrl"
-                        value={baseUrl}
-                        spellCheck={false}
-                        onChange={(event) => setBaseUrl(event.target.value)}
-                        className="mt-1.5 h-10 mono text-[12px]"
-                      />
-                    </div>
-
-                    <div>
-                      <Label
-                        htmlFor="limit"
-                        className="text-[11px] uppercase tracking-wide text-muted-foreground"
-                      >
-                        Evidence limit: <span className="mono">{limit}</span>
-                      </Label>
-                      <Slider
-                        id="limit"
-                        className="mt-3"
-                        min={1}
-                        max={20}
-                        step={1}
-                        value={[limit]}
-                        onValueChange={(value) => setLimit(value[0] ?? limit)}
-                      />
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2">
+                  <AccordionItem value="settings" className="border-0">
+                    <AccordionTrigger className="py-2.5 text-[13px] hover:no-underline">
+                      Research settings
+                    </AccordionTrigger>
+                    <AccordionContent className="space-y-4">
                       <div>
-                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Question intent
-                        </span>
-                        <Segmented
-                          label="question mode"
-                          value={questionMode}
-                          options={QUESTION_MODES}
-                          onChange={setQuestionMode}
+                        <Label
+                          htmlFor="baseUrl"
+                          className="text-[11px] uppercase tracking-wide text-muted-foreground"
+                        >
+                          API base URL
+                        </Label>
+                        <Input
+                          id="baseUrl"
+                          value={baseUrl}
+                          spellCheck={false}
+                          onChange={(event) => setBaseUrl(event.target.value)}
+                          className="mt-1.5 h-10 mono text-[12px]"
                         />
                       </div>
+
                       <div>
-                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Retrieval
-                        </span>
-                        <Segmented
-                          label="retrieval mode"
-                          value={retrievalMode}
-                          options={RETRIEVAL_MODES}
-                          onChange={setRetrievalMode}
+                        <Label
+                          htmlFor="limit"
+                          className="text-[11px] uppercase tracking-wide text-muted-foreground"
+                        >
+                          Evidence limit: <span className="mono">{limit}</span>
+                        </Label>
+                        <Slider
+                          id="limit"
+                          className="mt-3"
+                          min={1}
+                          max={20}
+                          step={1}
+                          value={[limit]}
+                          onValueChange={(value) => setLimit(value[0] ?? limit)}
                         />
                       </div>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
 
-              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-                <Button type="submit" disabled={!canAsk} className="gap-1.5">
-                  {queryMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Play className="h-4 w-4" aria-hidden />
-                  )}
-                  {queryMutation.isPending ? "Running..." : "Run query"}
-                </Button>
-                <span className="mono text-[11px] text-muted-foreground">Cmd/Ctrl + Enter</span>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Question intent
+                          </span>
+                          <Segmented
+                            label="question mode"
+                            value={questionMode}
+                            options={QUESTION_MODES}
+                            onChange={setQuestionMode}
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Retrieval
+                          </span>
+                          <Segmented
+                            label="retrieval mode"
+                            value={retrievalMode}
+                            options={RETRIEVAL_MODES}
+                            onChange={setRetrievalMode}
+                          />
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+
+                <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                  <Button type="submit" disabled={!canAsk} className="gap-1.5">
+                    {queryMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Play className="h-4 w-4" aria-hidden />
+                    )}
+                    {queryMutation.isPending ? "Running..." : "Run query"}
+                  </Button>
+                  <span className="mono text-[11px] text-muted-foreground">Cmd/Ctrl + Enter</span>
+                </div>
+                {queryError ? <ApiError error={queryError} /> : null}
               </div>
-              {queryError ? <ApiError error={queryError} /> : null}
-            </div>
-          </form>
+            </form>
+          </div>
         </section>
 
         <section>
