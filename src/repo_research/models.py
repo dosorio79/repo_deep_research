@@ -9,7 +9,7 @@ from hashlib import sha256
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
 
 class RepositoryIdentity(BaseModel):
@@ -122,6 +122,15 @@ class ResearchRequest(BaseModel):
     retrieval_mode: RetrievalMode = RetrievalMode.DENSE
     retrieval_limit: int = Field(default=5, ge=1, le=20)
     budget: ResearchBudget = Field(default_factory=ResearchBudget)
+
+
+class RepositoryIngestRequest(BaseModel):
+    """A request to parse and index a repository available to the backend."""
+
+    repository_address: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("repository_address", "repository_path"),
+    )
 
 
 class EvidenceItem(BaseModel):

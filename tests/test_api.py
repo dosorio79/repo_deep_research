@@ -16,6 +16,7 @@ from repo_research.models import (
     ParsedChunk,
     RagMode,
     RagRequest,
+    RepositoryIdentity,
     ResearchAnswer,
     ResearchRequest,
     SearchResult,
@@ -29,12 +30,18 @@ class FakeDatabase:
 
     def __init__(self, *, healthy: bool) -> None:
         self._healthy = healthy
+        self.replaced_repository_id: str | None = None
+        self.replaced_chunks: list[ParsedChunk] = []
 
     def health_check(self) -> bool:
         return self._healthy
 
     def search(self, query: object) -> list[SearchResult]:
         return []
+
+    def replace(self, repository_id: str, chunks: list[ParsedChunk]) -> None:
+        self.replaced_repository_id = repository_id
+        self.replaced_chunks = chunks
 
 
 class FakeGenerator:
@@ -156,6 +163,64 @@ async def test_health_reports_qdrant_status() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "qdrant": True}
+
+
+@pytest.mark.anyio
+async def test_ingest_repository_indexes_local_repository_path(tmp_path: Path) -> None:
+    (tmp_path / "example.py").write_text(
+        "def answer() -> int:\n    return 42\n",
+        encoding="utf-8",
+    )
+    database = FakeDatabase(healthy=True)
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=database,
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/repositories/ingest",
+            json={"repository_address": str(tmp_path)},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    repository = RepositoryIdentity.model_validate(body["repository"])
+    assert repository.root_path == tmp_path.resolve()
+    assert body["indexed_chunks"] >= 1
+    assert body["index_updated"] is True
+    assert body["skipped_files"] == []
+    assert database.replaced_repository_id == repository.repository_id
+    assert [chunk.path for chunk in database.replaced_chunks] == ["example.py"]
+
+
+@pytest.mark.anyio
+async def test_ingest_repository_returns_stable_error_for_missing_path(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/repositories/ingest",
+            json={"repository_path": str(tmp_path / "missing")},
+        )
+
+    assert response.status_code == 400
+    assert "repository path is not a directory" in response.json()["detail"]
 
 
 @pytest.mark.anyio

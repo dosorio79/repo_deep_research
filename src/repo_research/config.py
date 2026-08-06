@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "repo_chunks_v2"
     repository_root: Path = Path(".")
+    repository_cache_dir: Path = Path(".repo_research_cache/repositories")
     max_file_size_bytes: int = Field(default=1_048_576, gt=0)
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dimension: int = Field(default=384, gt=0)
