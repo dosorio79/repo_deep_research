@@ -186,6 +186,9 @@ Run the backend and frontend together:
 make app
 ```
 
+This starts Qdrant, the API, and the frontend only. Use the Research page to
+enter and ingest the repository you want to inspect.
+
 Or run them in separate terminals:
 
 ```bash
