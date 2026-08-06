@@ -110,9 +110,20 @@ class RepositoryDatabase:
                 wait=True,
             )
 
+    def indexed_chunk_count(self, repository_id: str, commit_hash: str) -> int:
+        """Return how many chunks are already indexed for a repository revision."""
+        if not self._client.collection_exists(self._collection_name):
+            return 0
+        response = self._client.count(
+            collection_name=self._collection_name,
+            count_filter=_revision_filter(repository_id, commit_hash),
+            exact=True,
+        )
+        return response.count
+
     def search(self, query: SearchQuery) -> list[SearchResult]:
         """Return typed results from the requested mode and repository revision."""
-        repository_filter = _repository_filter(query)
+        repository_filter = _revision_filter(query.repository_id, query.commit_hash)
         if query.mode is RetrievalMode.DENSE:
             response = self._client.query_points(
                 collection_name=self._collection_name,
@@ -208,16 +219,16 @@ class RepositoryDatabase:
             )
 
 
-def _repository_filter(query: SearchQuery) -> models.Filter:
+def _revision_filter(repository_id: str, commit_hash: str) -> models.Filter:
     return models.Filter(
         must=[
             models.FieldCondition(
                 key="repository_id",
-                match=models.MatchValue(value=query.repository_id),
+                match=models.MatchValue(value=repository_id),
             ),
             models.FieldCondition(
                 key="commit_hash",
-                match=models.MatchValue(value=query.commit_hash),
+                match=models.MatchValue(value=commit_hash),
             ),
         ]
     )
