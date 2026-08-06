@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { AnswerPanel } from "./AnswerPanel";
+import { ResearchStepsPanel } from "./ResearchStepsPanel";
 import { TracePanel } from "./TracePanel";
 import type { RagAnswer, RagTrace } from "@/lib/rag-types";
 
@@ -88,5 +89,24 @@ describe("RAG result panels", () => {
     expect(screen.getAllByText("$0.001700")).toHaveLength(2);
     expect(screen.getByText("model_usage[1].estimated_cost_usd")).toBeInTheDocument();
     expect(screen.getByText("Unavailable")).toBeInTheDocument();
+  });
+
+  it("renders agentic research steps", () => {
+    render(
+      <ResearchStepsPanel
+        steps={[
+          {
+            sequence: 1,
+            action: "Search repository evidence.",
+            rationale: "Find modules related to feedback persistence.",
+            evidence_ids: ["E1", "E2"],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Search repository evidence.")).toBeInTheDocument();
+    expect(screen.getByText("Find modules related to feedback persistence.")).toBeInTheDocument();
+    expect(screen.getByText("evidence: E1, E2")).toBeInTheDocument();
   });
 });

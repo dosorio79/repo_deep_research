@@ -7,10 +7,18 @@ import { ApiError } from "@/components/ApiError";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { RagQueryForm, type QueryFormState } from "@/components/RagQueryForm";
 import { RawJsonPanel } from "@/components/RawJsonPanel";
+import { RepositoryIngestPanel } from "@/components/RepositoryIngestPanel";
+import { ResearchStepsPanel } from "@/components/ResearchStepsPanel";
 import { TracePanel } from "@/components/TracePanel";
 import { saveLatestRagRun } from "@/lib/latest-rag-run";
-import { runRagQuery } from "@/lib/rag-client";
-import type { ApiErrorShape, RagRequest, RagRunResult } from "@/lib/rag-types";
+import { ingestRepository, runAgenticResearch, runRagQuery } from "@/lib/rag-client";
+import type {
+  ApiErrorShape,
+  IngestSummary,
+  RagRequest,
+  ResearchRequest,
+  ResearchResult,
+} from "@/lib/rag-types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/")({
@@ -20,13 +28,12 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Developer testing harness for the Repo Deep Research RAG backend: run /rag queries and inspect answers, evidence and traces.",
+          "Ask repository research questions with direct RAG or bounded agentic research, then inspect grounded evidence.",
       },
-      { property: "og:title", content: "Research — Repo Deep Research M3.6" },
+      { property: "og:title", content: "Repository Research — Repo Deep Research" },
       {
         property: "og:description",
-        content:
-          "Run /rag queries against the FastAPI backend and inspect answer, evidence and trace output.",
+        content: "Compare direct RAG and bounded agentic research over repository evidence.",
       },
     ],
   }),
@@ -35,22 +42,48 @@ export const Route = createFileRoute("/")({
 
 function ResearchView() {
   const [form, setForm] = useState<QueryFormState>({
+    researchKind: "direct",
     question: "",
     mode: "auto",
     retrievalMode: "hybrid",
     limit: 8,
-    baseUrl: "http://localhost:8000",
-    repositoryPath: "",
   });
-  const [result, setResult] = useState<RagRunResult | null>(null);
+  const [baseUrl, setBaseUrl] = useState("http://localhost:8000");
+  const [repositoryAddress, setRepositoryAddress] = useState("");
+  const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null);
+  const [result, setResult] = useState<ResearchResult | null>(null);
   const [error, setError] = useState<ApiErrorShape | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
 
   useEffect(() => () => activeRequest.current?.abort(), []);
 
-  const mutation = useMutation({
-    mutationFn: (payload: { baseUrl: string; body: RagRequest; signal: AbortSignal }) =>
-      runRagQuery(payload.baseUrl, payload.body, payload.signal),
+  const ingestMutation = useMutation({
+    mutationFn: (payload: { baseUrl: string; repositoryPath: string }) =>
+      ingestRepository(payload.baseUrl, { repository_address: payload.repositoryPath }),
+    onSuccess: (data) => {
+      setIngestSummary(data);
+      setError(null);
+    },
+    onError: (err: unknown) => {
+      const shape = err as Partial<ApiErrorShape>;
+      setError({
+        title: shape?.title ?? "Ingestion failed",
+        detail: shape?.detail ?? "The backend could not ingest this repository.",
+        ...(typeof shape?.status === "number" ? { status: shape.status } : {}),
+      });
+    },
+  });
+
+  const queryMutation = useMutation({
+    mutationFn: (payload: {
+      kind: QueryFormState["researchKind"];
+      baseUrl: string;
+      body: RagRequest | ResearchRequest;
+      signal: AbortSignal;
+    }) =>
+      payload.kind === "agentic"
+        ? runAgenticResearch(payload.baseUrl, payload.body as ResearchRequest, payload.signal)
+        : runRagQuery(payload.baseUrl, payload.body as RagRequest, payload.signal),
     onSuccess: (data) => {
       saveLatestRagRun(data);
       setResult(data);
@@ -71,34 +104,101 @@ function ResearchView() {
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
-    const body: RagRequest = {
+    const queryRepositoryPath = ingestSummary?.repository.root_path ?? repositoryAddress.trim();
+    const common = {
       question: form.question.trim(),
       mode: form.mode,
       retrieval_mode: form.retrievalMode,
-      limit: form.limit,
-      ...(form.repositoryPath.trim() ? { repository_path: form.repositoryPath.trim() } : {}),
+      ...(queryRepositoryPath ? { repository_path: queryRepositoryPath } : {}),
     };
-    mutation.mutate({ baseUrl: form.baseUrl, body, signal: controller.signal });
+    const body =
+      form.researchKind === "agentic"
+        ? ({
+            ...common,
+            retrieval_limit: form.limit,
+          } satisfies ResearchRequest)
+        : ({
+            ...common,
+            limit: form.limit,
+          } satisfies RagRequest);
+    queryMutation.mutate({
+      kind: form.researchKind,
+      baseUrl,
+      body,
+      signal: controller.signal,
+    });
+  };
+
+  const ingest = () => {
+    ingestMutation.mutate({
+      baseUrl,
+      repositoryPath: repositoryAddress.trim(),
+    });
   };
 
   return (
     <AppShell>
-      <h1 className="sr-only">Repo Deep Research — RAG query harness</h1>
-      <div className="grid gap-3 lg:grid-cols-[340px_minmax(0,1fr)]">
+      <h1 className="sr-only">Repo Deep Research</h1>
+      <div className="mb-4 grid gap-3 border-b border-border pb-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div>
+          <p className="text-[12px] font-medium uppercase tracking-wide text-primary">
+            Repository research
+          </p>
+          <h2 className="mt-1 max-w-3xl text-3xl font-semibold tracking-tight">
+            Ingest a repository, then ask how it works.
+          </h2>
+          <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-muted-foreground">
+            Add a repository address available to the backend, index its source evidence, then
+            choose direct RAG or agentic RAG for grounded answers.
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-md border border-border bg-card p-2">
+            <p className="mono text-[16px] font-semibold">local</p>
+            <p className="text-[11px] text-muted-foreground">repo paths</p>
+          </div>
+          <div className="rounded-md border border-border bg-card p-2">
+            <p className="mono text-[16px] font-semibold">2</p>
+            <p className="text-[11px] text-muted-foreground">answer modes</p>
+          </div>
+          <div className="rounded-md border border-border bg-card p-2">
+            <p className="mono text-[16px] font-semibold">8</p>
+            <p className="text-[11px] text-muted-foreground">tool-call cap</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <RepositoryIngestPanel
+          baseUrl={baseUrl}
+          repositoryAddress={repositoryAddress}
+          summary={ingestSummary}
+          loading={ingestMutation.isPending}
+          onAddressChange={(value) => {
+            setRepositoryAddress(value);
+            setIngestSummary(null);
+          }}
+          onBaseUrlChange={setBaseUrl}
+          onIngest={ingest}
+        />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[360px_minmax(0,1fr)]">
         <div className="space-y-3 lg:sticky lg:top-16 lg:self-start">
           <RagQueryForm
             state={form}
             onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
             onSubmit={submit}
-            loading={mutation.isPending}
+            loading={queryMutation.isPending}
           />
           {error ? <ApiError error={error} /> : null}
         </div>
 
         <div className="min-w-0">
-          {mutation.isPending ? (
+          {queryMutation.isPending ? (
             <div className="mb-3 rounded-md border border-border bg-secondary/60 px-3 py-1.5 mono text-[12px] text-muted-foreground">
-              Running query… showing last successful result below.
+              Running {form.researchKind === "agentic" ? "agentic research" : "direct research"}...
+              showing last successful result below.
             </div>
           ) : null}
 
@@ -117,6 +217,7 @@ function ResearchView() {
               </TabsList>
               <TabsContent value="answer" className="mt-3 space-y-3">
                 <AnswerPanel answer={result.answer} />
+                <ResearchStepsPanel steps={result.answer?.research_steps} />
                 <EvidencePanel evidence={result.answer?.evidence ?? null} />
               </TabsContent>
               <TabsContent value="evidence" className="mt-3">
@@ -133,8 +234,11 @@ function ResearchView() {
             <div className="panel flex min-h-[320px] items-center justify-center p-6">
               <p className="max-w-md text-center text-[13px] text-muted-foreground">
                 No result yet. Enter a question and run a query against{" "}
-                <span className="mono">{form.baseUrl.replace(/\/+$/, "")}/rag</span> to inspect the
-                answer, evidence and trace.
+                <span className="mono">
+                  {baseUrl.replace(/\/+$/, "")}
+                  {form.researchKind === "agentic" ? "/research" : "/rag"}
+                </span>{" "}
+                to inspect the answer and evidence.
               </p>
             </div>
           )}

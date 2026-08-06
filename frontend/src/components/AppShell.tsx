@@ -13,14 +13,14 @@ const NAV = [
 
 export function Navigation() {
   return (
-    <nav className="flex items-center gap-0.5">
+    <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
       {NAV.map((item) => (
         <Link
           key={item.to}
           to={item.to}
           activeOptions={{ exact: item.to === "/" }}
           className={cn(
-            "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+            "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
           )}
           activeProps={{ className: "bg-secondary text-foreground font-medium" }}
         >
@@ -41,19 +41,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
-        <div className="mx-auto flex h-12 max-w-[1600px] items-center gap-4 px-4">
-          <div className="flex items-center gap-2">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-2 px-4 py-2 lg:h-12 lg:flex-row lg:items-center lg:gap-4 lg:py-0">
+          <div className="flex shrink-0 items-center gap-2">
             <Terminal className="h-4 w-4 text-primary" aria-hidden />
-            <span className="mono text-[13px] font-semibold tracking-tight">
+            <span className="whitespace-nowrap mono text-[13px] font-semibold tracking-tight">
               Repo Deep Research
             </span>
             <span className="rounded-sm bg-secondary px-1.5 py-0.5 mono text-[10px] text-muted-foreground">
-              M3.6
+              MVP
             </span>
           </div>
           <Navigation />
-          <div className="ml-auto mono text-[11px] text-muted-foreground">
-            backend testing harness
+          <div className="hidden whitespace-nowrap mono text-[11px] text-muted-foreground xl:ml-auto xl:block">
+            evidence-grounded repository research
           </div>
         </div>
       </header>
