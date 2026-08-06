@@ -81,6 +81,39 @@ const agenticResult: ResearchRunResult = {
   },
 };
 
+const budgetLimitedAgenticResult: ResearchRunResult = {
+  ...agenticResult,
+  answer: {
+    ...agenticResult.answer!,
+    summary: "Insufficient repository evidence to produce an agentic change plan.",
+    evidence: [
+      {
+        evidence_id: "E1",
+        path: "app/services/profiler.py",
+        start_line: 1,
+        end_line: 40,
+        symbol: null,
+        score: 0.9,
+        reason: "Closest available repository evidence.",
+      },
+    ],
+    confidence: 0,
+    insufficient_evidence: true,
+    risks: ["The answer is intentionally withheld because grounding failed."],
+    unresolved_questions: ["maximum file reads exceeded"],
+  },
+  trace: {
+    ...agenticResult.trace!,
+    evidence_ids: ["E1"],
+    retrieved_chunk_count: 8,
+    unique_file_count: 1,
+    tool_call_count: 7,
+    insufficient_evidence: true,
+    error_type: "ResearchBudgetExceeded",
+    error_message: "maximum file reads exceeded",
+  },
+};
+
 const ingestSummary: IngestSummary = {
   repository: {
     name: "sample-repo",
@@ -258,5 +291,26 @@ describe("Research route", () => {
     );
     expect(runRagQuery).not.toHaveBeenCalled();
     await screen.findByText("Search repository evidence.");
+  });
+
+  it("explains bounded agentic partial results without treating them as request errors", async () => {
+    vi.mocked(runAgenticResearch).mockResolvedValue(budgetLimitedAgenticResult);
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await user.click(screen.getByRole("radio", { name: "agentic RAG" }));
+    await user.type(
+      screen.getByLabelText("Question"),
+      "Which modules change for agentic analysis?",
+    );
+    await user.click(screen.getByRole("button", { name: "Run query" }));
+
+    await screen.findByText("Bounded agent stopped at its tool budget");
+    expect(screen.getByText("maximum file reads exceeded")).toBeInTheDocument();
+    expect(screen.getByText("tool calls 7")).toBeInTheDocument();
+    expect(screen.getByText("evidence 1")).toBeInTheDocument();
+    expect(screen.queryByText("Network error")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Backend returned/)).not.toBeInTheDocument();
   });
 });
