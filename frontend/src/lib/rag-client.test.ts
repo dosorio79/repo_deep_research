@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ingestRepository, runAgenticResearch, runRagQuery } from "./rag-client";
+import { getBackendHealth, ingestRepository, runAgenticResearch, runRagQuery } from "./rag-client";
 import type { IngestSummary, RagRunResult, ResearchRunResult } from "./rag-types";
 
 const okResult: RagRunResult = {
@@ -179,6 +179,24 @@ describe("runRagQuery", () => {
           repository_address: "/tmp/sample-repo",
         }),
       }),
+    );
+  });
+
+  it("checks backend health at the configured base URL", async () => {
+    const health = { status: "ok", qdrant: true };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(health), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getBackendHealth("http://localhost:8000///")).resolves.toEqual(health);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/health",
+      expect.objectContaining({ signal: null }),
     );
   });
 

@@ -49,6 +49,11 @@ export interface IngestSummary {
   index_updated: boolean;
 }
 
+export interface BackendHealth {
+  status: string;
+  qdrant: boolean;
+}
+
 export interface EvidenceItem {
   evidence_id: string;
   path: string;
