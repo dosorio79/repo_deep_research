@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/", label: "Research", icon: Search },
-  { to: "/monitoring", label: "Monitoring", icon: Activity },
+  { to: "/monitoring", label: "Run info", icon: Activity },
 ] as const;
 
 export function Navigation() {

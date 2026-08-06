@@ -190,7 +190,7 @@ describe("Research route", () => {
     await user.click(screen.getByRole("button", { name: "Ingest repository" }));
 
     const repositoryRegion = screen.getByRole("region", {
-      name: "Connect the codebase to research.",
+      name: "Connect the codebase.",
     });
     await within(repositoryRegion).findByText("Backend returned 400");
     expect(
