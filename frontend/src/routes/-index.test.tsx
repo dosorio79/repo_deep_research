@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode, ComponentType } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route } from "./index";
-import { saveLatestRagRun } from "@/lib/latest-rag-run";
+import { loadLatestRagRun, saveLatestRagRun } from "@/lib/latest-rag-run";
 import { ingestRepository, runAgenticResearch, runRagQuery } from "@/lib/rag-client";
 import type { IngestSummary, RagRunResult, ResearchRunResult } from "@/lib/rag-types";
 
@@ -15,6 +15,7 @@ vi.mock("@/lib/rag-client", () => ({
 }));
 
 vi.mock("@/lib/latest-rag-run", () => ({
+  loadLatestRagRun: vi.fn(),
   saveLatestRagRun: vi.fn(),
 }));
 
@@ -106,7 +107,18 @@ describe("Research route", () => {
     vi.mocked(ingestRepository).mockReset();
     vi.mocked(runAgenticResearch).mockReset();
     vi.mocked(runRagQuery).mockReset();
+    vi.mocked(loadLatestRagRun).mockReset();
+    vi.mocked(loadLatestRagRun).mockReturnValue(null);
     vi.mocked(saveLatestRagRun).mockReset();
+  });
+
+  it("restores the latest successful result when returning to research", () => {
+    vi.mocked(loadLatestRagRun).mockReturnValue(okResult);
+
+    renderResearchRoute();
+
+    expect(screen.getByText("Settings validates runtime config.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Question")).toHaveValue("Where is config validated?");
   });
 
   it("aborts an in-flight RAG request when the route unmounts", async () => {
@@ -162,6 +174,28 @@ describe("Research route", () => {
     });
     await screen.findByText("sample-repo");
     await screen.findByText("12");
+  });
+
+  it("shows repository ingest errors beside the repository controls", async () => {
+    vi.mocked(ingestRepository).mockRejectedValue({
+      title: "Backend returned 400",
+      detail: "repository path is not a directory",
+      status: 400,
+    });
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await user.type(screen.getByLabelText("Repository address"), "/tmp/missing-repo");
+    await user.click(screen.getByRole("button", { name: "Ingest repository" }));
+
+    const repositoryRegion = screen.getByRole("region", {
+      name: "Connect the codebase to research.",
+    });
+    await within(repositoryRegion).findByText("Backend returned 400");
+    expect(
+      within(repositoryRegion).getByText("repository path is not a directory"),
+    ).toBeInTheDocument();
   });
 
   it("submits direct research to /rag with a limit field", async () => {
