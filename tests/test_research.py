@@ -23,6 +23,7 @@ from repo_research.research import (
     ResearchAgentResult,
     ResearchBudgetExceeded,
     ResearchToolContext,
+    _model_usage_from_agent_usage,
 )
 
 
@@ -106,6 +107,15 @@ class BudgetExhaustingAgent:
         )
 
 
+class FakeAgentUsage:
+    """Minimal PydanticAI run usage shape for telemetry conversion tests."""
+
+    input_tokens = 1_000
+    output_tokens = 200
+    cache_read_tokens = 100
+    details = {"reasoning_tokens": 25}
+
+
 def test_research_service_canonicalizes_agent_evidence(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     chunk = _chunk(repository)
@@ -165,6 +175,25 @@ def test_research_service_canonicalizes_agent_evidence(tmp_path: Path) -> None:
     assert run.trace.retrieved_chunk_count == 1
     assert run.trace.evidence_ids == ["E1"]
     assert "BoundedResearchService" in database.queries[0].text
+
+
+def test_research_agent_usage_maps_to_trace_model_usage() -> None:
+    usage = _model_usage_from_agent_usage(
+        provider="openai",
+        model="gpt-5-mini",
+        usage=FakeAgentUsage(),
+    )
+
+    assert usage is not None
+    assert usage.provider == "openai"
+    assert usage.model == "gpt-5-mini"
+    assert usage.input_tokens == 1_000
+    assert usage.output_tokens == 200
+    assert usage.total_tokens == 1_200
+    assert usage.cached_input_tokens == 100
+    assert usage.reasoning_tokens == 25
+    assert usage.estimated_cost_usd is not None
+    assert usage.pricing_source != "unknown"
 
 
 def test_research_service_rejects_unknown_agent_evidence(tmp_path: Path) -> None:
