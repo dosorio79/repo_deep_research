@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CheckCircle2,
   ChevronRight,
@@ -8,6 +8,7 @@ import {
   GitBranch,
   Loader2,
   Play,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -28,9 +29,15 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { AppShell } from "@/components/AppShell";
 import { loadLatestRagRun, saveLatestRagRun } from "@/lib/latest-rag-run";
-import { ingestRepository, runAgenticResearch, runRagQuery } from "@/lib/rag-client";
+import {
+  getBackendHealth,
+  ingestRepository,
+  runAgenticResearch,
+  runRagQuery,
+} from "@/lib/rag-client";
 import type {
   ApiErrorShape,
+  BackendHealth,
   ChangeTarget,
   IngestSummary,
   QuestionMode,
@@ -65,6 +72,8 @@ const EXAMPLES = [
 
 const QUESTION_MODES: QuestionMode[] = ["auto", "locate", "flow", "change"];
 const RETRIEVAL_MODES: RetrievalMode[] = ["dense", "sparse", "hybrid"];
+const DEFAULT_API_BASE_URL =
+  (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "http://127.0.0.1:8000";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -86,7 +95,7 @@ export const Route = createFileRoute("/")({
 });
 
 function ResearchView() {
-  const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8000");
+  const [baseUrl, setBaseUrl] = useState(DEFAULT_API_BASE_URL);
   const [repositoryAddress, setRepositoryAddress] = useState("");
   const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null);
   const [question, setQuestion] = useState("");
@@ -112,6 +121,14 @@ function ResearchView() {
       setQuestionMode(latestRun.answer.mode);
     }
   }, []);
+
+  const healthQuery = useQuery({
+    queryKey: ["backend-health", baseUrl],
+    queryFn: ({ signal }) => getBackendHealth(baseUrl, signal),
+    enabled: baseUrl.trim().length > 0,
+    retry: false,
+    staleTime: 5_000,
+  });
 
   const ingestMutation = useMutation({
     mutationFn: (payload: { baseUrl: string; repositoryAddress: string }) =>
@@ -247,6 +264,14 @@ function ResearchView() {
                   ) : null}
                 </div>
                 <div className="grid gap-3">
+                  <ApiConnectionPanel
+                    baseUrl={baseUrl}
+                    health={healthQuery.data}
+                    error={healthQuery.error as ApiErrorShape | null}
+                    isChecking={healthQuery.isFetching}
+                    onBaseUrlChange={(value) => setBaseUrl(value)}
+                    onRetry={() => void healthQuery.refetch()}
+                  />
                   <div>
                     <Label
                       htmlFor="repositoryAddress"
@@ -376,22 +401,6 @@ function ResearchView() {
                     <AccordionContent className="space-y-4">
                       <div>
                         <Label
-                          htmlFor="baseUrl"
-                          className="text-[11px] uppercase tracking-wide text-muted-foreground"
-                        >
-                          API base URL
-                        </Label>
-                        <Input
-                          id="baseUrl"
-                          value={baseUrl}
-                          spellCheck={false}
-                          onChange={(event) => setBaseUrl(event.target.value)}
-                          className="mt-1.5 h-10 mono text-[12px]"
-                        />
-                      </div>
-
-                      <div>
-                        <Label
                           htmlFor="limit"
                           className="text-[11px] uppercase tracking-wide text-muted-foreground"
                         >
@@ -507,6 +516,83 @@ function Segmented<T extends string>({
           {format ? format(option) : option}
         </button>
       ))}
+    </div>
+  );
+}
+
+function ApiConnectionPanel({
+  baseUrl,
+  health,
+  error,
+  isChecking,
+  onBaseUrlChange,
+  onRetry,
+}: {
+  baseUrl: string;
+  health: BackendHealth | undefined;
+  error: ApiErrorShape | null;
+  isChecking: boolean;
+  onBaseUrlChange: (value: string) => void;
+  onRetry: () => void;
+}) {
+  const isReachable = Boolean(health) && !error;
+  const isReady = isReachable && health?.qdrant;
+  const statusLabel = isChecking
+    ? "checking"
+    : isReady
+      ? "API ready"
+      : isReachable
+        ? "API online, storage unavailable"
+        : "API offline";
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label
+          htmlFor="baseUrl"
+          className="text-[11px] uppercase tracking-wide text-muted-foreground"
+        >
+          API base URL
+        </Label>
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={isReady ? "secondary" : "outline"}
+            className={cn(
+              "gap-1.5",
+              isReady
+                ? "bg-primary/10 text-primary"
+                : error
+                  ? "border-destructive/40 text-destructive"
+                  : "border-warning/50 text-warning-foreground",
+            )}
+          >
+            {isChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+            {statusLabel}
+          </Badge>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRetry}
+            disabled={isChecking || !baseUrl.trim()}
+            aria-label="Check API connection"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isChecking && "animate-spin")} aria-hidden />
+          </Button>
+        </div>
+      </div>
+      <Input
+        id="baseUrl"
+        value={baseUrl}
+        spellCheck={false}
+        onChange={(event) => onBaseUrlChange(event.target.value)}
+        className="mt-2 h-9 mono text-[12px]"
+      />
+      {error ? (
+        <p className="mt-2 break-words mono text-[11px] leading-5 text-destructive">
+          {error.detail}
+        </p>
+      ) : null}
     </div>
   );
 }

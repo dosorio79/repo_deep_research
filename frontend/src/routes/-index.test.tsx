@@ -5,10 +5,16 @@ import type { ReactNode, ComponentType } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route } from "./index";
 import { loadLatestRagRun, saveLatestRagRun } from "@/lib/latest-rag-run";
-import { ingestRepository, runAgenticResearch, runRagQuery } from "@/lib/rag-client";
+import {
+  getBackendHealth,
+  ingestRepository,
+  runAgenticResearch,
+  runRagQuery,
+} from "@/lib/rag-client";
 import type { IngestSummary, RagRunResult, ResearchRunResult } from "@/lib/rag-types";
 
 vi.mock("@/lib/rag-client", () => ({
+  getBackendHealth: vi.fn(),
   ingestRepository: vi.fn(),
   runAgenticResearch: vi.fn(),
   runRagQuery: vi.fn(),
@@ -138,6 +144,8 @@ function renderResearchRoute() {
 describe("Research route", () => {
   beforeEach(() => {
     vi.mocked(ingestRepository).mockReset();
+    vi.mocked(getBackendHealth).mockReset();
+    vi.mocked(getBackendHealth).mockResolvedValue({ status: "ok", qdrant: true });
     vi.mocked(runAgenticResearch).mockReset();
     vi.mocked(runRagQuery).mockReset();
     vi.mocked(loadLatestRagRun).mockReset();
@@ -152,6 +160,19 @@ describe("Research route", () => {
 
     expect(screen.getByText("Settings validates runtime config.")).toBeInTheDocument();
     expect(screen.getByLabelText("Question")).toHaveValue("Where is config validated?");
+  });
+
+  it("shows backend connection state before ingestion", async () => {
+    vi.mocked(getBackendHealth).mockRejectedValue({
+      title: "Network error",
+      detail: "Could not reach the backend at http://127.0.0.1:8000/health.",
+    });
+
+    renderResearchRoute();
+
+    await screen.findByText("API offline");
+    expect(screen.getByText(/127\.0\.0\.1:8000\/health/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check API connection" })).toBeInTheDocument();
   });
 
   it("aborts an in-flight RAG request when the route unmounts", async () => {

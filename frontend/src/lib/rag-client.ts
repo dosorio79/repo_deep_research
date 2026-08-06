@@ -1,5 +1,6 @@
 import type {
   ApiErrorShape,
+  BackendHealth,
   IngestSummary,
   RagRequest,
   RagRunResult,
@@ -83,6 +84,51 @@ async function postJson<TPayload, TResult>(
   }
 
   return parsed as TResult;
+}
+
+export async function getBackendHealth(
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<BackendHealth> {
+  const url = `${baseUrl.replace(/\/+$/, "")}/health`;
+  let response: Response;
+
+  try {
+    response = await fetch(url, { signal: signal ?? null });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    throw {
+      title: "Network error",
+      detail: `Could not reach the backend at ${url}. Check that the API is running and the base URL is correct.`,
+    } satisfies ApiErrorShape;
+  }
+
+  const text = await response.text();
+  let parsed: unknown = null;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    parsed = null;
+  }
+
+  if (!response.ok) {
+    throw {
+      title: `Backend returned ${response.status} ${response.statusText}`.trim(),
+      detail:
+        extractDetail(parsed) ??
+        (text ? text.slice(0, ERROR_BODY_PREVIEW_LIMIT) : "The backend returned no response body."),
+      status: response.status,
+    } satisfies ApiErrorShape;
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw {
+      title: "Unexpected response",
+      detail: "The backend health response was not valid JSON.",
+    } satisfies ApiErrorShape;
+  }
+
+  return parsed as BackendHealth;
 }
 
 export async function runRagQuery(
