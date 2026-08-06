@@ -85,6 +85,8 @@ Aim for full points in the standard rubric before chasing bonus:
 
 ### 0. Finish branch hygiene
 
+Status: complete for the documentation PR setup.
+
 1. Merge PR #6 into `dev` after checks remain green.
 2. Delete the merged fix branch locally and remotely.
 3. Start MVP work from updated `dev`.
