@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
+from pydantic_ai.usage import RunUsage
 
 from repo_research.config import load_dotenv_environment
 from repo_research.models import (
@@ -35,6 +36,21 @@ from repo_research.rag import RepositorySearcher, infer_rag_mode
 
 class ResearchBudgetExceeded(ValueError):
     """Raised when a research tool call would exceed configured bounds."""
+
+
+class ResearchAgentRunError(ValueError):
+    """Raised when the live agent fails after collecting model usage."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        usage: ModelUsage | None = None,
+        error_type: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.usage = usage
+        self.error_type = error_type or type(self).__name__
 
 
 class ToolEvidence(BaseModel):
@@ -307,7 +323,10 @@ class BoundedResearchService:
         except ValueError as error:
             if latency_ms_model is None:
                 latency_ms_model = _elapsed_ms(model_start)
-            error_type = type(error).__name__
+            usage = getattr(error, "usage", None)
+            if isinstance(usage, ModelUsage):
+                model_usage.append(usage)
+            error_type = getattr(error, "error_type", type(error).__name__)
             error_message = str(error)
             answer = insufficient_evidence_research_answer(
                 request=request,
@@ -383,16 +402,32 @@ class PydanticAIResearchAgent:
         tools: ResearchToolContext,
     ) -> ResearchAgentResult:
         """Run the live PydanticAI agent and return structured output."""
-        result = self._agent.run_sync(
-            _research_user_prompt(request=request, evidence=tools.evidence),
-            deps=PydanticResearchDeps(tools=tools),
-        )
+        run_usage = RunUsage()
+        try:
+            result = self._agent.run_sync(
+                _research_user_prompt(request=request, evidence=tools.evidence),
+                deps=PydanticResearchDeps(tools=tools),
+                usage=run_usage,
+            )
+        except ValueError as error:
+            raise ResearchAgentRunError(
+                str(error),
+                usage=_model_usage_from_agent_usage(
+                    provider=self._provider,
+                    model=self._model_name,
+                    usage=run_usage,
+                ),
+                error_type=type(error).__name__,
+            ) from error
+        usage = result.usage
+        if usage is None or not usage.has_values():
+            usage = run_usage
         return ResearchAgentResult(
             answer=result.output,
             usage=_model_usage_from_agent_usage(
                 provider=self._provider,
                 model=self._model_name,
-                usage=result.usage,
+                usage=usage,
             ),
         )
 
@@ -603,6 +638,9 @@ def _model_usage_from_agent_usage(
     usage: object | None,
 ) -> ModelUsage | None:
     if usage is None:
+        return None
+    has_values = getattr(usage, "has_values", None)
+    if callable(has_values) and not has_values():
         return None
     input_tokens = _usage_int(usage, "input_tokens")
     output_tokens = _usage_int(usage, "output_tokens")

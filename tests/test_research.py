@@ -7,6 +7,7 @@ import pytest
 from repo_research.models import (
     ChangeTarget,
     EvidenceItem,
+    ModelUsage,
     ParsedChunk,
     RagMode,
     RepositoryIdentity,
@@ -21,6 +22,7 @@ from repo_research.models import (
 from repo_research.research import (
     BoundedResearchService,
     ResearchAgentResult,
+    ResearchAgentRunError,
     ResearchBudgetExceeded,
     ResearchToolContext,
     _model_usage_from_agent_usage,
@@ -107,6 +109,29 @@ class BudgetExhaustingAgent:
         )
 
 
+class FailingUsageAgent:
+    """Fail after a model call while preserving usage telemetry."""
+
+    def run_research(
+        self,
+        *,
+        request: ResearchRequest,
+        tools: ResearchToolContext,
+    ) -> ResearchAgentResult:
+        tools.search_repository("settings")
+        raise ResearchAgentRunError(
+            "maximum search calls exceeded",
+            usage=ModelUsage(
+                provider="openai",
+                model="gpt-5-mini",
+                input_tokens=100,
+                output_tokens=25,
+                total_tokens=125,
+            ),
+            error_type="ResearchBudgetExceeded",
+        )
+
+
 class FakeAgentUsage:
     """Minimal PydanticAI run usage shape for telemetry conversion tests."""
 
@@ -114,6 +139,13 @@ class FakeAgentUsage:
     output_tokens = 200
     cache_read_tokens = 100
     details = {"reasoning_tokens": 25}
+
+
+class FakeEmptyAgentUsage:
+    """Minimal empty PydanticAI run usage shape."""
+
+    def has_values(self) -> bool:
+        return False
 
 
 def test_research_service_canonicalizes_agent_evidence(tmp_path: Path) -> None:
@@ -194,6 +226,35 @@ def test_research_agent_usage_maps_to_trace_model_usage() -> None:
     assert usage.reasoning_tokens == 25
     assert usage.estimated_cost_usd is not None
     assert usage.pricing_source != "unknown"
+
+
+def test_research_agent_usage_ignores_empty_run_usage() -> None:
+    usage = _model_usage_from_agent_usage(
+        provider="openai",
+        model="gpt-5-mini",
+        usage=FakeEmptyAgentUsage(),
+    )
+
+    assert usage is None
+
+
+def test_research_service_preserves_model_usage_on_agent_error(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    service = BoundedResearchService(
+        database=FakeDatabase([SearchResult(chunk=_chunk(repository), score=0.9)]),
+        agent=FailingUsageAgent(),
+    )
+
+    run = service.run(
+        repository=repository,
+        request=ResearchRequest(question="Which modules change?"),
+    )
+
+    assert run.answer.insufficient_evidence is True
+    assert run.trace.error_type == "ResearchBudgetExceeded"
+    assert run.trace.model_usage[0].input_tokens == 100
+    assert run.trace.model_usage[0].output_tokens == 25
+    assert run.trace.total_estimated_cost_usd is None
 
 
 def test_research_service_rejects_unknown_agent_evidence(tmp_path: Path) -> None:
