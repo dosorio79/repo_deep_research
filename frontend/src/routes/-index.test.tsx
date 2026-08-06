@@ -5,10 +5,12 @@ import type { ReactNode, ComponentType } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route } from "./index";
 import { saveLatestRagRun } from "@/lib/latest-rag-run";
-import { runRagQuery } from "@/lib/rag-client";
-import type { RagRunResult } from "@/lib/rag-types";
+import { ingestRepository, runAgenticResearch, runRagQuery } from "@/lib/rag-client";
+import type { IngestSummary, RagRunResult, ResearchRunResult } from "@/lib/rag-types";
 
 vi.mock("@/lib/rag-client", () => ({
+  ingestRepository: vi.fn(),
+  runAgenticResearch: vi.fn(),
   runRagQuery: vi.fn(),
 }));
 
@@ -57,6 +59,39 @@ const okResult: RagRunResult = {
   },
 };
 
+const agenticResult: ResearchRunResult = {
+  ...okResult,
+  answer: {
+    ...okResult.answer!,
+    mode: "change",
+    research_steps: [
+      {
+        sequence: 1,
+        action: "Search repository evidence.",
+        rationale: "Locate feedback and monitoring requirements.",
+        evidence_ids: ["E1"],
+      },
+    ],
+  },
+  trace: {
+    ...okResult.trace!,
+    question_mode: "change",
+    tool_call_count: 3,
+  },
+};
+
+const ingestSummary: IngestSummary = {
+  repository: {
+    name: "sample-repo",
+    root_path: "/tmp/sample-repo",
+    branch: "main",
+    commit_hash: "abc123",
+  },
+  indexed_chunks: 12,
+  skipped_files: [],
+  index_updated: true,
+};
+
 function renderResearchRoute() {
   const ResearchComponent = Route.options.component as ComponentType;
   return render(
@@ -68,6 +103,8 @@ function renderResearchRoute() {
 
 describe("Research route", () => {
   beforeEach(() => {
+    vi.mocked(ingestRepository).mockReset();
+    vi.mocked(runAgenticResearch).mockReset();
     vi.mocked(runRagQuery).mockReset();
     vi.mocked(saveLatestRagRun).mockReset();
   });
@@ -103,9 +140,74 @@ describe("Research route", () => {
 
     renderResearchRoute();
 
+    await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
     await user.type(screen.getByLabelText("Question"), "Where is config validated?");
     await user.click(screen.getByRole("button", { name: "Run query" }));
 
     await waitFor(() => expect(saveLatestRagRun).toHaveBeenCalledWith(okResult));
+  });
+
+  it("ingests a repository address before research", async () => {
+    vi.mocked(ingestRepository).mockResolvedValue(ingestSummary);
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
+    await user.click(screen.getByRole("button", { name: "Ingest repository" }));
+
+    await waitFor(() => expect(ingestRepository).toHaveBeenCalled());
+    expect(ingestRepository).toHaveBeenCalledWith("http://localhost:8000", {
+      repository_address: "/tmp/sample-repo",
+    });
+    await screen.findByText("sample-repo");
+    await screen.findByText("12");
+  });
+
+  it("submits direct research to /rag with a limit field", async () => {
+    vi.mocked(runRagQuery).mockResolvedValue(okResult);
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
+    await user.type(screen.getByLabelText("Question"), "Where is config validated?");
+    await user.click(screen.getByRole("button", { name: "Run query" }));
+
+    await waitFor(() => expect(runRagQuery).toHaveBeenCalled());
+    expect(runRagQuery).toHaveBeenCalledWith(
+      "http://localhost:8000",
+      expect.objectContaining({
+        question: "Where is config validated?",
+        repository_path: "/tmp/sample-repo",
+        limit: 8,
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(runAgenticResearch).not.toHaveBeenCalled();
+  });
+
+  it("submits agentic research to /research with a retrieval_limit field", async () => {
+    vi.mocked(runAgenticResearch).mockResolvedValue(agenticResult);
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await user.click(screen.getByRole("radio", { name: "agentic RAG" }));
+    await user.type(screen.getByLabelText("Question"), "Which modules change for feedback?");
+    await user.click(screen.getByRole("button", { name: "Run query" }));
+
+    await waitFor(() => expect(runAgenticResearch).toHaveBeenCalled());
+    expect(runAgenticResearch).toHaveBeenCalledWith(
+      "http://localhost:8000",
+      expect.objectContaining({
+        question: "Which modules change for feedback?",
+        mode: "change",
+        retrieval_limit: 8,
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(runRagQuery).not.toHaveBeenCalled();
+    await screen.findByText("Search repository evidence.");
   });
 });

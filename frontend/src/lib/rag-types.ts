@@ -1,5 +1,6 @@
 export type QuestionMode = "auto" | "locate" | "flow" | "change";
 export type RetrievalMode = "dense" | "sparse" | "hybrid";
+export type ResearchKind = "direct" | "agentic";
 
 export interface RagRequest {
   question: string;
@@ -7,6 +8,45 @@ export interface RagRequest {
   retrieval_mode: RetrievalMode;
   limit: number;
   repository_path?: string;
+}
+
+export interface ResearchBudget {
+  max_searches: number;
+  max_file_reads: number;
+  max_total_tool_calls: number;
+}
+
+export interface ResearchRequest {
+  question: string;
+  mode: QuestionMode;
+  retrieval_mode: RetrievalMode;
+  retrieval_limit: number;
+  repository_path?: string;
+  budget?: ResearchBudget;
+}
+
+export interface RepositoryIdentity {
+  name: string;
+  root_path: string;
+  branch: string;
+  commit_hash: string;
+}
+
+export interface IngestionIssue {
+  path: string;
+  error_type: string;
+  message: string;
+}
+
+export interface RepositoryIngestRequest {
+  repository_address: string;
+}
+
+export interface IngestSummary {
+  repository: RepositoryIdentity;
+  indexed_chunks: number;
+  skipped_files: IngestionIssue[];
+  index_updated: boolean;
 }
 
 export interface EvidenceItem {
@@ -39,7 +79,17 @@ export interface RagAnswer {
   confidence: number | string | null;
   unresolved_questions: string[] | null;
   insufficient_evidence: boolean | null;
+  research_steps?: ResearchStep[] | null;
 }
+
+export interface ResearchStep {
+  sequence: number;
+  action: string;
+  rationale: string;
+  evidence_ids: string[];
+}
+
+export type ResearchAnswer = RagAnswer;
 
 export interface ModelUsage {
   provider?: string | null;
@@ -84,6 +134,13 @@ export interface RagRunResult {
   answer: RagAnswer | null;
   trace: RagTrace | null;
 }
+
+export interface ResearchRunResult {
+  answer: ResearchAnswer | null;
+  trace: RagTrace | null;
+}
+
+export type ResearchResult = RagRunResult | ResearchRunResult;
 
 export interface ApiErrorShape {
   title: string;
