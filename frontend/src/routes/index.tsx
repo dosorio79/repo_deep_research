@@ -86,7 +86,7 @@ export const Route = createFileRoute("/")({
 });
 
 function ResearchView() {
-  const [baseUrl, setBaseUrl] = useState("http://localhost:8000");
+  const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8000");
   const [repositoryAddress, setRepositoryAddress] = useState("");
   const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null);
   const [question, setQuestion] = useState("");

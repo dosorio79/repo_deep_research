@@ -169,7 +169,7 @@ describe("Research route", () => {
     await user.click(screen.getByRole("button", { name: "Ingest repository" }));
 
     await waitFor(() => expect(ingestRepository).toHaveBeenCalled());
-    expect(ingestRepository).toHaveBeenCalledWith("http://localhost:8000", {
+    expect(ingestRepository).toHaveBeenCalledWith("http://127.0.0.1:8000", {
       repository_address: "/tmp/sample-repo",
     });
     await screen.findByText("sample-repo");
@@ -225,7 +225,7 @@ describe("Research route", () => {
 
     await waitFor(() => expect(runRagQuery).toHaveBeenCalled());
     expect(runRagQuery).toHaveBeenCalledWith(
-      "http://localhost:8000",
+      "http://127.0.0.1:8000",
       expect.objectContaining({
         question: "Where is config validated?",
         repository_path: "/tmp/sample-repo",
@@ -248,7 +248,7 @@ describe("Research route", () => {
 
     await waitFor(() => expect(runAgenticResearch).toHaveBeenCalled());
     expect(runAgenticResearch).toHaveBeenCalledWith(
-      "http://localhost:8000",
+      "http://127.0.0.1:8000",
       expect.objectContaining({
         question: "Which modules change for feedback?",
         mode: "change",
