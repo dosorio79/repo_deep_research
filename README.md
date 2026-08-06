@@ -67,7 +67,7 @@ Stop the local service with `make docker-down`.
 | `make evaluate-retrieval` | Evaluate dense, sparse, and hybrid retrieval on the development records. |
 | `make evaluate-answers` | Run opt-in live answer judging with OpenAI. |
 | `make api` | Run the minimal FastAPI backend on localhost. |
-| `make app` | Run FastAPI and the MVP frontend together for local browser testing. |
+| `make app` | Run FastAPI and the MVP frontend; choose and ingest a repository from the UI. |
 | `make frontend-install` | Install the vendored frontend dependencies with npm. |
 | `make frontend-dev` | Run the MVP frontend locally. |
 | `make frontend-format` | Format the frontend with Prettier. |
