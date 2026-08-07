@@ -28,6 +28,25 @@ from repo_research.models import (
 ConnectionFactory = Callable[..., AbstractContextManager[Any]]
 
 
+class NoOpRecordingStore:
+    """Recording store used when telemetry persistence is not configured."""
+
+    def initialize(self) -> None:
+        """Match the live store lifecycle without creating external state."""
+
+    def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
+        """Accept run traces without persisting them."""
+        del run_kind, trace
+
+    def record_feedback(self, event: FeedbackEvent) -> None:
+        """Accept feedback without persisting it."""
+        del event
+
+    def monitoring_summary(self) -> MonitoringSummary:
+        """Return an empty dashboard summary."""
+        return MonitoringSummary(total_runs=0)
+
+
 @dataclass(frozen=True)
 class PostgresRecordingStore:
     """Persist run summaries and feedback using explicit PostgreSQL SQL."""
