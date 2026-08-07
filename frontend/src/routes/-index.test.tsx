@@ -165,13 +165,13 @@ describe("Research route", () => {
   it("shows backend connection state before ingestion", async () => {
     vi.mocked(getBackendHealth).mockRejectedValue({
       title: "Network error",
-      detail: "Could not reach the backend at http://127.0.0.1:8000/health.",
+      detail: "Could not reach the backend at /api/health.",
     });
 
     renderResearchRoute();
 
     await screen.findByText("API offline");
-    expect(screen.getByText(/127\.0\.0\.1:8000\/health/)).toBeInTheDocument();
+    expect(screen.getByText(/\/api\/health/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check API connection" })).toBeInTheDocument();
   });
 
@@ -223,7 +223,7 @@ describe("Research route", () => {
     await user.click(screen.getByRole("button", { name: "Ingest repository" }));
 
     await waitFor(() => expect(ingestRepository).toHaveBeenCalled());
-    expect(ingestRepository).toHaveBeenCalledWith("http://127.0.0.1:8000", {
+    expect(ingestRepository).toHaveBeenCalledWith("/api", {
       repository_address: "/tmp/sample-repo",
     });
     await screen.findByText("sample-repo");
@@ -279,7 +279,7 @@ describe("Research route", () => {
 
     await waitFor(() => expect(runRagQuery).toHaveBeenCalled());
     expect(runRagQuery).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000",
+      "/api",
       expect.objectContaining({
         question: "Where is config validated?",
         repository_path: "/tmp/sample-repo",
@@ -302,7 +302,7 @@ describe("Research route", () => {
 
     await waitFor(() => expect(runAgenticResearch).toHaveBeenCalled());
     expect(runAgenticResearch).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000",
+      "/api",
       expect.objectContaining({
         question: "Which modules change for feedback?",
         mode: "change",
