@@ -200,6 +200,23 @@ describe("runRagQuery", () => {
     );
   });
 
+  it("supports a same-origin proxied API base URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "ok", qdrant: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getBackendHealth("/api")).resolves.toEqual({ status: "ok", qdrant: true });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/health",
+      expect.objectContaining({ signal: null }),
+    );
+  });
+
   it("surfaces FastAPI validation errors without exposing a stack trace", async () => {
     vi.stubGlobal(
       "fetch",
