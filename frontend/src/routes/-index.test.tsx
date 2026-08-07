@@ -144,6 +144,13 @@ function renderResearchRoute() {
   );
 }
 
+async function ingestSampleRepository(user: ReturnType<typeof userEvent.setup>) {
+  vi.mocked(ingestRepository).mockResolvedValue(ingestSummary);
+  await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
+  await user.click(screen.getByRole("button", { name: "Ingest repository" }));
+  await screen.findByText("sample-repo");
+}
+
 describe("Research route", () => {
   beforeEach(() => {
     vi.mocked(ingestRepository).mockReset();
@@ -194,6 +201,7 @@ describe("Research route", () => {
 
     const view = renderResearchRoute();
 
+    await ingestSampleRepository(user);
     await user.type(screen.getByLabelText("Question"), "Where is config validated?");
     await user.click(screen.getByRole("button", { name: "Run query" }));
 
@@ -212,7 +220,7 @@ describe("Research route", () => {
 
     renderResearchRoute();
 
-    await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
+    await ingestSampleRepository(user);
     await user.type(screen.getByLabelText("Question"), "Where is config validated?");
     await user.click(screen.getByRole("button", { name: "Run query" }));
 
@@ -273,13 +281,26 @@ describe("Research route", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not run research before a repository is ingested", async () => {
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await user.type(screen.getByLabelText("Question"), "Where is config validated?");
+
+    expect(screen.getByRole("button", { name: "Run query" })).toBeDisabled();
+    expect(screen.getByText("Ingest a repository first")).toBeInTheDocument();
+    expect(runRagQuery).not.toHaveBeenCalled();
+    expect(runAgenticResearch).not.toHaveBeenCalled();
+  });
+
   it("submits direct research to /rag with a limit field", async () => {
     vi.mocked(runRagQuery).mockResolvedValue(okResult);
     const user = userEvent.setup();
 
     renderResearchRoute();
 
-    await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
+    await ingestSampleRepository(user);
     await user.type(screen.getByLabelText("Question"), "Where is config validated?");
     await user.click(screen.getByRole("button", { name: "Run query" }));
 
@@ -303,6 +324,7 @@ describe("Research route", () => {
 
     renderResearchRoute();
 
+    await ingestSampleRepository(user);
     await user.click(screen.getByRole("radio", { name: "agentic RAG" }));
     await user.type(screen.getByLabelText("Question"), "Which modules change for feedback?");
     await user.click(screen.getByRole("button", { name: "Run query" }));
@@ -328,6 +350,7 @@ describe("Research route", () => {
 
     renderResearchRoute();
 
+    await ingestSampleRepository(user);
     await user.click(screen.getByRole("radio", { name: "agentic RAG" }));
     await user.type(
       screen.getByLabelText("Question"),
