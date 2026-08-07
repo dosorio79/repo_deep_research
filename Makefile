@@ -9,12 +9,13 @@ FRONTEND_NODE_VERSION := $(shell cat frontend/.nvmrc 2>/dev/null)
 FRONTEND_NODE_BIN := $(HOME)/.nvm/versions/node/v$(FRONTEND_NODE_VERSION)/bin
 FRONTEND_NPM := PATH=$(FRONTEND_NODE_BIN):$$PATH npm
 
-.PHONY: help install format lint typecheck test validate check test-all qdrant stop ready ingest ingest-self evidence rag research api-rag evaluate-retrieval evaluate-answers api app frontend-install frontend-format frontend-lint frontend-typecheck frontend-test frontend-build frontend-dev docker-up docker-down
+.PHONY: help install format lint typecheck test coverage validate check test-all qdrant stop ready ingest ingest-self evidence rag research api-rag evaluate-retrieval evaluate-answers api app frontend-install frontend-format frontend-lint frontend-typecheck frontend-test frontend-build frontend-dev docker-up docker-down
 
 help:
 	printf '%s\n' 'Common:'
 	printf '%s\n' '  make ready       install deps, start Qdrant, ingest this repo'
 	printf '%s\n' '  make check       backend lint, typecheck, and tests'
+	printf '%s\n' '  make coverage    backend test coverage report'
 	printf '%s\n' '  make test-all    backend check plus frontend test/typecheck/build'
 	printf '%s\n' '  make evidence    retrieve evidence for QUESTION'
 	printf '%s\n' '  make rag         direct RAG: ingest if needed, then answer QUESTION'
@@ -53,6 +54,9 @@ typecheck:
 
 test:
 	$(RUN) pytest
+
+coverage:
+	$(RUN) pytest --cov=repo_research --cov-report=term-missing
 
 validate: lint typecheck test
 
