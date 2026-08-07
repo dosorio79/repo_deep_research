@@ -17,6 +17,7 @@ from pydantic_ai.usage import RunUsage
 from repo_research.config import load_dotenv_environment
 from repo_research.grounding import canonical_change_targets
 from repo_research.models import (
+    ChangeTarget,
     EvidenceItem,
     ModelUsage,
     RagMode,
@@ -26,6 +27,7 @@ from repo_research.models import (
     ResearchAnswer,
     ResearchRequest,
     ResearchRunResult,
+    ResearchStep,
     SearchQuery,
     SearchResult,
 )
@@ -329,7 +331,13 @@ class BoundedResearchService:
                 model_usage.append(usage)
             error_type = getattr(error, "error_type", type(error).__name__)
             error_message = str(error)
-            answer = insufficient_evidence_research_answer(
+            answer = _bounded_change_plan_answer(
+                request=request,
+                reason=str(error),
+                error_type=error_type,
+                closest_evidence=tools.evidence,
+                tool_call_count=tools.total_tool_calls,
+            ) or insufficient_evidence_research_answer(
                 request=request,
                 reason=str(error),
                 closest_evidence=tools.evidence,
@@ -499,6 +507,119 @@ def insufficient_evidence_research_answer(
         unresolved_questions=[reason],
         insufficient_evidence=True,
     )
+
+
+def _bounded_change_plan_answer(
+    *,
+    request: ResearchRequest,
+    reason: str,
+    error_type: str | None,
+    closest_evidence: Iterable[ToolEvidence],
+    tool_call_count: int,
+) -> ResearchAnswer | None:
+    """Return a useful low-confidence change plan from evidence collected so far."""
+    evidence = [
+        item.evidence_item.model_copy(
+            update={"reason": "Collected before the bounded agent stopped."}
+        )
+        for item in closest_evidence
+    ]
+    if (
+        request.mode is not RagMode.CHANGE
+        or error_type != "ResearchBudgetExceeded"
+        or not evidence
+    ):
+        return None
+
+    evidence_by_target = _change_target_evidence(evidence)
+    evidence_ids = [item.evidence_id for item in evidence]
+    return ResearchAnswer(
+        question=request.question,
+        mode=request.mode,
+        summary=(
+            "Bounded change-impact plan from the repository evidence collected before "
+            "the agent reached its tool budget."
+        ),
+        research_steps=[
+            ResearchStep(
+                sequence=1,
+                action="Reviewed collected repository evidence.",
+                rationale=(
+                    "Use the evidence already retrieved or read by the bounded agent "
+                    "instead of inventing unsupported files."
+                ),
+                evidence_ids=evidence_ids,
+            ),
+            ResearchStep(
+                sequence=2,
+                action="Stopped at configured research budget.",
+                rationale=(
+                    "Return a conservative partial plan with explicit uncertainty "
+                    "rather than discarding useful evidence."
+                ),
+                evidence_ids=evidence_ids,
+            ),
+        ],
+        implementation_flow=[
+            (
+                "Start with the cited files and symbols because they are the "
+                "concrete repository surfaces retrieved for the requested change."
+            ),
+            (
+                "Inspect adjacent callers, configuration, and tests before editing; "
+                "the bounded run may not have followed every reference."
+            ),
+            (
+                "Apply the change in the smallest vertical slice and validate it "
+                "with focused tests around the cited modules."
+            ),
+        ],
+        evidence=evidence,
+        relevant_files=sorted({item.path for item in evidence}),
+        relevant_symbols=sorted({item.symbol for item in evidence if item.symbol}),
+        change_targets=[
+            ChangeTarget(
+                path=path,
+                symbol=symbol,
+                reason=(
+                    "Likely change surface because the bounded agent collected "
+                    "repository evidence here for the requested adaptation."
+                ),
+                evidence_ids=target_evidence_ids,
+            )
+            for (path, symbol), target_evidence_ids in evidence_by_target.items()
+        ],
+        risks=[
+            (
+                f"The agent stopped after {tool_call_count} tool calls, so this "
+                "plan may miss secondary callers or tests."
+            ),
+            (
+                "Validate each target against the full repository before "
+                "implementing changes."
+            ),
+            (
+                "Run the relevant unit or contract tests for every cited module "
+                "after editing."
+            ),
+        ],
+        confidence=0.35,
+        unresolved_questions=[
+            reason,
+            "A larger budget or follow-up run may identify additional change targets.",
+        ],
+        insufficient_evidence=False,
+    )
+
+
+def _change_target_evidence(
+    evidence: list[EvidenceItem],
+) -> dict[tuple[str, str | None], list[str]]:
+    target_evidence: dict[tuple[str, str | None], list[str]] = {}
+    for item in evidence:
+        key = (item.path, item.symbol)
+        target_evidence.setdefault(key, []).append(item.evidence_id)
+    return target_evidence
 
 
 def _canonical_research_answer(
@@ -688,18 +809,19 @@ def _initial_search_text(request: ResearchRequest) -> str:
     return " ".join(
         [
             request.question,
+            "change impact",
             "implementation",
+            "entry point",
+            "call flow",
             "service",
-            "settings",
+            "configuration",
+            "data model",
+            "API route",
+            "CLI command",
+            "persistence",
             "tests",
-            "ResearchToolContext",
-            "BoundedResearchService",
-            "ResearchAgentRunner",
-            "PydanticAIResearchAgent",
-            "search_repository",
-            "read_chunk",
-            "read_file",
-            "find_symbol",
+            "validation",
+            "risk",
         ]
     )
 

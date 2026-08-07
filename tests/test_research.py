@@ -206,7 +206,8 @@ def test_research_service_canonicalizes_agent_evidence(tmp_path: Path) -> None:
     assert run.trace.tool_call_count == 1
     assert run.trace.retrieved_chunk_count == 1
     assert run.trace.evidence_ids == ["E1"]
-    assert "BoundedResearchService" in database.queries[0].text
+    assert "change impact" in database.queries[0].text
+    assert "BoundedResearchService" not in database.queries[0].text
 
 
 def test_research_agent_usage_maps_to_trace_model_usage() -> None:
@@ -250,7 +251,8 @@ def test_research_service_preserves_model_usage_on_agent_error(tmp_path: Path) -
         request=ResearchRequest(question="Which modules change?"),
     )
 
-    assert run.answer.insufficient_evidence is True
+    assert run.answer.insufficient_evidence is False
+    assert run.answer.change_targets
     assert run.trace.error_type == "ResearchBudgetExceeded"
     assert run.trace.model_usage[0].input_tokens == 100
     assert run.trace.model_usage[0].output_tokens == 25
@@ -274,7 +276,9 @@ def test_research_service_rejects_unknown_agent_evidence(tmp_path: Path) -> None
     assert "unknown evidence IDs" in run.answer.unresolved_questions[0]
 
 
-def test_research_service_enforces_search_budget(tmp_path: Path) -> None:
+def test_research_service_returns_bounded_change_plan_on_search_budget(
+    tmp_path: Path,
+) -> None:
     repository = _repository(tmp_path)
     service = BoundedResearchService(
         database=FakeDatabase([SearchResult(chunk=_chunk(repository), score=0.9)]),
@@ -293,8 +297,16 @@ def test_research_service_enforces_search_budget(tmp_path: Path) -> None:
         ),
     )
 
-    assert run.answer.insufficient_evidence is True
+    assert run.answer.insufficient_evidence is False
+    assert run.answer.summary.startswith("Bounded change-impact plan")
     assert run.answer.evidence[0].path == "src/repo_research/config.py"
+    assert run.answer.change_targets[0].path == "src/repo_research/config.py"
+    assert run.answer.change_targets[0].evidence_ids == ["E1"]
+    assert (
+        run.answer.research_steps[1].action == "Stopped at configured research budget."
+    )
+    assert any("tests" in step.lower() for step in run.answer.implementation_flow)
+    assert run.answer.confidence == 0.35
     assert run.trace.error_type == "ResearchBudgetExceeded"
     assert run.trace.error_message is not None
     assert "maximum search calls exceeded" in run.trace.error_message
