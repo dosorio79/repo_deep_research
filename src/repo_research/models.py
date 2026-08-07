@@ -99,9 +99,9 @@ class RagRequest(BaseModel):
 class ResearchBudget(BaseModel):
     """Configurable tool-call limits for one bounded research run."""
 
-    max_searches: int = Field(default=3, ge=1, le=20)
-    max_file_reads: int = Field(default=5, ge=0, le=20)
-    max_total_tool_calls: int = Field(default=8, ge=1, le=40)
+    max_searches: int = Field(default=5, ge=1, le=20)
+    max_file_reads: int = Field(default=6, ge=0, le=20)
+    max_total_tool_calls: int = Field(default=12, ge=1, le=40)
 
     @model_validator(mode="after")
     def validate_total_budget(self) -> ResearchBudget:

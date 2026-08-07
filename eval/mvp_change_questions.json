@@ -1,0 +1,26 @@
+[
+  {
+    "id": "mvp_change_001",
+    "question": "Which modules must change to add feedback persistence?",
+    "question_type": "change",
+    "relevant_files": ["src/repo_research/models.py", "src/repo_research/api.py", "tests/test_api.py"],
+    "relevant_symbols": ["ResearchRunResult", "create_app"],
+    "notes": "MVP feedback needs typed payloads, API persistence contract, and API tests."
+  },
+  {
+    "id": "mvp_change_002",
+    "question": "Which modules must change to add another bounded research tool?",
+    "question_type": "change",
+    "relevant_files": ["src/repo_research/research.py", "tests/test_research.py"],
+    "relevant_symbols": ["ResearchToolContext", "BoundedResearchService"],
+    "notes": "Tool additions belong in the bounded tool context, service contract, and focused tests."
+  },
+  {
+    "id": "mvp_change_003",
+    "question": "Which modules must change to expose another research request option?",
+    "question_type": "change",
+    "relevant_files": ["src/repo_research/models.py", "src/repo_research/api.py", "src/repo_research/cli.py", "tests/test_cli.py"],
+    "relevant_symbols": ["ResearchRequest", "build_parser"],
+    "notes": "Request options cross typed models, API validation, CLI parsing, and tests."
+  }
+]

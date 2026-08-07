@@ -103,9 +103,9 @@ All runtime settings use the `RDR_` prefix and are validated by
 | `RDR_OPENAI_ANSWER_MODEL` | `gpt-5-mini` | Default direct-RAG answer model. |
 | `RDR_OPENAI_JUDGE_MODEL` | `gpt-5.1` | Default answer-evaluation judge model. |
 | `RDR_ANSWER_EVALUATION_LIMIT` | `5` | Default retrieved evidence limit during answer evaluation. |
-| `RDR_RESEARCH_MAX_SEARCHES` | `3` | Default maximum search tool calls for one agentic research run. |
-| `RDR_RESEARCH_MAX_FILE_READS` | `5` | Default maximum repository file-read tool calls for one agentic research run. |
-| `RDR_RESEARCH_MAX_TOTAL_TOOL_CALLS` | `8` | Default maximum total tool calls for one agentic research run. |
+| `RDR_RESEARCH_MAX_SEARCHES` | `5` | Default maximum search tool calls for one agentic research run. |
+| `RDR_RESEARCH_MAX_FILE_READS` | `6` | Default maximum repository file-read tool calls for one agentic research run. |
+| `RDR_RESEARCH_MAX_TOTAL_TOOL_CALLS` | `12` | Default maximum total tool calls for one agentic research run. |
 | `RDR_CORS_ALLOWED_ORIGINS` | `[]` | JSON list of browser origins allowed to call FastAPI. `.env.example` opts in local frontend origins. |
 | `RDR_LOG_LEVEL` | `INFO` | Application log level. |
 | `OPENAI_API_KEY` | unset | OpenAI API key for live direct RAG and answer evaluation. Prefer `.env.local` or an exported shell variable. |

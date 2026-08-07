@@ -97,7 +97,7 @@ class Settings(BaseSettings):
         ),
     )
     research_max_searches: int = Field(
-        default=3,
+        default=5,
         ge=1,
         le=20,
         validation_alias=AliasChoices(
@@ -106,7 +106,7 @@ class Settings(BaseSettings):
         ),
     )
     research_max_file_reads: int = Field(
-        default=5,
+        default=6,
         ge=0,
         le=20,
         validation_alias=AliasChoices(
@@ -115,7 +115,7 @@ class Settings(BaseSettings):
         ),
     )
     research_max_total_tool_calls: int = Field(
-        default=8,
+        default=12,
         ge=1,
         le=40,
         validation_alias=AliasChoices(

@@ -124,7 +124,7 @@ uv run repo-research research "which modules must change to add bounded tools?" 
 The research command exposes optional budget flags:
 
 ```bash
---max-searches 3 --max-file-reads 5 --max-total-tool-calls 8
+--max-searches 5 --max-file-reads 6 --max-total-tool-calls 12
 ```
 
 The service enforces those limits in application code for `search_repository`,
@@ -153,9 +153,9 @@ Example JSON body:
   "retrieval_mode": "dense",
   "retrieval_limit": 5,
   "budget": {
-    "max_searches": 3,
-    "max_file_reads": 5,
-    "max_total_tool_calls": 8
+    "max_searches": 5,
+    "max_file_reads": 6,
+    "max_total_tool_calls": 12
   }
 }
 ```

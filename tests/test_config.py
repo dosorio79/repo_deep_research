@@ -47,13 +47,13 @@ def test_settings_use_local_defaults(
     assert settings.research_limit == 5
     assert settings.answer_evaluation_limit == 5
     assert settings.answer_eval_limit == 5
-    assert settings.research_max_searches == 3
-    assert settings.research_max_file_reads == 5
-    assert settings.research_max_total_tool_calls == 8
+    assert settings.research_max_searches == 5
+    assert settings.research_max_file_reads == 6
+    assert settings.research_max_total_tool_calls == 12
     assert settings.research_budget == ResearchBudget(
-        max_searches=3,
-        max_file_reads=5,
-        max_total_tool_calls=8,
+        max_searches=5,
+        max_file_reads=6,
+        max_total_tool_calls=12,
     )
     assert settings.cors_allowed_origins == []
 
