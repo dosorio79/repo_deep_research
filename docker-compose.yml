@@ -38,8 +38,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env.local  # Load secrets from .env.local instead of .env
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
       RDR_QDRANT_URL: http://qdrant:6333
       RDR_POSTGRES_DSN: postgresql://${POSTGRES_USER:-repo_research}:${POSTGRES_PASSWORD:-repo_research}@postgres:5432/${POSTGRES_DB:-repo_research}
       RDR_TELEMETRY_ENABLED: "true"
