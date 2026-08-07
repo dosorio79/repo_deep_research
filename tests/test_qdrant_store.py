@@ -5,13 +5,13 @@ from pathlib import Path
 import pytest
 from qdrant_client import QdrantClient
 
-from repo_research.db import RepositoryDatabase
 from repo_research.models import (
     RepositoryIdentity,
     RetrievalMode,
     SearchQuery,
     create_chunk,
 )
+from repo_research.qdrant_store import RepositoryDatabase
 
 
 def fake_embed(texts: list[str]) -> list[list[float]]:

@@ -9,6 +9,7 @@ dependencies = [
     "fastembed==0.7.3",
     "openai==2.48.0",
     "pathspec==0.12.1",
+    "psycopg[binary]==3.3.2",
     "pydantic-ai==2.22.0",
     "pydantic-settings==2.10.1",
     "qdrant-client==1.15.1",
