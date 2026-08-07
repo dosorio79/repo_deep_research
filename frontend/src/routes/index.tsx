@@ -95,7 +95,7 @@ export const Route = createFileRoute("/")({
 });
 
 function ResearchView() {
-  const [baseUrl, setBaseUrl] = useState(DEFAULT_API_BASE_URL);
+  const baseUrl = DEFAULT_API_BASE_URL;
   const [repositoryAddress, setRepositoryAddress] = useState("");
   const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null);
   const [question, setQuestion] = useState("");
@@ -267,12 +267,10 @@ function ResearchView() {
                 files, symbols, line ranges, and change targets.
               </p>
             </div>
-            <ApiConnectionPanel
-              baseUrl={baseUrl}
+            <ApiStatusLight
               health={healthQuery.data}
               error={healthQuery.error as ApiErrorShape | null}
               isChecking={healthQuery.isFetching}
-              onBaseUrlChange={(value) => setBaseUrl(value)}
               onRetry={() => void healthQuery.refetch()}
             />
           </div>
@@ -588,19 +586,15 @@ function SearchSettingsPopover({
   );
 }
 
-function ApiConnectionPanel({
-  baseUrl,
+function ApiStatusLight({
   health,
   error,
   isChecking,
-  onBaseUrlChange,
   onRetry,
 }: {
-  baseUrl: string;
   health: BackendHealth | undefined;
   error: ApiErrorShape | null;
   isChecking: boolean;
-  onBaseUrlChange: (value: string) => void;
   onRetry: () => void;
 }) {
   const isReachable = Boolean(health) && !error;
@@ -614,53 +608,39 @@ function ApiConnectionPanel({
         : "API offline";
 
   return (
-    <div className="w-full rounded-md border border-border bg-background p-3 shadow-sm sm:max-w-[360px]">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label
-          htmlFor="baseUrl"
-          className="text-[11px] uppercase tracking-wide text-muted-foreground"
-        >
-          API base URL
-        </Label>
-        <div className="flex items-center gap-2">
-          <Badge
-            variant={isReady ? "secondary" : "outline"}
-            className={cn(
-              "gap-1.5",
-              isReady
-                ? "bg-primary/10 text-primary"
-                : error
-                  ? "border-destructive/40 text-destructive"
-                  : "border-warning/50 text-warning-foreground",
-            )}
-          >
-            {isChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
-            {statusLabel}
-          </Badge>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onRetry}
-            disabled={isChecking || !baseUrl.trim()}
-            aria-label="Check API connection"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", isChecking && "animate-spin")} aria-hidden />
-          </Button>
-        </div>
-      </div>
-      <Input
-        id="baseUrl"
-        value={baseUrl}
-        spellCheck={false}
-        onChange={(event) => onBaseUrlChange(event.target.value)}
-        className="mt-2 h-9 mono text-[12px]"
-      />
-      {error ? (
-        <p className="mt-2 break-words mono text-[11px] leading-5 text-destructive">
-          {error.detail}
-        </p>
-      ) : null}
+    <div className="flex items-center gap-2">
+      <Badge
+        variant={isReady ? "secondary" : "outline"}
+        className={cn(
+          "gap-1.5",
+          isReady
+            ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+            : error
+              ? "border-destructive/40 text-destructive"
+              : "border-warning/50 text-warning-foreground",
+        )}
+      >
+        <span
+          className={cn(
+            "h-2 w-2 rounded-full",
+            isReady ? "bg-emerald-500" : error ? "bg-destructive" : "bg-warning",
+          )}
+          aria-hidden
+        />
+        {isChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+        {statusLabel}
+      </Badge>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onRetry}
+        disabled={isChecking}
+        aria-label="Check API connection"
+      >
+        <RefreshCw className={cn("h-3.5 w-3.5", isChecking && "animate-spin")} aria-hidden />
+      </Button>
+      {error ? <span className="sr-only">{error.detail}</span> : null}
     </div>
   );
 }

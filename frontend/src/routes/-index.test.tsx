@@ -184,7 +184,6 @@ describe("Research route", () => {
     renderResearchRoute();
 
     await screen.findByText("API offline");
-    expect(screen.getByText(/\/api\/health/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check API connection" })).toBeInTheDocument();
   });
 
