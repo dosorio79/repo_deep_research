@@ -147,3 +147,22 @@ After local `/rag` and `/research` runs plus submitted feedback, a reviewer can
 restart the app and still inspect persisted monitoring and feedback in the UI.
 The dashboard shows real PostgreSQL-backed data in at least five useful panels,
 and Logfire spans are available when explicitly enabled.
+
+## Implementation progress
+
+- Added typed `session_id`, feedback, and monitoring summary models.
+- Added explicit PostgreSQL recording storage for `monitoring_runs` and
+  `feedback_events`.
+- Wired `/rag` and `/research` to persist run traces when telemetry is
+  configured.
+- Added `POST /feedback` and `GET /monitoring/summary`.
+- Added Docker Compose PostgreSQL and local runtime documentation.
+- Wired the frontend to persist browser `session_id`, submit run-level
+  feedback, and render API-backed monitoring and feedback summaries.
+- Added opt-in Logfire instrumentation for FastAPI and PydanticAI without
+  custom prompt, source-content, evidence-excerpt, or header capture.
+
+Remaining before merge:
+
+- Run the full backend and frontend validation suite.
+- Smoke-test PostgreSQL persistence against the local Compose database.
