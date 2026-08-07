@@ -393,5 +393,9 @@ describe("Research route", () => {
       comment: "Grounded enough.",
     });
     await screen.findByText("submitted");
+    expect(screen.getByRole("button", { name: "Feedback recorded" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Useful" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Not useful" })).toBeDisabled();
+    expect(screen.getByLabelText("Comment")).toBeDisabled();
   });
 });
