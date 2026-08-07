@@ -34,6 +34,47 @@ services:
       retries: 5
       start_period: 10s
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      RDR_QDRANT_URL: http://qdrant:6333
+      RDR_POSTGRES_DSN: postgresql://${POSTGRES_USER:-repo_research}:${POSTGRES_PASSWORD:-repo_research}@postgres:5432/${POSTGRES_DB:-repo_research}
+      RDR_TELEMETRY_ENABLED: "true"
+      RDR_CORS_ALLOWED_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
+      RDR_REPOSITORY_ROOT: /repository
+    volumes:
+      - ${REPOSITORY_PATH:-.}:/repository:ro
+      - fastembed_cache:/root/.cache/fastembed
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_PROXY_TARGET: http://api:8000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   postgres_storage:
   qdrant_storage:
+  fastembed_cache:
