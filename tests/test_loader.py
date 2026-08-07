@@ -66,6 +66,16 @@ def test_materialize_repository_address_clones_public_github_url(
     ]
 
 
-def test_materialize_repository_address_rejects_non_github_url(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "address",
+    [
+        "https://example.com/owner/repo",
+        "https://gitlab.com/owner/repo",
+    ],
+)
+def test_materialize_repository_address_rejects_non_github_url(
+    tmp_path: Path,
+    address: str,
+) -> None:
     with pytest.raises(ValueError, match="only public github.com"):
-        materialize_repository_address("https://example.com/owner/repo", tmp_path)
+        materialize_repository_address(address, tmp_path)

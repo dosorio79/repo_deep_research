@@ -171,7 +171,7 @@ def create_app(
             ) from error
 
     @app.post("/research", response_model=ResearchRunResult)
-    async def research(request: ResearchRequest) -> ResearchRunResult:
+    def research(request: ResearchRequest) -> ResearchRunResult:
         root_path = (request.repository_path or app_settings.repository_root).resolve()
         try:
             repository, _ = discover_repository(

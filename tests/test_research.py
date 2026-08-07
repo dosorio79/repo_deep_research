@@ -1,9 +1,11 @@
 """Tests for bounded agentic research behavior."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
+from repo_research.grounding import canonical_change_targets
 from repo_research.models import (
     ChangeTarget,
     EvidenceItem,
@@ -39,6 +41,14 @@ class FakeDatabase:
     def search(self, query: SearchQuery) -> list[SearchResult]:
         self.queries.append(query)
         return self._results
+
+
+class InitialSearchFailingDatabase:
+    """Raise before the agent receives seeded evidence."""
+
+    def search(self, query: SearchQuery) -> list[SearchResult]:
+        del query
+        raise ValueError("initial search failed")
 
 
 class ScriptedAgent:
@@ -148,6 +158,14 @@ class FakeEmptyAgentUsage:
         return False
 
 
+@dataclass
+class ProtocolChangeTarget:
+    """Protocol-shaped target that bypasses Pydantic model validation."""
+
+    reason: str
+    evidence_ids: list[str]
+
+
 def test_research_service_canonicalizes_agent_evidence(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     chunk = _chunk(repository)
@@ -210,6 +228,34 @@ def test_research_service_canonicalizes_agent_evidence(tmp_path: Path) -> None:
     assert "BoundedResearchService" not in database.queries[0].text
 
 
+def test_canonical_change_targets_skips_targets_without_valid_evidence() -> None:
+    evidence = EvidenceItem(
+        evidence_id="E1",
+        path="src/repo_research/config.py",
+        start_line=1,
+        end_line=3,
+        symbol="Settings",
+        score=0.9,
+        reason="Canonical evidence.",
+    )
+
+    targets = canonical_change_targets(
+        [
+            ProtocolChangeTarget(reason="No evidence.", evidence_ids=[]),
+            ProtocolChangeTarget(reason="Unknown evidence.", evidence_ids=["E99"]),
+            ProtocolChangeTarget(
+                reason="Use valid evidence.", evidence_ids=["E99", "E1"]
+            ),
+        ],
+        {"E1": evidence},
+    )
+
+    assert len(targets) == 1
+    assert targets[0].path == "src/repo_research/config.py"
+    assert targets[0].symbol == "Settings"
+    assert targets[0].evidence_ids == ["E1"]
+
+
 def test_research_agent_usage_maps_to_trace_model_usage() -> None:
     usage = _model_usage_from_agent_usage(
         provider="openai",
@@ -257,6 +303,33 @@ def test_research_service_preserves_model_usage_on_agent_error(tmp_path: Path) -
     assert run.trace.model_usage[0].input_tokens == 100
     assert run.trace.model_usage[0].output_tokens == 25
     assert run.trace.total_estimated_cost_usd is None
+
+
+def test_research_service_returns_fallback_when_initial_search_fails(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    service = BoundedResearchService(
+        database=InitialSearchFailingDatabase(),
+        agent=ScriptedAgent(
+            ResearchAnswer(
+                question="Which modules change?",
+                summary="Should not run.",
+                confidence=0.1,
+            )
+        ),
+    )
+
+    run = service.run(
+        repository=repository,
+        request=ResearchRequest(question="Which modules change?"),
+    )
+
+    assert run.answer.insufficient_evidence is True
+    assert run.answer.evidence == []
+    assert run.trace.error_type == "ValueError"
+    assert run.trace.error_message == "initial search failed"
+    assert run.trace.latency_ms_model is not None
 
 
 def test_research_service_rejects_unknown_agent_evidence(tmp_path: Path) -> None:

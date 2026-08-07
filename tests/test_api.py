@@ -1,5 +1,6 @@
 """Contract tests for the minimal M3 FastAPI backend."""
 
+import asyncio
 import os
 import subprocess
 from importlib.metadata import version
@@ -71,6 +72,12 @@ class FakeResearchAgent:
         tools: object,
     ) -> ResearchAgentResult:
         del tools
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("sync research agent ran inside the ASGI event loop")
         if not isinstance(request, ResearchRequest):
             raise AssertionError("expected ResearchRequest")
         return ResearchAgentResult(
