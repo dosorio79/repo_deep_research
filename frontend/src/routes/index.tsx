@@ -358,7 +358,7 @@ function ResearchView() {
                     Ask what you need to understand.
                   </h2>
                 </div>
-                <div className="flex flex-wrap items-start gap-3">
+                <div className="flex flex-wrap items-end gap-3">
                   <div className="min-w-[220px]">
                     <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
                       Research mode
@@ -532,7 +532,7 @@ function SearchSettingsPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" className="mt-[20px] gap-1.5">
+        <Button type="button" variant="outline" className="gap-1.5">
           <SlidersHorizontal className="h-4 w-4" aria-hidden />
           Search settings
         </Button>
