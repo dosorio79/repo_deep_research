@@ -16,6 +16,7 @@ from repo_research.rag import (
     DirectRagService,
     OpenAIResponsesModel,
 )
+from repo_research.recording_store import NoOpRecordingStore, PostgresRecordingStore
 from repo_research.research import (
     BoundedResearchService,
     PydanticAIResearchAgent,
@@ -49,6 +50,17 @@ def create_answer_model(settings: Settings) -> OpenAIResponsesModel:
 def create_research_agent(settings: Settings) -> PydanticAIResearchAgent:
     """Create the live PydanticAI research agent adapter."""
     return PydanticAIResearchAgent(model=settings.openai_answer_model)
+
+
+def create_recording_store(
+    settings: Settings,
+) -> NoOpRecordingStore | PostgresRecordingStore:
+    """Create the optional monitoring and feedback recording dependency."""
+    if not settings.telemetry_enabled or settings.postgres_dsn is None:
+        return NoOpRecordingStore()
+    store = PostgresRecordingStore(settings.postgres_dsn)
+    store.initialize()
+    return store
 
 
 def create_direct_rag_service(

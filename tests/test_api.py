@@ -15,12 +15,16 @@ import repo_research.api as api_module
 from repo_research.api import create_app
 from repo_research.config import Settings
 from repo_research.models import (
+    FeedbackEvent,
+    MonitoringSummary,
     ParsedChunk,
     RagMode,
     RagRequest,
+    RagRunTrace,
     RepositoryIdentity,
     ResearchAnswer,
     ResearchRequest,
+    RunKind,
     SearchResult,
 )
 from repo_research.rag import AnswerGenerationResult
@@ -120,6 +124,24 @@ class UnavailableDatabase(FakeDatabase):
 
     def search(self, query: object) -> list[SearchResult]:
         raise ResponseHandlingException(Exception("Connection refused"))
+
+
+class FakeRecordingStore:
+    """Capture monitoring and feedback persistence calls from API routes."""
+
+    def __init__(self) -> None:
+        self.runs: list[tuple[RunKind, RagRunTrace]] = []
+        self.feedback_events: list[FeedbackEvent] = []
+        self.summary = MonitoringSummary(total_runs=0)
+
+    def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
+        self.runs.append((run_kind, trace))
+
+    def record_feedback(self, event: FeedbackEvent) -> None:
+        self.feedback_events.append(event)
+
+    def monitoring_summary(self) -> MonitoringSummary:
+        return self.summary
 
 
 @pytest.fixture
@@ -401,6 +423,39 @@ async def test_rag_returns_insufficient_evidence_shape() -> None:
 
 
 @pytest.mark.anyio
+async def test_rag_persists_monitoring_run_with_session_id() -> None:
+    recording_store = FakeRecordingStore()
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/rag",
+            json={
+                "question": "Where is missing logic?",
+                "limit": 5,
+                "session_id": "browser-session",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["trace"]["session_id"] == "browser-session"
+    assert len(recording_store.runs) == 1
+    run_kind, trace = recording_store.runs[0]
+    assert run_kind is RunKind.DIRECT
+    assert trace.session_id == "browser-session"
+    assert trace.request_id == response.json()["trace"]["request_id"]
+
+
+@pytest.mark.anyio
 async def test_research_returns_agentic_trace_shape() -> None:
     app = create_app(
         settings=Settings(repository_root=Path(".")),
@@ -430,6 +485,93 @@ async def test_research_returns_agentic_trace_shape() -> None:
     assert body["answer"]["insufficient_evidence"] is True
     assert body["answer"]["mode"] == "change"
     assert body["trace"]["tool_call_count"] == 0
+
+
+@pytest.mark.anyio
+async def test_research_generates_fallback_session_id_for_monitoring() -> None:
+    recording_store = FakeRecordingStore()
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/research",
+            json={"question": "Which modules change for bounded research?"},
+        )
+
+    assert response.status_code == 200
+    session_id = response.json()["trace"]["session_id"]
+    assert isinstance(session_id, str)
+    assert session_id
+    assert len(recording_store.runs) == 1
+    run_kind, trace = recording_store.runs[0]
+    assert run_kind is RunKind.AGENTIC
+    assert trace.session_id == session_id
+
+
+@pytest.mark.anyio
+async def test_feedback_persists_user_feedback() -> None:
+    recording_store = FakeRecordingStore()
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/feedback",
+            json={
+                "session_id": "browser-session",
+                "request_id": "request-1",
+                "run_kind": "direct",
+                "useful": True,
+                "comment": "Grounded enough.",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session_id"] == "browser-session"
+    assert body["request_id"] == "request-1"
+    assert body["useful"] is True
+    assert len(recording_store.feedback_events) == 1
+    assert recording_store.feedback_events[0].comment == "Grounded enough."
+
+
+@pytest.mark.anyio
+async def test_monitoring_summary_returns_recorder_aggregates() -> None:
+    recording_store = FakeRecordingStore()
+    recording_store.summary = MonitoringSummary(total_runs=3)
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get("/monitoring/summary")
+
+    assert response.status_code == 200
+    assert response.json()["total_runs"] == 3
 
 
 @pytest.mark.anyio
