@@ -97,9 +97,9 @@ def test_research_request_uses_bounded_change_defaults() -> None:
     assert request.retrieval_mode is RetrievalMode.DENSE
     assert request.retrieval_limit == 5
     assert request.budget == ResearchBudget(
-        max_searches=3,
-        max_file_reads=5,
-        max_total_tool_calls=8,
+        max_searches=5,
+        max_file_reads=6,
+        max_total_tool_calls=12,
     )
 
 
