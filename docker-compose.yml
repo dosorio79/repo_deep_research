@@ -1,4 +1,25 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-repo_research}
+      POSTGRES_USER: ${POSTGRES_USER:-repo_research}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-repo_research}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_storage:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-repo_research} -d ${POSTGRES_DB:-repo_research}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   qdrant:
     image: qdrant/qdrant:v1.15.1
     ports:
@@ -14,4 +35,5 @@ services:
       start_period: 10s
 
 volumes:
+  postgres_storage:
   qdrant_storage:

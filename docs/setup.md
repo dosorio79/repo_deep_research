@@ -23,22 +23,34 @@ make typecheck
 make test
 ```
 
-## Qdrant
+## Local services
 
-The current local stack uses Qdrant as the only containerized dependency. Start
-it with:
+The current local stack uses Qdrant for repository vectors and PostgreSQL for
+monitoring and feedback persistence. Start both with:
 
 ```bash
 make docker-up
 ```
 
-The service persists data in the Docker-managed `qdrant_storage` volume. Its
-HTTP API and dashboard use port 6333 by default; change the host ports through
+Qdrant persists data in the Docker-managed `qdrant_storage` volume. Its HTTP
+API and dashboard use port 6333 by default; change the host ports through
 `QDRANT_HTTP_PORT` and `QDRANT_GRPC_PORT` in `.env` if needed. No collection is
 created until the first repository ingestion.
 
-Use `make docker-down` to stop the container. The named volume remains so local
-data is preserved.
+PostgreSQL persists data in the Docker-managed `postgres_storage` volume. The
+local DSN in `.env.example` is:
+
+```text
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research
+```
+
+Use `RDR_TELEMETRY_ENABLED=false` to run without recording monitoring and
+feedback. When telemetry is enabled but `RDR_POSTGRES_DSN` is unset, the app
+uses an in-process no-op recorder.
+
+Use `make qdrant` or `make postgres` to start one service. Use
+`make docker-down` to stop containers. Named volumes remain so local data is
+preserved.
 
 ## Local embeddings
 

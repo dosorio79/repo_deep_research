@@ -21,14 +21,14 @@ metadata where pricing is known. A minimal FastAPI backend exposes `/health` and
 TypeScript frontend under `frontend/` calls that `/rag` API and renders answer,
 evidence, trace, cost telemetry, errors, and raw JSON. The first M4 agentic
 slice adds a PydanticAI-backed bounded research service at `/research` and
-`repo-research research`; feedback persistence and monitoring dashboards remain
-deliberately deferred.
+`repo-research research`; the current feature branch adds PostgreSQL-backed run
+recording and feedback persistence for the next monitoring dashboard slice.
 
 ## Requirements
 
 - Python 3.12
 - [uv](https://docs.astral.sh/uv/)
-- Docker and Docker Compose (only to run Qdrant)
+- Docker and Docker Compose (to run Qdrant and PostgreSQL locally)
 
 ## Quick start
 
@@ -41,7 +41,8 @@ make rag QUESTION="where is configuration validated?"
 ```
 
 Qdrant is then available at `http://localhost:6333`; its local dashboard is at
-`http://localhost:6333/dashboard`.
+`http://localhost:6333/dashboard`. PostgreSQL uses the local DSN declared in
+`.env.example`.
 
 Stop the local service with `make docker-down`.
 
@@ -106,6 +107,8 @@ All runtime settings use the `RDR_` prefix and are validated by
 | `RDR_RESEARCH_MAX_SEARCHES` | `5` | Default maximum search tool calls for one agentic research run. |
 | `RDR_RESEARCH_MAX_FILE_READS` | `6` | Default maximum repository file-read tool calls for one agentic research run. |
 | `RDR_RESEARCH_MAX_TOTAL_TOOL_CALLS` | `12` | Default maximum total tool calls for one agentic research run. |
+| `RDR_POSTGRES_DSN` | unset | PostgreSQL connection string used for run monitoring and feedback persistence. `.env.example` configures the Compose database. |
+| `RDR_TELEMETRY_ENABLED` | `true` | Enables persisted monitoring and feedback when `RDR_POSTGRES_DSN` is configured. |
 | `RDR_CORS_ALLOWED_ORIGINS` | `[]` | JSON list of browser origins allowed to call FastAPI. `.env.example` opts in local frontend origins. |
 | `RDR_LOG_LEVEL` | `INFO` | Application log level. |
 | `OPENAI_API_KEY` | unset | OpenAI API key for live direct RAG and answer evaluation. Prefer `.env.local` or an exported shell variable. |
