@@ -19,6 +19,8 @@ import type {
   ResearchResult,
 } from "@/lib/rag-types";
 
+const DEFAULT_API_BASE_URL = (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "/api";
+
 export function TechnicalResearchConsole() {
   const [form, setForm] = useState<QueryFormState>({
     researchKind: "direct",
@@ -27,7 +29,7 @@ export function TechnicalResearchConsole() {
     retrievalMode: "hybrid",
     limit: 8,
   });
-  const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8000");
+  const [baseUrl, setBaseUrl] = useState(DEFAULT_API_BASE_URL);
   const [repositoryAddress, setRepositoryAddress] = useState("");
   const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null);
   const [result, setResult] = useState<ResearchResult | null>(null);

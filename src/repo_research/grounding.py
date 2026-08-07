@@ -22,13 +22,20 @@ def canonical_change_targets(
     """Return change targets pinned to the first cited canonical evidence item."""
     canonical: list[ChangeTarget] = []
     for target in targets:
-        first_evidence = evidence_by_id[target.evidence_ids[0]]
+        evidence_ids = [
+            evidence_id
+            for evidence_id in target.evidence_ids
+            if evidence_id in evidence_by_id
+        ]
+        if not evidence_ids:
+            continue
+        first_evidence = evidence_by_id[evidence_ids[0]]
         canonical.append(
             ChangeTarget(
                 path=first_evidence.path,
                 symbol=first_evidence.symbol,
                 reason=target.reason,
-                evidence_ids=target.evidence_ids,
+                evidence_ids=evidence_ids,
             )
         )
     return canonical
