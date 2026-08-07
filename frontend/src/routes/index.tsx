@@ -9,8 +9,11 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  Send,
   ShieldCheck,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/components/ApiError";
@@ -34,7 +37,9 @@ import {
   ingestRepository,
   runAgenticResearch,
   runRagQuery,
+  submitFeedback,
 } from "@/lib/rag-client";
+import { getBrowserSessionId } from "@/lib/session-id";
 import type {
   ApiErrorShape,
   BackendHealth,
@@ -103,6 +108,8 @@ function ResearchView() {
   const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>("hybrid");
   const [limit, setLimit] = useState(8);
   const [result, setResult] = useState<ResearchResult | null>(null);
+  const [resultKind, setResultKind] = useState<ResearchKind>("direct");
+  const [sessionId] = useState(() => getBrowserSessionId());
   const [ingestError, setIngestError] = useState<ApiErrorShape | null>(null);
   const [queryError, setQueryError] = useState<ApiErrorShape | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
@@ -119,6 +126,7 @@ function ResearchView() {
     if (latestRun.answer?.mode) {
       setQuestionMode(latestRun.answer.mode);
     }
+    setResultKind(latestRun.answer?.research_steps?.length ? "agentic" : "direct");
   }, []);
 
   const healthQuery = useQuery({
@@ -172,6 +180,22 @@ function ResearchView() {
     },
   });
 
+  const feedbackMutation = useMutation({
+    mutationFn: (payload: {
+      useful: boolean;
+      comment?: string;
+      requestId?: string;
+      runKind: ResearchKind;
+    }) =>
+      submitFeedback(baseUrl, {
+        session_id: sessionId,
+        run_kind: payload.runKind,
+        useful: payload.useful,
+        ...(payload.requestId ? { request_id: payload.requestId } : {}),
+        ...(payload.comment ? { comment: payload.comment } : {}),
+      }),
+  });
+
   const ingest = () => {
     setIngestError(null);
     ingestMutation.mutate({
@@ -190,6 +214,7 @@ function ResearchView() {
       question: question.trim(),
       mode: questionMode,
       retrieval_mode: retrievalMode,
+      session_id: sessionId,
       ...(queryRepositoryPath ? { repository_path: queryRepositoryPath } : {}),
     };
     const body =
@@ -207,6 +232,16 @@ function ResearchView() {
       baseUrl,
       body,
       signal: controller.signal,
+    });
+    setResultKind(researchKind);
+  };
+
+  const submitRunFeedback = (payload: { useful: boolean; comment?: string }) => {
+    feedbackMutation.mutate({
+      useful: payload.useful,
+      runKind: resultKind,
+      ...(result?.trace?.request_id ? { requestId: result.trace.request_id } : {}),
+      ...(payload.comment ? { comment: payload.comment } : {}),
     });
   };
 
@@ -469,7 +504,14 @@ function ResearchView() {
             </div>
           ) : null}
           {result ? (
-            <ReviewerResult result={result} />
+            <ReviewerResult
+              result={result}
+              runKind={resultKind}
+              feedbackPending={feedbackMutation.isPending}
+              feedbackSubmitted={feedbackMutation.isSuccess}
+              feedbackError={(feedbackMutation.error as ApiErrorShape | null) ?? null}
+              onSubmitFeedback={submitRunFeedback}
+            />
           ) : (
             <EmptyResult endpoint={researchKind === "agentic" ? "/research" : "/rag"} />
           )}
@@ -636,7 +678,21 @@ function EmptyResult({ endpoint }: { endpoint: string }) {
   );
 }
 
-function ReviewerResult({ result }: { result: ResearchResult }) {
+function ReviewerResult({
+  result,
+  runKind,
+  feedbackPending,
+  feedbackSubmitted,
+  feedbackError,
+  onSubmitFeedback,
+}: {
+  result: ResearchResult;
+  runKind: ResearchKind;
+  feedbackPending: boolean;
+  feedbackSubmitted: boolean;
+  feedbackError: ApiErrorShape | null;
+  onSubmitFeedback: (payload: { useful: boolean; comment?: string }) => void;
+}) {
   const answer = result.answer;
   const evidence = answer?.evidence ?? [];
   const changeTargets = answer?.change_targets ?? [];
@@ -664,6 +720,16 @@ function ReviewerResult({ result }: { result: ResearchResult }) {
           <p className="max-w-4xl whitespace-pre-wrap text-[15px] leading-7">
             {answer?.summary ?? "No summary returned."}
           </p>
+          {result.trace ? (
+            <FeedbackControls
+              runKind={runKind}
+              requestId={result.trace.request_id}
+              pending={feedbackPending}
+              submitted={feedbackSubmitted}
+              error={feedbackError}
+              onSubmit={onSubmitFeedback}
+            />
+          ) : null}
           {answer?.implementation_flow?.length ? (
             <div className="grid gap-2 md:grid-cols-2">
               {answer.implementation_flow.slice(0, 4).map((item, index) => (
@@ -686,6 +752,102 @@ function ReviewerResult({ result }: { result: ResearchResult }) {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <EvidenceHighlights evidence={evidence} />
         <RunTraceSummary result={result} />
+      </div>
+    </div>
+  );
+}
+
+function FeedbackControls({
+  runKind,
+  requestId,
+  pending,
+  submitted,
+  error,
+  onSubmit,
+}: {
+  runKind: ResearchKind;
+  requestId: string;
+  pending: boolean;
+  submitted: boolean;
+  error: ApiErrorShape | null;
+  onSubmit: (payload: { useful: boolean; comment?: string }) => void;
+}) {
+  const [useful, setUseful] = useState<boolean | null>(null);
+  const [comment, setComment] = useState("");
+  const canSubmit = useful !== null && !pending;
+
+  return (
+    <div className="rounded-md border border-border bg-secondary/25 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Run feedback
+          </p>
+          <p className="mt-1 mono text-[11px] text-muted-foreground">
+            {runKind} - {requestId}
+          </p>
+        </div>
+        {submitted ? <Badge variant="secondary">submitted</Badge> : null}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant={useful === true ? "default" : "outline"}
+          size="sm"
+          onClick={() => setUseful(true)}
+          className="gap-1.5"
+        >
+          <ThumbsUp className="h-4 w-4" aria-hidden />
+          Useful
+        </Button>
+        <Button
+          type="button"
+          variant={useful === false ? "default" : "outline"}
+          size="sm"
+          onClick={() => setUseful(false)}
+          className="gap-1.5"
+        >
+          <ThumbsDown className="h-4 w-4" aria-hidden />
+          Not useful
+        </Button>
+      </div>
+      <Label
+        htmlFor="feedbackComment"
+        className="mt-3 block text-[11px] uppercase tracking-wide text-muted-foreground"
+      >
+        Comment
+      </Label>
+      <Textarea
+        id="feedbackComment"
+        value={comment}
+        rows={2}
+        maxLength={2000}
+        onChange={(event) => setComment(event.target.value)}
+        className="mt-1.5 min-h-[68px] resize-y text-[13px] leading-5"
+      />
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={!canSubmit}
+          onClick={() =>
+            useful !== null
+              ? onSubmit({
+                  useful,
+                  ...(comment.trim() ? { comment: comment.trim() } : {}),
+                })
+              : undefined
+          }
+          className="gap-1.5"
+        >
+          {pending ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Send className="h-4 w-4" aria-hidden />
+          )}
+          Submit feedback
+        </Button>
+        {error ? <span className="text-[12px] text-destructive">{error.detail}</span> : null}
       </div>
     </div>
   );

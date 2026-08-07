@@ -42,6 +42,7 @@ describe("RAG result panels", () => {
   it("renders multiple model usage entries and string decimal costs", () => {
     const trace: RagTrace = {
       request_id: "req-1",
+      session_id: "session-1",
       repository_name: "repo_deep_research",
       branch: "dev",
       commit_hash: "abc123",
@@ -84,6 +85,7 @@ describe("RAG result panels", () => {
 
     render(<TracePanel trace={trace} />);
 
+    expect(screen.getByText("session-1")).toBeInTheDocument();
     expect(screen.getByText("model_usage[0].provider")).toBeInTheDocument();
     expect(screen.getAllByText("gpt-5-mini")).toHaveLength(2);
     expect(screen.getAllByText("$0.001700")).toHaveLength(2);

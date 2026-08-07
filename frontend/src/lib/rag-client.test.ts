@@ -1,6 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getBackendHealth, ingestRepository, runAgenticResearch, runRagQuery } from "./rag-client";
-import type { IngestSummary, RagRunResult, ResearchRunResult } from "./rag-types";
+import {
+  getBackendHealth,
+  getMonitoringSummary,
+  ingestRepository,
+  runAgenticResearch,
+  runRagQuery,
+  submitFeedback,
+} from "./rag-client";
+import type {
+  IngestSummary,
+  MonitoringSummary,
+  RagRunResult,
+  ResearchRunResult,
+} from "./rag-types";
 
 const okResult: RagRunResult = {
   answer: {
@@ -19,6 +31,7 @@ const okResult: RagRunResult = {
   },
   trace: {
     request_id: "req-1",
+    session_id: "session-1",
     repository_name: "repo_deep_research",
     branch: "dev",
     commit_hash: "abc123",
@@ -72,6 +85,16 @@ const ingestSummary: IngestSummary = {
   index_updated: true,
 };
 
+const monitoringSummary: MonitoringSummary = {
+  total_runs: 1,
+  runs_by_kind: [{ run_kind: "direct", count: 1 }],
+  average_latency_by_kind: [{ run_kind: "direct", average_latency_ms: 10 }],
+  retrieval_volume: { retrieved_chunk_count: 1, unique_file_count: 1 },
+  model_usage_by_model: [],
+  feedback: { useful: 1, not_useful: 0 },
+  errors_by_type: [],
+};
+
 describe("runRagQuery", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -95,6 +118,7 @@ describe("runRagQuery", () => {
           mode: "locate",
           retrieval_mode: "hybrid",
           limit: 5,
+          session_id: "session-1",
         },
         controller.signal,
       ),
@@ -110,6 +134,7 @@ describe("runRagQuery", () => {
           mode: "locate",
           retrieval_mode: "hybrid",
           limit: 5,
+          session_id: "session-1",
         }),
         signal: controller.signal,
       }),
@@ -134,6 +159,7 @@ describe("runRagQuery", () => {
           mode: "change",
           retrieval_mode: "dense",
           retrieval_limit: 5,
+          session_id: "session-1",
         },
         controller.signal,
       ),
@@ -149,6 +175,7 @@ describe("runRagQuery", () => {
           mode: "change",
           retrieval_mode: "dense",
           retrieval_limit: 5,
+          session_id: "session-1",
         }),
         signal: controller.signal,
       }),
@@ -196,6 +223,69 @@ describe("runRagQuery", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/health",
+      expect.objectContaining({ signal: null }),
+    );
+  });
+
+  it("posts feedback to the backend feedback endpoint", async () => {
+    const event = {
+      feedback_id: "feedback-1",
+      session_id: "session-1",
+      request_id: "req-1",
+      run_kind: "direct",
+      useful: true,
+      comment: "Grounded enough.",
+      submitted_at: "2026-08-07T12:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(event), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      submitFeedback("http://localhost:8000///", {
+        session_id: "session-1",
+        request_id: "req-1",
+        run_kind: "direct",
+        useful: true,
+        comment: "Grounded enough.",
+      }),
+    ).resolves.toEqual(event);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/feedback",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: "session-1",
+          request_id: "req-1",
+          run_kind: "direct",
+          useful: true,
+          comment: "Grounded enough.",
+        }),
+      }),
+    );
+  });
+
+  it("loads monitoring summary from the backend endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(monitoringSummary), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getMonitoringSummary("http://localhost:8000///")).resolves.toEqual(
+      monitoringSummary,
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/monitoring/summary",
       expect.objectContaining({ signal: null }),
     );
   });

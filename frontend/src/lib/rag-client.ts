@@ -1,7 +1,10 @@
 import type {
   ApiErrorShape,
   BackendHealth,
+  FeedbackEvent,
+  FeedbackRequest,
   IngestSummary,
+  MonitoringSummary,
   RagRequest,
   RagRunResult,
   RepositoryIngestRequest,
@@ -36,7 +39,7 @@ function extractDetail(body: unknown): string | null {
 
 async function postJson<TPayload, TResult>(
   baseUrl: string,
-  path: "/rag" | "/research" | "/repositories/ingest",
+  path: "/rag" | "/research" | "/repositories/ingest" | "/feedback",
   payload: TPayload,
   signal?: AbortSignal,
 ): Promise<TResult> {
@@ -86,11 +89,12 @@ async function postJson<TPayload, TResult>(
   return parsed as TResult;
 }
 
-export async function getBackendHealth(
+async function getJson<TResult>(
   baseUrl: string,
+  path: "/health" | "/monitoring/summary",
   signal?: AbortSignal,
-): Promise<BackendHealth> {
-  const url = `${baseUrl.replace(/\/+$/, "")}/health`;
+): Promise<TResult> {
+  const url = `${baseUrl.replace(/\/+$/, "")}${path}`;
   let response: Response;
 
   try {
@@ -124,11 +128,18 @@ export async function getBackendHealth(
   if (!parsed || typeof parsed !== "object") {
     throw {
       title: "Unexpected response",
-      detail: "The backend health response was not valid JSON.",
+      detail: "The backend response was not valid JSON.",
     } satisfies ApiErrorShape;
   }
 
-  return parsed as BackendHealth;
+  return parsed as TResult;
+}
+
+export async function getBackendHealth(
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<BackendHealth> {
+  return getJson<BackendHealth>(baseUrl, "/health", signal);
 }
 
 export async function runRagQuery(
@@ -145,6 +156,21 @@ export async function runAgenticResearch(
   signal?: AbortSignal,
 ): Promise<ResearchRunResult> {
   return postJson<ResearchRequest, ResearchRunResult>(baseUrl, "/research", payload, signal);
+}
+
+export async function submitFeedback(
+  baseUrl: string,
+  payload: FeedbackRequest,
+  signal?: AbortSignal,
+): Promise<FeedbackEvent> {
+  return postJson<FeedbackRequest, FeedbackEvent>(baseUrl, "/feedback", payload, signal);
+}
+
+export async function getMonitoringSummary(
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<MonitoringSummary> {
+  return getJson<MonitoringSummary>(baseUrl, "/monitoring/summary", signal);
 }
 
 export async function ingestRepository(
