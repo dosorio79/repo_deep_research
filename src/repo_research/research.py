@@ -6,7 +6,6 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal
 from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
@@ -16,8 +15,8 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.usage import RunUsage
 
 from repo_research.config import load_dotenv_environment
+from repo_research.grounding import canonical_change_targets
 from repo_research.models import (
-    ChangeTarget,
     EvidenceItem,
     ModelUsage,
     RagMode,
@@ -31,7 +30,9 @@ from repo_research.models import (
     SearchResult,
 )
 from repo_research.pricing import estimate_openai_price
-from repo_research.rag import RepositorySearcher, infer_rag_mode
+from repo_research.protocols import RepositorySearcher
+from repo_research.rag import infer_rag_mode
+from repo_research.telemetry import elapsed_ms, total_estimated_cost, usage_int
 
 
 class ResearchBudgetExceeded(ValueError):
@@ -312,7 +313,7 @@ class BoundedResearchService:
         try:
             model_start = time.perf_counter()
             agent_result = self._agent.run_research(request=request, tools=tools)
-            latency_ms_model = _elapsed_ms(model_start)
+            latency_ms_model = elapsed_ms(model_start)
             if agent_result.usage is not None:
                 model_usage.append(agent_result.usage)
             answer = _canonical_research_answer(
@@ -322,7 +323,7 @@ class BoundedResearchService:
             )
         except ValueError as error:
             if latency_ms_model is None:
-                latency_ms_model = _elapsed_ms(model_start)
+                latency_ms_model = elapsed_ms(model_start)
             usage = getattr(error, "usage", None)
             if isinstance(usage, ModelUsage):
                 model_usage.append(usage)
@@ -344,7 +345,7 @@ class BoundedResearchService:
                 request=request,
                 evidence=tools.evidence,
                 answer=answer,
-                latency_ms_total=_elapsed_ms(total_start),
+                latency_ms_total=elapsed_ms(total_start),
                 latency_ms_model=latency_ms_model,
                 model_usage=model_usage,
                 error_type=error_type,
@@ -548,7 +549,7 @@ def _canonical_research_answer(
         evidence=evidence,
         relevant_files=relevant_files,
         relevant_symbols=relevant_symbols,
-        change_targets=_canonical_change_targets(
+        change_targets=canonical_change_targets(
             answer.change_targets,
             evidence_by_id,
         ),
@@ -557,24 +558,6 @@ def _canonical_research_answer(
         unresolved_questions=answer.unresolved_questions,
         insufficient_evidence=answer.insufficient_evidence,
     )
-
-
-def _canonical_change_targets(
-    targets: list[ChangeTarget],
-    evidence_by_id: dict[str, EvidenceItem],
-) -> list[ChangeTarget]:
-    canonical: list[ChangeTarget] = []
-    for target in targets:
-        first_evidence = evidence_by_id[target.evidence_ids[0]]
-        canonical.append(
-            ChangeTarget(
-                path=first_evidence.path,
-                symbol=first_evidence.symbol,
-                reason=target.reason,
-                evidence_ids=target.evidence_ids,
-            )
-        )
-    return canonical
 
 
 def _build_research_trace(
@@ -612,23 +595,12 @@ def _build_research_trace(
         latency_ms_retrieval=0,
         latency_ms_model=latency_ms_model,
         model_usage=model_usage,
-        total_estimated_cost_usd=_total_estimated_cost(model_usage),
+        total_estimated_cost_usd=total_estimated_cost(model_usage),
         insufficient_evidence=answer.insufficient_evidence,
         error_type=error_type,
         error_message=error_message,
         tool_call_count=tool_call_count,
     )
-
-
-def _total_estimated_cost(model_usage: list[ModelUsage]) -> Decimal | None:
-    if not model_usage:
-        return None
-    total = Decimal("0")
-    for usage in model_usage:
-        if usage.estimated_cost_usd is None:
-            return None
-        total += usage.estimated_cost_usd
-    return total
 
 
 def _model_usage_from_agent_usage(
@@ -642,12 +614,12 @@ def _model_usage_from_agent_usage(
     has_values = getattr(usage, "has_values", None)
     if callable(has_values) and not has_values():
         return None
-    input_tokens = _usage_int(usage, "input_tokens")
-    output_tokens = _usage_int(usage, "output_tokens")
-    total_tokens = _usage_int(usage, "total_tokens")
+    input_tokens = usage_int(usage, "input_tokens")
+    output_tokens = usage_int(usage, "output_tokens")
+    total_tokens = usage_int(usage, "total_tokens")
     if total_tokens is None and input_tokens is not None and output_tokens is not None:
         total_tokens = input_tokens + output_tokens
-    cached_input_tokens = _usage_int(usage, "cache_read_tokens")
+    cached_input_tokens = usage_int(usage, "cache_read_tokens")
     reasoning_tokens = _usage_detail_int(usage, "reasoning_tokens")
     estimated_cost = None
     pricing_source = "unknown"
@@ -687,21 +659,12 @@ def _split_provider_model(model: str) -> tuple[str, str]:
     return provider, model_name
 
 
-def _usage_int(usage: object, field_name: str) -> int | None:
-    value = getattr(usage, field_name, None)
-    return value if isinstance(value, int) else None
-
-
 def _usage_detail_int(usage: object, field_name: str) -> int | None:
     details = getattr(usage, "details", None)
     if not isinstance(details, dict):
         return None
     value = details.get(field_name)
     return value if isinstance(value, int) else None
-
-
-def _elapsed_ms(start: float) -> int:
-    return max(0, round((time.perf_counter() - start) * 1000))
 
 
 def _infer_research_mode(request: ResearchRequest) -> RagMode:
