@@ -141,7 +141,11 @@ def ingest_repository_if_needed(
     repository: RepositoryIdentity,
     files: list[Path],
 ) -> IngestSummary:
-    """Parse and index a repository revision unless it is already indexed."""
+    """Parse and index a repository revision unless it is already indexed.
+
+    Reused indexes report an empty skipped-files list because prior parse issues are
+    not persisted with the current index metadata.
+    """
     existing_chunk_count = database.indexed_chunk_count(
         repository.repository_id,
         repository.commit_hash,

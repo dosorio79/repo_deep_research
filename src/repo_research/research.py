@@ -198,7 +198,7 @@ class ResearchToolContext:
         return evidence
 
     def find_symbol(self, symbol: str) -> list[ToolEvidence]:
-        """Find indexed chunks whose symbol matches the requested name."""
+        """Find symbol matches within the bounded semantic search result set."""
         self._consume_tool_call(kind="search")
         results = self._database.search(
             SearchQuery(
@@ -301,18 +301,22 @@ class BoundedResearchService:
             }
         )
         root_path = (request.repository_path or repository.root_path).resolve()
-        tools = ResearchToolContext(
-            database=self._database,
-            repository=repository,
-            root_path=root_path,
-            request=request,
-            seed_evidence=self._initial_search(repository=repository, request=request),
-        )
+        tools: ResearchToolContext | None = None
         model_usage: list[ModelUsage] = []
         latency_ms_model: int | None = None
         error_type: str | None = None
         error_message: str | None = None
+        model_start = time.perf_counter()
         try:
+            tools = ResearchToolContext(
+                database=self._database,
+                repository=repository,
+                root_path=root_path,
+                request=request,
+                seed_evidence=self._initial_search(
+                    repository=repository, request=request
+                ),
+            )
             model_start = time.perf_counter()
             agent_result = self._agent.run_research(request=request, tools=tools)
             latency_ms_model = elapsed_ms(model_start)
@@ -326,6 +330,13 @@ class BoundedResearchService:
         except ValueError as error:
             if latency_ms_model is None:
                 latency_ms_model = elapsed_ms(model_start)
+            if tools is None:
+                tools = ResearchToolContext(
+                    database=self._database,
+                    repository=repository,
+                    root_path=root_path,
+                    request=request,
+                )
             usage = getattr(error, "usage", None)
             if isinstance(usage, ModelUsage):
                 model_usage.append(usage)
