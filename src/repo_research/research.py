@@ -723,9 +723,7 @@ def _build_research_trace(
         retrieved_chunk_count=sum(1 for item in evidence if item.chunk_id is not None),
         unique_file_count=len(unique_files),
         evidence_ids=[item.evidence_id for item in answer.evidence],
-        latency_ms_total=latency_ms_total,
-        latency_ms_retrieval=0,
-        latency_ms_model=latency_ms_model,
+        latency_ms_retrieval=max(0, latency_ms_total - (latency_ms_model or 0))
         model_usage=model_usage,
         total_estimated_cost_usd=total_estimated_cost(model_usage),
         insufficient_evidence=answer.insufficient_evidence,
