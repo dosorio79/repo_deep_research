@@ -8,6 +8,7 @@ export interface RagRequest {
   retrieval_mode: RetrievalMode;
   limit: number;
   repository_path?: string;
+  session_id?: string;
 }
 
 export interface ResearchBudget {
@@ -23,6 +24,7 @@ export interface ResearchRequest {
   retrieval_limit: number;
   repository_path?: string;
   budget?: ResearchBudget;
+  session_id?: string;
 }
 
 export interface RepositoryIdentity {
@@ -112,6 +114,7 @@ export interface ModelUsage {
 
 export interface RagTrace {
   request_id: string;
+  session_id: string;
   started_at?: string | null;
   completed_at?: string | null;
   repository_id?: string | null;
@@ -146,6 +149,68 @@ export interface ResearchRunResult {
 }
 
 export type ResearchResult = RagRunResult | ResearchRunResult;
+
+export interface FeedbackRequest {
+  session_id?: string;
+  request_id?: string;
+  run_kind?: ResearchKind;
+  useful: boolean;
+  comment?: string;
+}
+
+export interface FeedbackEvent {
+  feedback_id: string;
+  session_id: string;
+  request_id: string | null;
+  run_kind: ResearchKind | null;
+  useful: boolean;
+  comment: string | null;
+  submitted_at: string;
+}
+
+export interface RunKindCount {
+  run_kind: ResearchKind;
+  count: number;
+}
+
+export interface LatencyByRunKind {
+  run_kind: ResearchKind;
+  average_latency_ms: number;
+}
+
+export interface RetrievalVolumeSummary {
+  retrieved_chunk_count: number;
+  unique_file_count: number;
+}
+
+export interface ModelUsageSummary {
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number | string | null;
+}
+
+export interface FeedbackUsefulSummary {
+  useful: number;
+  not_useful: number;
+}
+
+export interface ErrorCountSummary {
+  error_type: string;
+  count: number;
+}
+
+export interface MonitoringSummary {
+  total_runs: number;
+  runs_by_kind: RunKindCount[];
+  average_latency_by_kind: LatencyByRunKind[];
+  retrieval_volume: RetrievalVolumeSummary;
+  model_usage_by_model: ModelUsageSummary[];
+  feedback: FeedbackUsefulSummary;
+  errors_by_type: ErrorCountSummary[];
+}
 
 export interface ApiErrorShape {
   title: string;
