@@ -720,16 +720,6 @@ function ReviewerResult({
           <p className="max-w-4xl whitespace-pre-wrap text-[15px] leading-7">
             {answer?.summary ?? "No summary returned."}
           </p>
-          {result.trace ? (
-            <FeedbackControls
-              runKind={runKind}
-              requestId={result.trace.request_id}
-              pending={feedbackPending}
-              submitted={feedbackSubmitted}
-              error={feedbackError}
-              onSubmit={onSubmitFeedback}
-            />
-          ) : null}
           {answer?.implementation_flow?.length ? (
             <div className="grid gap-2 md:grid-cols-2">
               {answer.implementation_flow.slice(0, 4).map((item, index) => (
@@ -753,6 +743,16 @@ function ReviewerResult({
         <EvidenceHighlights evidence={evidence} />
         <RunTraceSummary result={result} />
       </div>
+      {result.trace ? (
+        <FeedbackControls
+          runKind={runKind}
+          requestId={result.trace.request_id}
+          pending={feedbackPending}
+          submitted={feedbackSubmitted}
+          error={feedbackError}
+          onSubmit={onSubmitFeedback}
+        />
+      ) : null}
     </div>
   );
 }
