@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Protocol
 
 from pydantic import TypeAdapter
 
@@ -14,15 +13,8 @@ from repo_research.models import (
     RepositoryIdentity,
     RetrievalMode,
     SearchQuery,
-    SearchResult,
 )
-
-
-class RepositorySearcher(Protocol):
-    """The retrieval dependency required by deterministic evaluation."""
-
-    def search(self, query: SearchQuery) -> list[SearchResult]:
-        """Return typed repository evidence for one query."""
+from repo_research.protocols import RepositorySearcher
 
 
 def load_records(path: Path) -> list[EvaluationRecord]:

@@ -8,7 +8,6 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol, cast
 from uuid import uuid4
@@ -18,9 +17,9 @@ from pydantic import BaseModel, Field
 
 from repo_research.config import load_dotenv_environment
 from repo_research.evaluation import load_records
+from repo_research.grounding import canonical_change_targets
 from repo_research.models import (
     AnswerEvaluationResult,
-    ChangeTarget,
     EvaluationRecord,
     EvidenceItem,
     ModelUsage,
@@ -35,6 +34,8 @@ from repo_research.models import (
     SearchResult,
 )
 from repo_research.pricing import estimate_openai_price
+from repo_research.protocols import RepositorySearcher
+from repo_research.telemetry import elapsed_ms, total_estimated_cost, usage_int
 
 
 @dataclass(frozen=True)
@@ -51,13 +52,6 @@ class AnswerGenerationResult:
 
     draft: RagAnswerDraft
     usage: ModelUsage | None = None
-
-
-class RepositorySearcher(Protocol):
-    """The repository retrieval dependency used by direct RAG."""
-
-    def search(self, query: SearchQuery) -> list[SearchResult]:
-        """Return typed repository evidence for one query."""
 
 
 class AnswerGenerator(Protocol):
@@ -158,7 +152,7 @@ class DirectRagService:
                 mode=request.retrieval_mode,
             )
         )
-        latency_ms_retrieval = _elapsed_ms(retrieval_start)
+        latency_ms_retrieval = elapsed_ms(retrieval_start)
         if not results:
             answer = insufficient_evidence_rag_answer(
                 request=request,
@@ -175,7 +169,7 @@ class DirectRagService:
                     request=request,
                     results=results,
                     answer=answer,
-                    latency_ms_total=_elapsed_ms(total_start),
+                    latency_ms_total=elapsed_ms(total_start),
                     latency_ms_retrieval=latency_ms_retrieval,
                     latency_ms_model=latency_ms_model,
                     model_usage=model_usage,
@@ -191,11 +185,11 @@ class DirectRagService:
                 request=request,
                 evidence_context=evidence_context,
             )
-            latency_ms_model = _elapsed_ms(model_start)
+            latency_ms_model = elapsed_ms(model_start)
             if generation.usage is not None:
                 model_usage.append(generation.usage)
         except ValueError as error:
-            latency_ms_model = _elapsed_ms(model_start)
+            latency_ms_model = elapsed_ms(model_start)
             error_type = type(error).__name__
             error_message = str(error)
             answer = insufficient_evidence_rag_answer(
@@ -214,7 +208,7 @@ class DirectRagService:
                     request=request,
                     results=results,
                     answer=answer,
-                    latency_ms_total=_elapsed_ms(total_start),
+                    latency_ms_total=elapsed_ms(total_start),
                     latency_ms_retrieval=latency_ms_retrieval,
                     latency_ms_model=latency_ms_model,
                     model_usage=model_usage,
@@ -239,7 +233,7 @@ class DirectRagService:
                 request=request,
                 results=results,
                 answer=answer,
-                latency_ms_total=_elapsed_ms(total_start),
+                latency_ms_total=elapsed_ms(total_start),
                 latency_ms_retrieval=latency_ms_retrieval,
                 latency_ms_model=latency_ms_model,
                 model_usage=model_usage,
@@ -368,7 +362,7 @@ def _build_rag_trace(
 ) -> RagRunTrace:
     evidence_ids = [item.evidence_id for item in answer.evidence]
     unique_files = {result.chunk.path for result in results}
-    total_estimated_cost = _total_estimated_cost(model_usage)
+    estimated_cost = total_estimated_cost(model_usage)
     return RagRunTrace(
         request_id=request_id,
         started_at=started_at,
@@ -387,27 +381,12 @@ def _build_rag_trace(
         latency_ms_retrieval=latency_ms_retrieval,
         latency_ms_model=latency_ms_model,
         model_usage=model_usage,
-        total_estimated_cost_usd=total_estimated_cost,
+        total_estimated_cost_usd=estimated_cost,
         insufficient_evidence=answer.insufficient_evidence,
         error_type=error_type,
         error_message=error_message,
         tool_call_count=0,
     )
-
-
-def _total_estimated_cost(model_usage: list[ModelUsage]) -> Decimal | None:
-    if not model_usage:
-        return None
-    total = Decimal("0")
-    for usage in model_usage:
-        if usage.estimated_cost_usd is None:
-            return None
-        total += usage.estimated_cost_usd
-    return total
-
-
-def _elapsed_ms(start: float) -> int:
-    return max(0, round((time.perf_counter() - start) * 1000))
 
 
 def insufficient_evidence_rag_answer(
@@ -502,7 +481,7 @@ def _build_validated_answer(
     relevant_files = sorted({item.path for item in evidence})
     relevant_symbols = sorted({item.symbol for item in evidence if item.symbol})
     change_targets = (
-        _canonical_change_targets(draft.change_targets, evidence_by_id)
+        canonical_change_targets(draft.change_targets, evidence_by_id)
         if request.mode is RagMode.CHANGE
         else []
     )
@@ -520,24 +499,6 @@ def _build_validated_answer(
         unresolved_questions=_filtered_unresolved_questions(draft.unresolved_questions),
         insufficient_evidence=draft.insufficient_evidence,
     )
-
-
-def _canonical_change_targets(
-    targets: list[ChangeTargetDraft],
-    evidence_by_id: dict[str, EvidenceItem],
-) -> list[ChangeTarget]:
-    canonical: list[ChangeTarget] = []
-    for target in targets:
-        first_evidence = evidence_by_id[target.evidence_ids[0]]
-        canonical.append(
-            ChangeTarget(
-                path=first_evidence.path,
-                symbol=first_evidence.symbol,
-                reason=target.reason,
-                evidence_ids=target.evidence_ids,
-            )
-        )
-    return canonical
 
 
 def _evidence_by_id(results: list[SearchResult]) -> dict[str, EvidenceItem]:
@@ -674,9 +635,9 @@ def _model_usage_from_response(*, model: str, response: object) -> ModelUsage | 
     usage = getattr(response, "usage", None)
     if usage is None:
         return None
-    input_tokens = _usage_int(usage, "input_tokens")
-    output_tokens = _usage_int(usage, "output_tokens")
-    total_tokens = _usage_int(usage, "total_tokens")
+    input_tokens = usage_int(usage, "input_tokens")
+    output_tokens = usage_int(usage, "output_tokens")
+    total_tokens = usage_int(usage, "total_tokens")
     cached_input_tokens = _cached_input_tokens(usage)
     reasoning_tokens = _reasoning_tokens(usage)
     estimated_cost = None
@@ -708,11 +669,6 @@ def _model_usage_from_response(*, model: str, response: object) -> ModelUsage | 
         pricing_source=pricing_source,
         pricing_version=pricing_version,
     )
-
-
-def _usage_int(usage: object, field_name: str) -> int | None:
-    value = getattr(usage, field_name, None)
-    return value if isinstance(value, int) else None
 
 
 def _cached_input_tokens(usage: object) -> int | None:

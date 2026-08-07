@@ -13,8 +13,8 @@ from qdrant_client.http.exceptions import ResponseHandlingException
 from repo_research.config import Settings, load_dotenv_environment
 from repo_research.ingestion import (
     discover_repository,
+    ingest_repository_if_needed,
     materialize_repository_address,
-    parse_files,
 )
 from repo_research.models import (
     IngestSummary,
@@ -119,26 +119,10 @@ def create_app(
             repository, files = discover_repository(
                 root_path, app_settings.max_file_size_bytes
             )
-            existing_chunk_count = get_database().indexed_chunk_count(
-                repository.repository_id,
-                repository.commit_hash,
-            )
-            if _can_reuse_index(repository.commit_hash, existing_chunk_count):
-                return IngestSummary(
-                    repository=repository,
-                    indexed_chunks=existing_chunk_count,
-                    skipped_files=[],
-                    index_updated=False,
-                )
-            parsed_files = parse_files(files, repository)
-            index_updated = bool(parsed_files.chunks or not parsed_files.skipped_files)
-            if index_updated:
-                get_database().replace(repository.repository_id, parsed_files.chunks)
-            return IngestSummary(
+            return ingest_repository_if_needed(
+                database=get_database(),
                 repository=repository,
-                indexed_chunks=len(parsed_files.chunks),
-                skipped_files=parsed_files.skipped_files,
-                index_updated=index_updated,
+                files=files,
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -222,10 +206,6 @@ def create_app(
             ) from error
 
     return app
-
-
-def _can_reuse_index(commit_hash: str, indexed_chunk_count: int) -> bool:
-    return indexed_chunk_count > 0 and not commit_hash.startswith("unknown-")
 
 
 app = create_app()
