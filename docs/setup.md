@@ -52,6 +52,21 @@ Use `make qdrant` or `make postgres` to start one service. Use
 `make docker-down` to stop containers. Named volumes remain so local data is
 preserved.
 
+## Optional Logfire
+
+Logfire instrumentation is disabled by default. To enable local spans without
+sending them to Logfire, set:
+
+```text
+RDR_LOGFIRE_ENABLED=true
+RDR_LOGFIRE_SEND_TO_LOGFIRE=false
+```
+
+To send spans to Logfire, authenticate through Logfire's normal local setup and
+set `RDR_LOGFIRE_SEND_TO_LOGFIRE=true`. The app instruments FastAPI and
+PydanticAI without capturing headers, prompts, source content, or evidence
+excerpts as custom payloads.
+
 ## Local embeddings
 
 M1 uses FastEmbed with `BAAI/bge-small-en-v1.5`, which executes through ONNX
