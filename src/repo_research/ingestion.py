@@ -158,10 +158,9 @@ def ingest_repository_if_needed(
             index_updated=False,
         )
     parsed_files = parse_files(files, repository)
-    index_updated = bool(parsed_files.chunks or not parsed_files.skipped_files)
+    index_updated = bool(parsed_files.chunks)
     if index_updated:
         database.replace(repository.repository_id, parsed_files.chunks)
-    return IngestSummary(
         repository=repository,
         indexed_chunks=len(parsed_files.chunks),
         skipped_files=parsed_files.skipped_files,
