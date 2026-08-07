@@ -122,7 +122,7 @@ app: qdrant
 		exit 1; \
 	fi; \
 	printf '%s\n' 'Open frontend at http://127.0.0.1:5173'; \
-	printf '%s\n' 'API base URL is http://127.0.0.1:8000'; \
+	printf '%s\n' 'Frontend API base URL is /api, proxied to http://127.0.0.1:8000'; \
 	$(MAKE) frontend-dev
 
 frontend-install:
