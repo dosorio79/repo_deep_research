@@ -7,15 +7,12 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Protocol
 
 from repo_research import runtime
 from repo_research.config import Settings
 from repo_research.evaluation import evaluate_records, load_records, write_report
-from repo_research.ingestion import discover_repository, parse_files
+from repo_research.ingestion import discover_repository, ingest_repository_if_needed
 from repo_research.models import (
-    IngestSummary,
-    ParsedChunk,
     RagMode,
     RagRequest,
     RagRunResult,
@@ -26,22 +23,12 @@ from repo_research.models import (
     RetrievalMode,
     SearchQuery,
 )
+from repo_research.protocols import RepositorySearcher
 from repo_research.rag import (
-    RepositorySearcher,
     evaluate_answers_from_dataset,
     write_answer_evaluation_report,
 )
 from repo_research.research import ResearchAgentRunner
-
-
-class RepositoryIndexer(Protocol):
-    """Repository storage behavior required by ingestion-oriented CLI commands."""
-
-    def replace(self, repository_id: str, chunks: list[ParsedChunk]) -> None:
-        """Replace current indexed chunks for one repository identity."""
-
-    def indexed_chunk_count(self, repository_id: str, commit_hash: str) -> int:
-        """Return indexed chunk count for one repository revision."""
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -136,7 +123,7 @@ def main() -> None:
             _start_qdrant_if_available()
             _report_step("ingesting repository")
         repository, files = discover_repository(root_path, settings.max_file_size_bytes)
-        summary = _ingest_if_needed(
+        summary = ingest_repository_if_needed(
             database=database,
             repository=repository,
             files=files,
@@ -165,7 +152,7 @@ def main() -> None:
     repository, files = discover_repository(root_path, settings.max_file_size_bytes)
     if arguments.command == "research":
         _report_step("ingesting repository")
-        summary = _ingest_if_needed(
+        summary = ingest_repository_if_needed(
             database=database,
             repository=repository,
             files=files,
@@ -267,39 +254,6 @@ def main() -> None:
         )
     )
     print(json.dumps([result.model_dump(mode="json") for result in results], indent=2))
-
-
-def _ingest_if_needed(
-    *,
-    database: RepositoryIndexer,
-    repository: RepositoryIdentity,
-    files: list[Path],
-) -> IngestSummary:
-    existing_chunk_count = database.indexed_chunk_count(
-        repository.repository_id,
-        repository.commit_hash,
-    )
-    if _can_reuse_index(repository.commit_hash, existing_chunk_count):
-        return IngestSummary(
-            repository=repository,
-            indexed_chunks=existing_chunk_count,
-            skipped_files=[],
-            index_updated=False,
-        )
-    parsed_files = parse_files(files, repository)
-    index_updated = bool(parsed_files.chunks or not parsed_files.skipped_files)
-    if index_updated:
-        database.replace(repository.repository_id, parsed_files.chunks)
-    return IngestSummary(
-        repository=repository,
-        indexed_chunks=len(parsed_files.chunks),
-        skipped_files=parsed_files.skipped_files,
-        index_updated=index_updated,
-    )
-
-
-def _can_reuse_index(commit_hash: str, indexed_chunk_count: int) -> bool:
-    return indexed_chunk_count > 0 and not commit_hash.startswith("unknown-")
 
 
 def _run_direct_rag(

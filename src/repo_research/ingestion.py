@@ -13,11 +13,13 @@ from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 
 from repo_research.models import (
     IngestionIssue,
+    IngestSummary,
     ParsedChunk,
     ParsedFiles,
     RepositoryIdentity,
     create_chunk,
 )
+from repo_research.protocols import RepositoryIndexer
 
 SUPPORTED_SUFFIXES = {".json", ".md", ".py", ".toml", ".yaml", ".yml"}
 IGNORED_DIRECTORY_NAMES = {
@@ -131,6 +133,41 @@ def parse_files(paths: list[Path], repository: RepositoryIdentity) -> ParsedFile
                 )
             )
     return ParsedFiles(chunks=chunks, skipped_files=skipped_files)
+
+
+def ingest_repository_if_needed(
+    *,
+    database: RepositoryIndexer,
+    repository: RepositoryIdentity,
+    files: list[Path],
+) -> IngestSummary:
+    """Parse and index a repository revision unless it is already indexed."""
+    existing_chunk_count = database.indexed_chunk_count(
+        repository.repository_id,
+        repository.commit_hash,
+    )
+    if can_reuse_index(repository.commit_hash, existing_chunk_count):
+        return IngestSummary(
+            repository=repository,
+            indexed_chunks=existing_chunk_count,
+            skipped_files=[],
+            index_updated=False,
+        )
+    parsed_files = parse_files(files, repository)
+    index_updated = bool(parsed_files.chunks or not parsed_files.skipped_files)
+    if index_updated:
+        database.replace(repository.repository_id, parsed_files.chunks)
+    return IngestSummary(
+        repository=repository,
+        indexed_chunks=len(parsed_files.chunks),
+        skipped_files=parsed_files.skipped_files,
+        index_updated=index_updated,
+    )
+
+
+def can_reuse_index(commit_hash: str, indexed_chunk_count: int) -> bool:
+    """Return whether a previously indexed commit can be reused."""
+    return indexed_chunk_count > 0 and not commit_hash.startswith("unknown-")
 
 
 def parse_file(path: Path, repository: RepositoryIdentity) -> list[ParsedChunk]:
