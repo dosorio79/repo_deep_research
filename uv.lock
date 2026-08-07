@@ -2233,7 +2233,7 @@ wheels = [
 
 [[package]]
 name = "repo-deep-research"
-version = "0.3.6"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
