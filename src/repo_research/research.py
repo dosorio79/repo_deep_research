@@ -298,6 +298,7 @@ class BoundedResearchService:
             update={
                 "mode": _infer_research_mode(request),
                 "repository_path": request.repository_path,
+                "session_id": request.session_id or uuid4().hex,
             }
         )
         root_path = (request.repository_path or repository.root_path).resolve()
@@ -711,6 +712,7 @@ def _build_research_trace(
     unique_files = {item.path for item in evidence}
     return RagRunTrace(
         request_id=request_id,
+        session_id=request.session_id or uuid4().hex,
         started_at=started_at,
         completed_at=completed_at,
         repository_id=repository.repository_id,

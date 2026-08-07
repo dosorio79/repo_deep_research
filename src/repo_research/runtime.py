@@ -5,12 +5,12 @@ from __future__ import annotations
 from qdrant_client import QdrantClient
 
 from repo_research.config import Settings
+from repo_research.protocols import RepositorySearcher
 from repo_research.qdrant_store import (
     RepositoryDatabase,
     local_embedder,
     local_sparse_embedder,
 )
-from repo_research.protocols import RepositorySearcher
 from repo_research.rag import (
     AnswerGenerator,
     DirectRagService,

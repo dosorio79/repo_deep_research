@@ -135,7 +135,12 @@ class DirectRagService:
         """Return a direct-RAG answer plus application-owned trace metadata."""
         total_start = time.perf_counter()
         started_at = datetime.now(UTC)
-        request = request.model_copy(update={"mode": infer_rag_mode(request)})
+        request = request.model_copy(
+            update={
+                "mode": infer_rag_mode(request),
+                "session_id": request.session_id or uuid4().hex,
+            }
+        )
         results: list[SearchResult] = []
         model_usage: list[ModelUsage] = []
         latency_ms_model: int | None = None
@@ -365,6 +370,7 @@ def _build_rag_trace(
     estimated_cost = total_estimated_cost(model_usage)
     return RagRunTrace(
         request_id=request_id,
+        session_id=request.session_id or uuid4().hex,
         started_at=started_at,
         completed_at=completed_at,
         repository_id=repository.repository_id,
