@@ -781,7 +781,7 @@ function FeedbackControls({
 }) {
   const [useful, setUseful] = useState<boolean | null>(null);
   const [comment, setComment] = useState("");
-  const canSubmit = useful !== null && !pending;
+  const canSubmit = useful !== null && !pending && !submitted;
 
   return (
     <div className="rounded-md border border-border bg-secondary/25 p-3">
@@ -801,6 +801,7 @@ function FeedbackControls({
           type="button"
           variant={useful === true ? "default" : "outline"}
           size="sm"
+          disabled={submitted}
           onClick={() => setUseful(true)}
           className="gap-1.5"
         >
@@ -811,6 +812,7 @@ function FeedbackControls({
           type="button"
           variant={useful === false ? "default" : "outline"}
           size="sm"
+          disabled={submitted}
           onClick={() => setUseful(false)}
           className="gap-1.5"
         >
@@ -829,6 +831,7 @@ function FeedbackControls({
         value={comment}
         rows={2}
         maxLength={2000}
+        disabled={submitted}
         onChange={(event) => setComment(event.target.value)}
         className="mt-1.5 min-h-[68px] resize-y text-[13px] leading-5"
       />
@@ -852,7 +855,7 @@ function FeedbackControls({
           ) : (
             <Send className="h-4 w-4" aria-hidden />
           )}
-          Submit feedback
+          {submitted ? "Feedback recorded" : "Submit feedback"}
         </Button>
         {error ? <span className="text-[12px] text-destructive">{error.detail}</span> : null}
       </div>
