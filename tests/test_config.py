@@ -56,6 +56,10 @@ def test_settings_use_local_defaults(
         max_total_tool_calls=12,
     )
     assert settings.cors_allowed_origins == []
+    assert settings.postgres_dsn is None
+    assert settings.telemetry_enabled is True
+    assert settings.logfire_enabled is False
+    assert settings.logfire_send_to_logfire is False
 
 
 def test_settings_read_prefixed_environment_values(
@@ -63,11 +67,24 @@ def test_settings_read_prefixed_environment_values(
 ) -> None:
     monkeypatch.setenv("RDR_QDRANT_URL", "https://qdrant.example.test/")
     monkeypatch.setenv("RDR_LOG_LEVEL", "debug")
+    monkeypatch.setenv(
+        "RDR_POSTGRES_DSN",
+        "postgresql://repo:repo@localhost:5432/repo_research",
+    )
+    monkeypatch.setenv("RDR_TELEMETRY_ENABLED", "false")
+    monkeypatch.setenv("RDR_LOGFIRE_ENABLED", "true")
+    monkeypatch.setenv("RDR_LOGFIRE_SEND_TO_LOGFIRE", "true")
 
     settings = make_settings(_env_file=None)
 
     assert settings.qdrant_url == "https://qdrant.example.test"
     assert settings.log_level == "DEBUG"
+    assert (
+        settings.postgres_dsn == "postgresql://repo:repo@localhost:5432/repo_research"
+    )
+    assert settings.telemetry_enabled is False
+    assert settings.logfire_enabled is True
+    assert settings.logfire_send_to_logfire is True
 
 
 def test_settings_read_env_local_after_env(

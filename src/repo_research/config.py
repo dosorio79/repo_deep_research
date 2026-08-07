@@ -130,6 +130,13 @@ class Settings(BaseSettings):
             "RDR_CORS_ALLOWED_ORIGINS",
         ),
     )
+    postgres_dsn: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("postgres_dsn", "RDR_POSTGRES_DSN"),
+    )
+    telemetry_enabled: bool = True
+    logfire_enabled: bool = False
+    logfire_send_to_logfire: bool = False
     log_level: str = "INFO"
 
     @property
