@@ -5,6 +5,7 @@ from __future__ import annotations
 from qdrant_client import QdrantClient
 
 from repo_research.config import Settings
+from repo_research.monitoring import instrument_pydantic_ai
 from repo_research.protocols import RepositorySearcher
 from repo_research.qdrant_store import (
     RepositoryDatabase,
@@ -49,6 +50,7 @@ def create_answer_model(settings: Settings) -> OpenAIResponsesModel:
 
 def create_research_agent(settings: Settings) -> PydanticAIResearchAgent:
     """Create the live PydanticAI research agent adapter."""
+    instrument_pydantic_ai(settings)
     return PydanticAIResearchAgent(model=settings.openai_answer_model)
 
 

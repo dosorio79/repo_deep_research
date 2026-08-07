@@ -34,6 +34,7 @@ from repo_research.models import (
     SearchQuery,
     SearchResult,
 )
+from repo_research.monitoring import instrument_fastapi
 from repo_research.rag import AnswerGenerator
 from repo_research.research import ResearchAgentRunner
 from repo_research.runtime import (
@@ -95,6 +96,7 @@ def create_app(
     load_dotenv_environment(keys=("OPENAI_API_KEY", "OPENAI_ADMIN_KEY"))
     app_settings = settings or Settings()
     app = FastAPI(title="Repo Deep Research", version=package_version())
+    instrument_fastapi(app, app_settings)
     if app_settings.cors_allowed_origins:
         app.add_middleware(
             CORSMiddleware,

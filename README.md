@@ -109,6 +109,8 @@ All runtime settings use the `RDR_` prefix and are validated by
 | `RDR_RESEARCH_MAX_TOTAL_TOOL_CALLS` | `12` | Default maximum total tool calls for one agentic research run. |
 | `RDR_POSTGRES_DSN` | unset | PostgreSQL connection string used for run monitoring and feedback persistence. `.env.example` configures the Compose database. |
 | `RDR_TELEMETRY_ENABLED` | `true` | Enables persisted monitoring and feedback when `RDR_POSTGRES_DSN` is configured. |
+| `RDR_LOGFIRE_ENABLED` | `false` | Enables optional Logfire instrumentation for FastAPI and PydanticAI. |
+| `RDR_LOGFIRE_SEND_TO_LOGFIRE` | `false` | Sends spans to Logfire only when explicitly enabled and authenticated. |
 | `RDR_CORS_ALLOWED_ORIGINS` | `[]` | JSON list of browser origins allowed to call FastAPI. `.env.example` opts in local frontend origins. |
 | `RDR_LOG_LEVEL` | `INFO` | Application log level. |
 | `OPENAI_API_KEY` | unset | OpenAI API key for live direct RAG and answer evaluation. Prefer `.env.local` or an exported shell variable. |
