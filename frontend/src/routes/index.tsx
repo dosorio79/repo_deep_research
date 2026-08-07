@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
@@ -18,16 +19,11 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/components/ApiError";
 import { ResearchStepsPanel } from "@/components/ResearchStepsPanel";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { AppShell } from "@/components/AppShell";
@@ -246,28 +242,39 @@ function ResearchView() {
   };
 
   const canIngest = repositoryAddress.trim().length > 0 && !ingestMutation.isPending;
-  const canAsk = question.trim().length > 0 && !queryMutation.isPending;
+  const hasRepository = ingestSummary !== null;
+  const canAsk = hasRepository && question.trim().length > 0 && !queryMutation.isPending;
   const ingestStatusLabel = ingestSummary?.index_updated ? "indexed" : "already indexed";
 
   return (
     <AppShell>
       <div className="space-y-3">
         <header className="border-b border-border pb-4">
-          <div className="max-w-5xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="gap-1.5 border-primary/30 bg-primary/5">
-                <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
-                Repository research assistant
-              </Badge>
-              <Badge variant="secondary">Python repositories</Badge>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-5xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="gap-1.5 border-primary/30 bg-primary/5">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
+                  Repository research assistant
+                </Badge>
+                <Badge variant="secondary">Python repositories</Badge>
+              </div>
+              <h1 className="mt-3 max-w-4xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+                Research a codebase with grounded RAG evidence.
+              </h1>
+              <p className="mt-2 max-w-3xl text-[14px] leading-6 text-muted-foreground">
+                Ingest a repository, ask a codebase question, and inspect an answer that cites
+                files, symbols, line ranges, and change targets.
+              </p>
             </div>
-            <h1 className="mt-3 max-w-4xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-              Research a codebase with grounded RAG evidence.
-            </h1>
-            <p className="mt-2 max-w-3xl text-[14px] leading-6 text-muted-foreground">
-              Ingest a repository, ask a codebase question, and inspect an answer that cites files,
-              symbols, line ranges, and change targets.
-            </p>
+            <ApiConnectionPanel
+              baseUrl={baseUrl}
+              health={healthQuery.data}
+              error={healthQuery.error as ApiErrorShape | null}
+              isChecking={healthQuery.isFetching}
+              onBaseUrlChange={(value) => setBaseUrl(value)}
+              onRetry={() => void healthQuery.refetch()}
+            />
           </div>
         </header>
 
@@ -298,14 +305,6 @@ function ResearchView() {
                   ) : null}
                 </div>
                 <div className="grid gap-3">
-                  <ApiConnectionPanel
-                    baseUrl={baseUrl}
-                    health={healthQuery.data}
-                    error={healthQuery.error as ApiErrorShape | null}
-                    isChecking={healthQuery.isFetching}
-                    onBaseUrlChange={(value) => setBaseUrl(value)}
-                    onRetry={() => void healthQuery.refetch()}
-                  />
                   <div>
                     <Label
                       htmlFor="repositoryAddress"
@@ -361,21 +360,31 @@ function ResearchView() {
                     Ask what you need to understand.
                   </h2>
                 </div>
-                <div className="min-w-[220px]">
-                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Research mode
-                  </span>
-                  <Segmented
-                    label="research type"
-                    value={researchKind}
-                    options={["direct", "agentic"]}
-                    format={(value) => (value === "agentic" ? "agentic RAG" : "direct RAG")}
-                    onChange={(value) => {
-                      setResearchKind(value);
-                      if (value === "agentic" && questionMode === "auto") {
-                        setQuestionMode("change");
-                      }
-                    }}
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="min-w-[220px]">
+                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Research mode
+                    </span>
+                    <Segmented
+                      label="research type"
+                      value={researchKind}
+                      options={["direct", "agentic"]}
+                      format={(value) => (value === "agentic" ? "agentic RAG" : "direct RAG")}
+                      onChange={(value) => {
+                        setResearchKind(value);
+                        if (value === "agentic" && questionMode === "auto") {
+                          setQuestionMode("change");
+                        }
+                      }}
+                    />
+                  </div>
+                  <SearchSettingsPopover
+                    limit={limit}
+                    questionMode={questionMode}
+                    retrievalMode={retrievalMode}
+                    onLimitChange={setLimit}
+                    onQuestionModeChange={setQuestionMode}
+                    onRetrievalModeChange={setRetrievalMode}
                   />
                 </div>
               </div>
@@ -423,62 +432,6 @@ function ResearchView() {
                   />
                 </div>
 
-                <Accordion
-                  type="single"
-                  collapsible
-                  className="rounded-md border border-border px-3"
-                >
-                  <AccordionItem value="settings" className="border-0">
-                    <AccordionTrigger className="py-2.5 text-[13px] hover:no-underline">
-                      Research settings
-                    </AccordionTrigger>
-                    <AccordionContent className="space-y-4">
-                      <div>
-                        <Label
-                          htmlFor="limit"
-                          className="text-[11px] uppercase tracking-wide text-muted-foreground"
-                        >
-                          Evidence limit: <span className="mono">{limit}</span>
-                        </Label>
-                        <Slider
-                          id="limit"
-                          className="mt-3"
-                          min={1}
-                          max={20}
-                          step={1}
-                          value={[limit]}
-                          onValueChange={(value) => setLimit(value[0] ?? limit)}
-                        />
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Question intent
-                          </span>
-                          <Segmented
-                            label="question mode"
-                            value={questionMode}
-                            options={QUESTION_MODES}
-                            onChange={setQuestionMode}
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Retrieval
-                          </span>
-                          <Segmented
-                            label="retrieval mode"
-                            value={retrievalMode}
-                            options={RETRIEVAL_MODES}
-                            onChange={setRetrievalMode}
-                          />
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-
                 <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                   <Button type="submit" disabled={!canAsk} className="gap-1.5">
                     {queryMutation.isPending ? (
@@ -488,7 +441,9 @@ function ResearchView() {
                     )}
                     {queryMutation.isPending ? "Running..." : "Run query"}
                   </Button>
-                  <span className="mono text-[11px] text-muted-foreground">Cmd/Ctrl + Enter</span>
+                  <span className="mono text-[11px] text-muted-foreground">
+                    {hasRepository ? "Cmd/Ctrl + Enter" : "Ingest a repository first"}
+                  </span>
                 </div>
                 {queryError ? <ApiError error={queryError} /> : null}
               </div>
@@ -561,6 +516,78 @@ function Segmented<T extends string>({
   );
 }
 
+function SearchSettingsPopover({
+  limit,
+  questionMode,
+  retrievalMode,
+  onLimitChange,
+  onQuestionModeChange,
+  onRetrievalModeChange,
+}: {
+  limit: number;
+  questionMode: QuestionMode;
+  retrievalMode: RetrievalMode;
+  onLimitChange: (value: number) => void;
+  onQuestionModeChange: (value: QuestionMode) => void;
+  onRetrievalModeChange: (value: RetrievalMode) => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" className="mt-[20px] gap-1.5">
+          <SlidersHorizontal className="h-4 w-4" aria-hidden />
+          Search settings
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[min(360px,calc(100vw-2rem))]">
+        <div className="space-y-4">
+          <div>
+            <Label
+              htmlFor="limit"
+              className="text-[11px] uppercase tracking-wide text-muted-foreground"
+            >
+              Evidence limit: <span className="mono">{limit}</span>
+            </Label>
+            <Slider
+              id="limit"
+              className="mt-3"
+              min={1}
+              max={20}
+              step={1}
+              value={[limit]}
+              onValueChange={(value) => onLimitChange(value[0] ?? limit)}
+            />
+          </div>
+
+          <div>
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Question intent
+            </span>
+            <Segmented
+              label="question mode"
+              value={questionMode}
+              options={QUESTION_MODES}
+              onChange={onQuestionModeChange}
+            />
+          </div>
+
+          <div>
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Retrieval
+            </span>
+            <Segmented
+              label="retrieval mode"
+              value={retrievalMode}
+              options={RETRIEVAL_MODES}
+              onChange={onRetrievalModeChange}
+            />
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function ApiConnectionPanel({
   baseUrl,
   health,
@@ -587,7 +614,7 @@ function ApiConnectionPanel({
         : "API offline";
 
   return (
-    <div className="rounded-md border border-border bg-background p-3">
+    <div className="w-full rounded-md border border-border bg-background p-3 shadow-sm sm:max-w-[360px]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Label
           htmlFor="baseUrl"
