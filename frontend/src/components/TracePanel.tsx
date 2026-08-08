@@ -42,6 +42,7 @@ export function TracePanel({ trace }: { trace: RagTrace | null }) {
 
       <Panel title="Run context">
         <Field label="request_id">{text(trace.request_id)}</Field>
+        <Field label="session_id">{text(trace.session_id)}</Field>
         <Field label="repository_name">{text(trace.repository_name)}</Field>
         <Field label="branch">{text(trace.branch)}</Field>
         <Field label="commit_hash">{text(trace.commit_hash)}</Field>

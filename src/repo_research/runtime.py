@@ -5,13 +5,19 @@ from __future__ import annotations
 from qdrant_client import QdrantClient
 
 from repo_research.config import Settings
-from repo_research.db import RepositoryDatabase, local_embedder, local_sparse_embedder
+from repo_research.monitoring import instrument_pydantic_ai
 from repo_research.protocols import RepositorySearcher
+from repo_research.qdrant_store import (
+    RepositoryDatabase,
+    local_embedder,
+    local_sparse_embedder,
+)
 from repo_research.rag import (
     AnswerGenerator,
     DirectRagService,
     OpenAIResponsesModel,
 )
+from repo_research.recording_store import NoOpRecordingStore, PostgresRecordingStore
 from repo_research.research import (
     BoundedResearchService,
     PydanticAIResearchAgent,
@@ -44,7 +50,19 @@ def create_answer_model(settings: Settings) -> OpenAIResponsesModel:
 
 def create_research_agent(settings: Settings) -> PydanticAIResearchAgent:
     """Create the live PydanticAI research agent adapter."""
+    instrument_pydantic_ai(settings)
     return PydanticAIResearchAgent(model=settings.openai_answer_model)
+
+
+def create_recording_store(
+    settings: Settings,
+) -> NoOpRecordingStore | PostgresRecordingStore:
+    """Create the optional monitoring and feedback recording dependency."""
+    if not settings.telemetry_enabled or settings.postgres_dsn is None:
+        return NoOpRecordingStore()
+    store = PostgresRecordingStore(settings.postgres_dsn)
+    store.initialize()
+    return store
 
 
 def create_direct_rag_service(

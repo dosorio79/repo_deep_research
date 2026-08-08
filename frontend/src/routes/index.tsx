@@ -9,22 +9,21 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  Send,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/components/ApiError";
 import { ResearchStepsPanel } from "@/components/ResearchStepsPanel";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { AppShell } from "@/components/AppShell";
@@ -34,7 +33,9 @@ import {
   ingestRepository,
   runAgenticResearch,
   runRagQuery,
+  submitFeedback,
 } from "@/lib/rag-client";
+import { getBrowserSessionId } from "@/lib/session-id";
 import type {
   ApiErrorShape,
   BackendHealth,
@@ -94,7 +95,7 @@ export const Route = createFileRoute("/")({
 });
 
 function ResearchView() {
-  const [baseUrl, setBaseUrl] = useState(DEFAULT_API_BASE_URL);
+  const baseUrl = DEFAULT_API_BASE_URL;
   const [repositoryAddress, setRepositoryAddress] = useState("");
   const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null);
   const [question, setQuestion] = useState("");
@@ -103,6 +104,8 @@ function ResearchView() {
   const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>("hybrid");
   const [limit, setLimit] = useState(8);
   const [result, setResult] = useState<ResearchResult | null>(null);
+  const [resultKind, setResultKind] = useState<ResearchKind>("direct");
+  const [sessionId] = useState(() => getBrowserSessionId());
   const [ingestError, setIngestError] = useState<ApiErrorShape | null>(null);
   const [queryError, setQueryError] = useState<ApiErrorShape | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
@@ -119,6 +122,7 @@ function ResearchView() {
     if (latestRun.answer?.mode) {
       setQuestionMode(latestRun.answer.mode);
     }
+    setResultKind(latestRun.answer?.research_steps?.length ? "agentic" : "direct");
   }, []);
 
   const healthQuery = useQuery({
@@ -172,6 +176,22 @@ function ResearchView() {
     },
   });
 
+  const feedbackMutation = useMutation({
+    mutationFn: (payload: {
+      useful: boolean;
+      comment?: string;
+      requestId?: string;
+      runKind: ResearchKind;
+    }) =>
+      submitFeedback(baseUrl, {
+        session_id: sessionId,
+        run_kind: payload.runKind,
+        useful: payload.useful,
+        ...(payload.requestId ? { request_id: payload.requestId } : {}),
+        ...(payload.comment ? { comment: payload.comment } : {}),
+      }),
+  });
+
   const ingest = () => {
     setIngestError(null);
     ingestMutation.mutate({
@@ -190,6 +210,7 @@ function ResearchView() {
       question: question.trim(),
       mode: questionMode,
       retrieval_mode: retrievalMode,
+      session_id: sessionId,
       ...(queryRepositoryPath ? { repository_path: queryRepositoryPath } : {}),
     };
     const body =
@@ -208,31 +229,50 @@ function ResearchView() {
       body,
       signal: controller.signal,
     });
+    setResultKind(researchKind);
+  };
+
+  const submitRunFeedback = (payload: { useful: boolean; comment?: string }) => {
+    feedbackMutation.mutate({
+      useful: payload.useful,
+      runKind: resultKind,
+      ...(result?.trace?.request_id ? { requestId: result.trace.request_id } : {}),
+      ...(payload.comment ? { comment: payload.comment } : {}),
+    });
   };
 
   const canIngest = repositoryAddress.trim().length > 0 && !ingestMutation.isPending;
-  const canAsk = question.trim().length > 0 && !queryMutation.isPending;
+  const hasRepository = ingestSummary !== null;
+  const canAsk = hasRepository && question.trim().length > 0 && !queryMutation.isPending;
   const ingestStatusLabel = ingestSummary?.index_updated ? "indexed" : "already indexed";
 
   return (
     <AppShell>
       <div className="space-y-3">
         <header className="border-b border-border pb-4">
-          <div className="max-w-5xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="gap-1.5 border-primary/30 bg-primary/5">
-                <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
-                Repository research assistant
-              </Badge>
-              <Badge variant="secondary">Python repositories</Badge>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-5xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="gap-1.5 border-primary/30 bg-primary/5">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
+                  Repository research assistant
+                </Badge>
+                <Badge variant="secondary">Python repositories</Badge>
+              </div>
+              <h1 className="mt-3 max-w-4xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+                Research a codebase with grounded RAG evidence.
+              </h1>
+              <p className="mt-2 max-w-3xl text-[14px] leading-6 text-muted-foreground">
+                Ingest a repository, ask a codebase question, and inspect an answer that cites
+                files, symbols, line ranges, and change targets.
+              </p>
             </div>
-            <h1 className="mt-3 max-w-4xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-              Research a codebase with grounded RAG evidence.
-            </h1>
-            <p className="mt-2 max-w-3xl text-[14px] leading-6 text-muted-foreground">
-              Ingest a repository, ask a codebase question, and inspect an answer that cites files,
-              symbols, line ranges, and change targets.
-            </p>
+            <ApiStatusLight
+              health={healthQuery.data}
+              error={healthQuery.error as ApiErrorShape | null}
+              isChecking={healthQuery.isFetching}
+              onRetry={() => void healthQuery.refetch()}
+            />
           </div>
         </header>
 
@@ -263,14 +303,6 @@ function ResearchView() {
                   ) : null}
                 </div>
                 <div className="grid gap-3">
-                  <ApiConnectionPanel
-                    baseUrl={baseUrl}
-                    health={healthQuery.data}
-                    error={healthQuery.error as ApiErrorShape | null}
-                    isChecking={healthQuery.isFetching}
-                    onBaseUrlChange={(value) => setBaseUrl(value)}
-                    onRetry={() => void healthQuery.refetch()}
-                  />
                   <div>
                     <Label
                       htmlFor="repositoryAddress"
@@ -326,21 +358,31 @@ function ResearchView() {
                     Ask what you need to understand.
                   </h2>
                 </div>
-                <div className="min-w-[220px]">
-                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Research mode
-                  </span>
-                  <Segmented
-                    label="research type"
-                    value={researchKind}
-                    options={["direct", "agentic"]}
-                    format={(value) => (value === "agentic" ? "agentic RAG" : "direct RAG")}
-                    onChange={(value) => {
-                      setResearchKind(value);
-                      if (value === "agentic" && questionMode === "auto") {
-                        setQuestionMode("change");
-                      }
-                    }}
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="min-w-[220px]">
+                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Research mode
+                    </span>
+                    <Segmented
+                      label="research type"
+                      value={researchKind}
+                      options={["direct", "agentic"]}
+                      format={(value) => (value === "agentic" ? "agentic RAG" : "direct RAG")}
+                      onChange={(value) => {
+                        setResearchKind(value);
+                        if (value === "agentic" && questionMode === "auto") {
+                          setQuestionMode("change");
+                        }
+                      }}
+                    />
+                  </div>
+                  <SearchSettingsPopover
+                    limit={limit}
+                    questionMode={questionMode}
+                    retrievalMode={retrievalMode}
+                    onLimitChange={setLimit}
+                    onQuestionModeChange={setQuestionMode}
+                    onRetrievalModeChange={setRetrievalMode}
                   />
                 </div>
               </div>
@@ -388,62 +430,6 @@ function ResearchView() {
                   />
                 </div>
 
-                <Accordion
-                  type="single"
-                  collapsible
-                  className="rounded-md border border-border px-3"
-                >
-                  <AccordionItem value="settings" className="border-0">
-                    <AccordionTrigger className="py-2.5 text-[13px] hover:no-underline">
-                      Research settings
-                    </AccordionTrigger>
-                    <AccordionContent className="space-y-4">
-                      <div>
-                        <Label
-                          htmlFor="limit"
-                          className="text-[11px] uppercase tracking-wide text-muted-foreground"
-                        >
-                          Evidence limit: <span className="mono">{limit}</span>
-                        </Label>
-                        <Slider
-                          id="limit"
-                          className="mt-3"
-                          min={1}
-                          max={20}
-                          step={1}
-                          value={[limit]}
-                          onValueChange={(value) => setLimit(value[0] ?? limit)}
-                        />
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Question intent
-                          </span>
-                          <Segmented
-                            label="question mode"
-                            value={questionMode}
-                            options={QUESTION_MODES}
-                            onChange={setQuestionMode}
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Retrieval
-                          </span>
-                          <Segmented
-                            label="retrieval mode"
-                            value={retrievalMode}
-                            options={RETRIEVAL_MODES}
-                            onChange={setRetrievalMode}
-                          />
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-
                 <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                   <Button type="submit" disabled={!canAsk} className="gap-1.5">
                     {queryMutation.isPending ? (
@@ -453,7 +439,9 @@ function ResearchView() {
                     )}
                     {queryMutation.isPending ? "Running..." : "Run query"}
                   </Button>
-                  <span className="mono text-[11px] text-muted-foreground">Cmd/Ctrl + Enter</span>
+                  <span className="mono text-[11px] text-muted-foreground">
+                    {hasRepository ? "Cmd/Ctrl + Enter" : "Ingest a repository first"}
+                  </span>
                 </div>
                 {queryError ? <ApiError error={queryError} /> : null}
               </div>
@@ -469,7 +457,14 @@ function ResearchView() {
             </div>
           ) : null}
           {result ? (
-            <ReviewerResult result={result} />
+            <ReviewerResult
+              result={result}
+              runKind={resultKind}
+              feedbackPending={feedbackMutation.isPending}
+              feedbackSubmitted={feedbackMutation.isSuccess}
+              feedbackError={(feedbackMutation.error as ApiErrorShape | null) ?? null}
+              onSubmitFeedback={submitRunFeedback}
+            />
           ) : (
             <EmptyResult endpoint={researchKind === "agentic" ? "/research" : "/rag"} />
           )}
@@ -519,19 +514,87 @@ function Segmented<T extends string>({
   );
 }
 
-function ApiConnectionPanel({
-  baseUrl,
+function SearchSettingsPopover({
+  limit,
+  questionMode,
+  retrievalMode,
+  onLimitChange,
+  onQuestionModeChange,
+  onRetrievalModeChange,
+}: {
+  limit: number;
+  questionMode: QuestionMode;
+  retrievalMode: RetrievalMode;
+  onLimitChange: (value: number) => void;
+  onQuestionModeChange: (value: QuestionMode) => void;
+  onRetrievalModeChange: (value: RetrievalMode) => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" className="gap-1.5">
+          <SlidersHorizontal className="h-4 w-4" aria-hidden />
+          Search settings
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[min(360px,calc(100vw-2rem))]">
+        <div className="space-y-4">
+          <div>
+            <Label
+              htmlFor="limit"
+              className="text-[11px] uppercase tracking-wide text-muted-foreground"
+            >
+              Evidence limit: <span className="mono">{limit}</span>
+            </Label>
+            <Slider
+              id="limit"
+              className="mt-3"
+              min={1}
+              max={20}
+              step={1}
+              value={[limit]}
+              onValueChange={(value) => onLimitChange(value[0] ?? limit)}
+            />
+          </div>
+
+          <div>
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Question intent
+            </span>
+            <Segmented
+              label="question mode"
+              value={questionMode}
+              options={QUESTION_MODES}
+              onChange={onQuestionModeChange}
+            />
+          </div>
+
+          <div>
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Retrieval
+            </span>
+            <Segmented
+              label="retrieval mode"
+              value={retrievalMode}
+              options={RETRIEVAL_MODES}
+              onChange={onRetrievalModeChange}
+            />
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ApiStatusLight({
   health,
   error,
   isChecking,
-  onBaseUrlChange,
   onRetry,
 }: {
-  baseUrl: string;
   health: BackendHealth | undefined;
   error: ApiErrorShape | null;
   isChecking: boolean;
-  onBaseUrlChange: (value: string) => void;
   onRetry: () => void;
 }) {
   const isReachable = Boolean(health) && !error;
@@ -545,53 +608,39 @@ function ApiConnectionPanel({
         : "API offline";
 
   return (
-    <div className="rounded-md border border-border bg-background p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label
-          htmlFor="baseUrl"
-          className="text-[11px] uppercase tracking-wide text-muted-foreground"
-        >
-          API base URL
-        </Label>
-        <div className="flex items-center gap-2">
-          <Badge
-            variant={isReady ? "secondary" : "outline"}
-            className={cn(
-              "gap-1.5",
-              isReady
-                ? "bg-primary/10 text-primary"
-                : error
-                  ? "border-destructive/40 text-destructive"
-                  : "border-warning/50 text-warning-foreground",
-            )}
-          >
-            {isChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
-            {statusLabel}
-          </Badge>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onRetry}
-            disabled={isChecking || !baseUrl.trim()}
-            aria-label="Check API connection"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", isChecking && "animate-spin")} aria-hidden />
-          </Button>
-        </div>
-      </div>
-      <Input
-        id="baseUrl"
-        value={baseUrl}
-        spellCheck={false}
-        onChange={(event) => onBaseUrlChange(event.target.value)}
-        className="mt-2 h-9 mono text-[12px]"
-      />
-      {error ? (
-        <p className="mt-2 break-words mono text-[11px] leading-5 text-destructive">
-          {error.detail}
-        </p>
-      ) : null}
+    <div className="flex items-center gap-2">
+      <Badge
+        variant={isReady ? "secondary" : "outline"}
+        className={cn(
+          "gap-1.5",
+          isReady
+            ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+            : error
+              ? "border-destructive/40 text-destructive"
+              : "border-warning/50 text-warning-foreground",
+        )}
+      >
+        <span
+          className={cn(
+            "h-2 w-2 rounded-full",
+            isReady ? "bg-emerald-500" : error ? "bg-destructive" : "bg-warning",
+          )}
+          aria-hidden
+        />
+        {isChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+        {statusLabel}
+      </Badge>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onRetry}
+        disabled={isChecking}
+        aria-label="Check API connection"
+      >
+        <RefreshCw className={cn("h-3.5 w-3.5", isChecking && "animate-spin")} aria-hidden />
+      </Button>
+      {error ? <span className="sr-only">{error.detail}</span> : null}
     </div>
   );
 }
@@ -636,7 +685,21 @@ function EmptyResult({ endpoint }: { endpoint: string }) {
   );
 }
 
-function ReviewerResult({ result }: { result: ResearchResult }) {
+function ReviewerResult({
+  result,
+  runKind,
+  feedbackPending,
+  feedbackSubmitted,
+  feedbackError,
+  onSubmitFeedback,
+}: {
+  result: ResearchResult;
+  runKind: ResearchKind;
+  feedbackPending: boolean;
+  feedbackSubmitted: boolean;
+  feedbackError: ApiErrorShape | null;
+  onSubmitFeedback: (payload: { useful: boolean; comment?: string }) => void;
+}) {
   const answer = result.answer;
   const evidence = answer?.evidence ?? [];
   const changeTargets = answer?.change_targets ?? [];
@@ -686,6 +749,115 @@ function ReviewerResult({ result }: { result: ResearchResult }) {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <EvidenceHighlights evidence={evidence} />
         <RunTraceSummary result={result} />
+      </div>
+      {result.trace ? (
+        <FeedbackControls
+          runKind={runKind}
+          requestId={result.trace.request_id}
+          pending={feedbackPending}
+          submitted={feedbackSubmitted}
+          error={feedbackError}
+          onSubmit={onSubmitFeedback}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function FeedbackControls({
+  runKind,
+  requestId,
+  pending,
+  submitted,
+  error,
+  onSubmit,
+}: {
+  runKind: ResearchKind;
+  requestId: string;
+  pending: boolean;
+  submitted: boolean;
+  error: ApiErrorShape | null;
+  onSubmit: (payload: { useful: boolean; comment?: string }) => void;
+}) {
+  const [useful, setUseful] = useState<boolean | null>(null);
+  const [comment, setComment] = useState("");
+  const canSubmit = useful !== null && !pending && !submitted;
+
+  return (
+    <div className="rounded-md border border-border bg-secondary/25 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Run feedback
+          </p>
+          <p className="mt-1 mono text-[11px] text-muted-foreground">
+            {runKind} - {requestId}
+          </p>
+        </div>
+        {submitted ? <Badge variant="secondary">submitted</Badge> : null}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant={useful === true ? "default" : "outline"}
+          size="sm"
+          disabled={submitted}
+          onClick={() => setUseful(true)}
+          className="gap-1.5"
+        >
+          <ThumbsUp className="h-4 w-4" aria-hidden />
+          Useful
+        </Button>
+        <Button
+          type="button"
+          variant={useful === false ? "default" : "outline"}
+          size="sm"
+          disabled={submitted}
+          onClick={() => setUseful(false)}
+          className="gap-1.5"
+        >
+          <ThumbsDown className="h-4 w-4" aria-hidden />
+          Not useful
+        </Button>
+      </div>
+      <Label
+        htmlFor="feedbackComment"
+        className="mt-3 block text-[11px] uppercase tracking-wide text-muted-foreground"
+      >
+        Comment
+      </Label>
+      <Textarea
+        id="feedbackComment"
+        value={comment}
+        rows={2}
+        maxLength={2000}
+        disabled={submitted}
+        onChange={(event) => setComment(event.target.value)}
+        className="mt-1.5 min-h-[68px] resize-y text-[13px] leading-5"
+      />
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={!canSubmit}
+          onClick={() =>
+            useful !== null
+              ? onSubmit({
+                  useful,
+                  ...(comment.trim() ? { comment: comment.trim() } : {}),
+                })
+              : undefined
+          }
+          className="gap-1.5"
+        >
+          {pending ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Send className="h-4 w-4" aria-hidden />
+          )}
+          {submitted ? "Feedback recorded" : "Submit feedback"}
+        </Button>
+        {error ? <span className="text-[12px] text-destructive">{error.detail}</span> : null}
       </div>
     </div>
   );

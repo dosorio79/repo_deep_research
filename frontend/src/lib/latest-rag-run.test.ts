@@ -19,6 +19,7 @@ const result: RagRunResult = {
   },
   trace: {
     request_id: "req-1",
+    session_id: "session-1",
     repository_name: "repo_deep_research",
     branch: "dev",
     commit_hash: "abc123",

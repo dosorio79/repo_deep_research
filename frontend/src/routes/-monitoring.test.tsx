@@ -1,115 +1,89 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route } from "./monitoring";
-import { loadLatestRagRun } from "@/lib/latest-rag-run";
-import type { RagRunResult } from "@/lib/rag-types";
+import { getMonitoringSummary } from "@/lib/rag-client";
+import type { MonitoringSummary } from "@/lib/rag-types";
 
 vi.mock("@/components/AppShell", () => ({
   AppShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("@/lib/latest-rag-run", () => ({
-  loadLatestRagRun: vi.fn(),
+vi.mock("@/lib/rag-client", () => ({
+  getMonitoringSummary: vi.fn(),
 }));
 
-const result: RagRunResult = {
-  answer: {
-    question: "Where to add a rag agentic mode?",
-    mode: "change",
-    summary: "Add a repository-level agentic research mode.",
-    implementation_flow: ["Update RagMode."],
-    evidence: [
-      {
-        evidence_id: "E1",
-        path: "src/repo_research/models.py",
-        start_line: 63,
-        end_line: 69,
-        symbol: "RagMode",
-        score: 0.33,
-        reason: "RagMode defines the supported modes.",
-      },
-    ],
-    relevant_files: ["src/repo_research/models.py"],
-    relevant_symbols: ["RagMode"],
-    change_targets: [
-      {
-        path: "src/repo_research/models.py",
-        symbol: "RagMode",
-        reason: "Add the new mode.",
-        evidence_ids: ["E1"],
-      },
-    ],
-    risks: ["Avoid starting M4 too early."],
-    confidence: 0.75,
-    unresolved_questions: ["research or agentic?"],
-    insufficient_evidence: false,
-  },
-  trace: {
-    request_id: "req-1",
-    started_at: "2026-08-03T21:46:45.712100Z",
-    completed_at: "2026-08-03T21:47:25.178039Z",
-    repository_name: "repo_deep_research",
-    branch: "feat/m3-6-frontend-harness",
-    commit_hash: "abc123",
-    question_mode: "change",
-    retrieval_mode: "hybrid",
-    retrieval_limit: 8,
-    retrieved_chunk_count: 8,
-    unique_file_count: 7,
-    latency_ms_total: 39469,
-    latency_ms_retrieval: 32,
-    latency_ms_model: 39436,
-    model_usage: [
-      {
-        provider: "openai",
-        model: "gpt-5-mini",
-        input_tokens: 2363,
-        output_tokens: 2922,
-        total_tokens: 5285,
-        reasoning_tokens: 1600,
-        estimated_cost_usd: "0.00643475",
-        pricing_version: "openai-api-pricing-snapshot",
-      },
-    ],
-    total_estimated_cost_usd: "0.00643475",
-    insufficient_evidence: false,
-    error_type: null,
-    error_message: null,
-    tool_call_count: 0,
-  },
+const summary: MonitoringSummary = {
+  total_runs: 2,
+  runs_by_kind: [
+    { run_kind: "agentic", count: 1 },
+    { run_kind: "direct", count: 1 },
+  ],
+  average_latency_by_kind: [
+    { run_kind: "agentic", average_latency_ms: 300 },
+    { run_kind: "direct", average_latency_ms: 100 },
+  ],
+  retrieval_volume: { retrieved_chunk_count: 7, unique_file_count: 5 },
+  model_usage_by_model: [
+    {
+      provider: "openai",
+      model: "gpt-5-mini",
+      input_tokens: 30,
+      output_tokens: 15,
+      total_tokens: 45,
+      estimated_cost_usd: "0.036",
+    },
+  ],
+  feedback: { useful: 1, not_useful: 2 },
+  errors_by_type: [{ error_type: "ResearchBudgetExceeded", count: 1 }],
 };
 
 function renderMonitoringRoute() {
   const MonitoringComponent = Route.options.component as ComponentType;
-  return render(<MonitoringComponent />);
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MonitoringComponent />
+    </QueryClientProvider>,
+  );
 }
 
 describe("Monitoring route", () => {
   beforeEach(() => {
-    vi.mocked(loadLatestRagRun).mockReset();
+    vi.mocked(getMonitoringSummary).mockReset();
   });
 
-  it("renders the latest RAG response outcome and usage metrics", async () => {
-    vi.mocked(loadLatestRagRun).mockReturnValue(result);
+  it("renders persisted monitoring summary panels", async () => {
+    vi.mocked(getMonitoringSummary).mockResolvedValue(summary);
 
     renderMonitoringRoute();
 
-    expect(await screen.findByText("Grounded")).toBeInTheDocument();
-    expect(screen.getByText("8 chunks, 7 files")).toBeInTheDocument();
-    expect(screen.getAllByText("$0.006435")).toHaveLength(2);
-    expect(screen.getByText("5,285 tokens")).toBeInTheDocument();
-    expect(screen.getByText("openai-api-pricing-snapshot")).toBeInTheDocument();
+    expect(await screen.findByText("2")).toBeInTheDocument();
+    expect(screen.getByText("7 chunks")).toBeInTheDocument();
+    expect(screen.getByText("5 files")).toBeInTheDocument();
+    expect(screen.getByText("45")).toBeInTheDocument();
+    expect(screen.getByText("$0.036000")).toBeInTheDocument();
+    expect(screen.getByText("1 useful, 2 not useful")).toBeInTheDocument();
+    expect(screen.getAllByText("ResearchBudgetExceeded").length).toBeGreaterThan(0);
   });
 
-  it("renders an empty state before any successful run", async () => {
-    vi.mocked(loadLatestRagRun).mockReturnValue(null);
+  it("renders an honest empty state before persisted runs exist", async () => {
+    vi.mocked(getMonitoringSummary).mockResolvedValue({
+      ...summary,
+      total_runs: 0,
+      runs_by_kind: [],
+      average_latency_by_kind: [],
+      retrieval_volume: { retrieved_chunk_count: 0, unique_file_count: 0 },
+      model_usage_by_model: [],
+      feedback: { useful: 0, not_useful: 0 },
+      errors_by_type: [],
+    });
 
     renderMonitoringRoute();
 
     expect(
       await screen.findByText(
-        "Run a research query first. The latest successful response appears here.",
+        "No persisted monitoring rows are available. Run a direct or agentic query first.",
       ),
     ).toBeInTheDocument();
   });

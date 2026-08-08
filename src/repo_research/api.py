@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from typing import Protocol
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,16 +19,22 @@ from repo_research.ingestion import (
     materialize_repository_address,
 )
 from repo_research.models import (
+    FeedbackEvent,
+    FeedbackRequest,
     IngestSummary,
+    MonitoringSummary,
     ParsedChunk,
     RagRequest,
     RagRunResult,
+    RagRunTrace,
     RepositoryIngestRequest,
     ResearchRequest,
     ResearchRunResult,
+    RunKind,
     SearchQuery,
     SearchResult,
 )
+from repo_research.monitoring import instrument_fastapi
 from repo_research.rag import AnswerGenerator
 from repo_research.research import ResearchAgentRunner
 from repo_research.runtime import (
@@ -34,6 +42,7 @@ from repo_research.runtime import (
     create_bounded_research_service,
     create_database,
     create_direct_rag_service,
+    create_recording_store,
     create_research_agent,
 )
 
@@ -54,6 +63,19 @@ class RagDatabase(Protocol):
         """Return indexed chunk count for one repository revision."""
 
 
+class RecordingStore(Protocol):
+    """Monitoring and feedback persistence behavior required by API routes."""
+
+    def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
+        """Persist one completed run trace."""
+
+    def record_feedback(self, event: FeedbackEvent) -> None:
+        """Persist one feedback event."""
+
+    def monitoring_summary(self) -> MonitoringSummary:
+        """Return aggregate monitoring panels."""
+
+
 def package_version() -> str:
     """Return the installed package version used by FastAPI metadata."""
     try:
@@ -68,11 +90,13 @@ def create_app(
     database: RagDatabase | None = None,
     generator: AnswerGenerator | None = None,
     research_agent: ResearchAgentRunner | None = None,
+    recording_store: RecordingStore | None = None,
 ) -> FastAPI:
     """Create a FastAPI app with injectable runtime dependencies."""
     load_dotenv_environment(keys=("OPENAI_API_KEY", "OPENAI_ADMIN_KEY"))
     app_settings = settings or Settings()
     app = FastAPI(title="Repo Deep Research", version=package_version())
+    instrument_fastapi(app, app_settings)
     if app_settings.cors_allowed_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -89,6 +113,14 @@ def create_app(
 
     def get_research_agent() -> ResearchAgentRunner:
         return research_agent or create_research_agent(app_settings)
+
+    recording_store_instance = recording_store
+
+    def get_recording_store() -> RecordingStore:
+        nonlocal recording_store_instance
+        if recording_store_instance is None:
+            recording_store_instance = create_recording_store(app_settings)
+        return recording_store_instance
 
     @app.get("/")
     async def root() -> dict[str, str]:
@@ -147,10 +179,15 @@ def create_app(
                 database=get_database(),
                 generator=get_generator(),
             )
-            return service.run(
+            result = service.run(
                 repository=repository,
                 request=request.model_copy(update={"repository_path": root_path}),
             )
+            get_recording_store().record_run(
+                run_kind=RunKind.DIRECT,
+                trace=result.trace,
+            )
+            return result
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         except ResponseHandlingException as error:
@@ -182,10 +219,15 @@ def create_app(
                 database=get_database(),
                 agent=get_research_agent(),
             )
-            return service.run(
+            result = service.run(
                 repository=repository,
                 request=request.model_copy(update={"repository_path": root_path}),
             )
+            get_recording_store().record_run(
+                run_kind=RunKind.AGENTIC,
+                trace=result.trace,
+            )
+            return result
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         except ResponseHandlingException as error:
@@ -204,6 +246,23 @@ def create_app(
                     "service configuration."
                 ),
             ) from error
+
+    @app.post("/feedback", response_model=FeedbackEvent)
+    async def feedback(request: FeedbackRequest) -> FeedbackEvent:
+        event = FeedbackEvent(
+            session_id=request.session_id or uuid4().hex,
+            request_id=request.request_id,
+            run_kind=request.run_kind,
+            useful=request.useful,
+            comment=request.comment,
+            submitted_at=datetime.now(UTC),
+        )
+        get_recording_store().record_feedback(event)
+        return event
+
+    @app.get("/monitoring/summary", response_model=MonitoringSummary)
+    async def monitoring_summary() -> MonitoringSummary:
+        return get_recording_store().monitoring_summary()
 
     return app
 

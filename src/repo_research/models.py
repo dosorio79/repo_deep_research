@@ -7,7 +7,7 @@ from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from pydantic import AliasChoices, BaseModel, Field, model_validator
 
@@ -69,6 +69,13 @@ class RagMode(StrEnum):
     AUTO = "auto"
 
 
+class RunKind(StrEnum):
+    """The persisted run categories shown in monitoring dashboards."""
+
+    DIRECT = "direct"
+    AGENTIC = "agentic"
+
+
 class SearchQuery(BaseModel):
     """A repository search request scoped to one source revision."""
 
@@ -94,6 +101,7 @@ class RagRequest(BaseModel):
     mode: RagMode = RagMode.AUTO
     retrieval_mode: RetrievalMode = RetrievalMode.DENSE
     limit: int = Field(default=5, ge=1, le=20)
+    session_id: str | None = Field(default=None, min_length=1)
 
 
 class ResearchBudget(BaseModel):
@@ -122,6 +130,7 @@ class ResearchRequest(BaseModel):
     retrieval_mode: RetrievalMode = RetrievalMode.DENSE
     retrieval_limit: int = Field(default=5, ge=1, le=20)
     budget: ResearchBudget = Field(default_factory=ResearchBudget)
+    session_id: str | None = Field(default=None, min_length=1)
 
 
 class RepositoryIngestRequest(BaseModel):
@@ -243,6 +252,7 @@ class RagRunTrace(BaseModel):
     """Application-owned trace metadata for one direct-RAG run."""
 
     request_id: str = Field(min_length=1)
+    session_id: str = Field(default_factory=lambda: uuid4().hex, min_length=1)
     started_at: datetime
     completed_at: datetime
     repository_id: str = Field(min_length=1)
@@ -278,6 +288,88 @@ class ResearchRunResult(BaseModel):
 
     answer: ResearchAnswer
     trace: RagRunTrace
+
+
+class FeedbackRequest(BaseModel):
+    """A user feedback submission for one browser session or returned run."""
+
+    session_id: str | None = Field(default=None, min_length=1)
+    request_id: str | None = Field(default=None, min_length=1)
+    run_kind: RunKind | None = None
+    useful: bool
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class FeedbackEvent(BaseModel):
+    """A persisted feedback event."""
+
+    feedback_id: str = Field(default_factory=lambda: uuid4().hex, min_length=1)
+    session_id: str = Field(min_length=1)
+    request_id: str | None = Field(default=None, min_length=1)
+    run_kind: RunKind | None = None
+    useful: bool
+    comment: str | None = Field(default=None, max_length=2000)
+    submitted_at: datetime
+
+
+class RunKindCount(BaseModel):
+    """Run count for one monitoring run kind."""
+
+    run_kind: RunKind
+    count: int = Field(ge=0)
+
+
+class LatencyByRunKind(BaseModel):
+    """Average latency for one monitoring run kind."""
+
+    run_kind: RunKind
+    average_latency_ms: float = Field(ge=0)
+
+
+class RetrievalVolumeSummary(BaseModel):
+    """Aggregate retrieval volume for monitoring dashboards."""
+
+    retrieved_chunk_count: int = Field(default=0, ge=0)
+    unique_file_count: int = Field(default=0, ge=0)
+
+
+class ModelUsageSummary(BaseModel):
+    """Aggregate token and cost telemetry for one model."""
+
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    total_tokens: int = Field(ge=0)
+    estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+
+
+class FeedbackUsefulSummary(BaseModel):
+    """Useful/not-useful feedback counts."""
+
+    useful: int = Field(default=0, ge=0)
+    not_useful: int = Field(default=0, ge=0)
+
+
+class ErrorCountSummary(BaseModel):
+    """Count of persisted run errors by error type."""
+
+    error_type: str = Field(min_length=1)
+    count: int = Field(ge=0)
+
+
+class MonitoringSummary(BaseModel):
+    """Backend aggregate data for reviewer-visible monitoring panels."""
+
+    total_runs: int = Field(ge=0)
+    runs_by_kind: list[RunKindCount] = Field(default_factory=list)
+    average_latency_by_kind: list[LatencyByRunKind] = Field(default_factory=list)
+    retrieval_volume: RetrievalVolumeSummary = Field(
+        default_factory=RetrievalVolumeSummary
+    )
+    model_usage_by_model: list[ModelUsageSummary] = Field(default_factory=list)
+    feedback: FeedbackUsefulSummary = Field(default_factory=FeedbackUsefulSummary)
+    errors_by_type: list[ErrorCountSummary] = Field(default_factory=list)
 
 
 class EvaluationRecord(BaseModel):

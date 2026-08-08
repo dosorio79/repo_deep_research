@@ -10,6 +10,7 @@ import {
   ingestRepository,
   runAgenticResearch,
   runRagQuery,
+  submitFeedback,
 } from "@/lib/rag-client";
 import type { IngestSummary, RagRunResult, ResearchRunResult } from "@/lib/rag-types";
 
@@ -18,6 +19,7 @@ vi.mock("@/lib/rag-client", () => ({
   ingestRepository: vi.fn(),
   runAgenticResearch: vi.fn(),
   runRagQuery: vi.fn(),
+  submitFeedback: vi.fn(),
 }));
 
 vi.mock("@/lib/latest-rag-run", () => ({
@@ -46,6 +48,7 @@ const okResult: RagRunResult = {
   },
   trace: {
     request_id: "req-1",
+    session_id: "browser-session",
     repository_name: "repo_deep_research",
     branch: "dev",
     commit_hash: "abc123",
@@ -141,6 +144,13 @@ function renderResearchRoute() {
   );
 }
 
+async function ingestSampleRepository(user: ReturnType<typeof userEvent.setup>) {
+  vi.mocked(ingestRepository).mockResolvedValue(ingestSummary);
+  await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
+  await user.click(screen.getByRole("button", { name: "Ingest repository" }));
+  await screen.findByText("sample-repo");
+}
+
 describe("Research route", () => {
   beforeEach(() => {
     vi.mocked(ingestRepository).mockReset();
@@ -148,9 +158,12 @@ describe("Research route", () => {
     vi.mocked(getBackendHealth).mockResolvedValue({ status: "ok", qdrant: true });
     vi.mocked(runAgenticResearch).mockReset();
     vi.mocked(runRagQuery).mockReset();
+    vi.mocked(submitFeedback).mockReset();
     vi.mocked(loadLatestRagRun).mockReset();
     vi.mocked(loadLatestRagRun).mockReturnValue(null);
     vi.mocked(saveLatestRagRun).mockReset();
+    window.localStorage.clear();
+    window.localStorage.setItem("repo-deep-research-session-id", "browser-session");
   });
 
   it("restores the latest successful result when returning to research", () => {
@@ -171,7 +184,6 @@ describe("Research route", () => {
     renderResearchRoute();
 
     await screen.findByText("API offline");
-    expect(screen.getByText(/\/api\/health/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check API connection" })).toBeInTheDocument();
   });
 
@@ -188,6 +200,7 @@ describe("Research route", () => {
 
     const view = renderResearchRoute();
 
+    await ingestSampleRepository(user);
     await user.type(screen.getByLabelText("Question"), "Where is config validated?");
     await user.click(screen.getByRole("button", { name: "Run query" }));
 
@@ -206,7 +219,7 @@ describe("Research route", () => {
 
     renderResearchRoute();
 
-    await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
+    await ingestSampleRepository(user);
     await user.type(screen.getByLabelText("Question"), "Where is config validated?");
     await user.click(screen.getByRole("button", { name: "Run query" }));
 
@@ -267,13 +280,26 @@ describe("Research route", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not run research before a repository is ingested", async () => {
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await user.type(screen.getByLabelText("Question"), "Where is config validated?");
+
+    expect(screen.getByRole("button", { name: "Run query" })).toBeDisabled();
+    expect(screen.getByText("Ingest a repository first")).toBeInTheDocument();
+    expect(runRagQuery).not.toHaveBeenCalled();
+    expect(runAgenticResearch).not.toHaveBeenCalled();
+  });
+
   it("submits direct research to /rag with a limit field", async () => {
     vi.mocked(runRagQuery).mockResolvedValue(okResult);
     const user = userEvent.setup();
 
     renderResearchRoute();
 
-    await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
+    await ingestSampleRepository(user);
     await user.type(screen.getByLabelText("Question"), "Where is config validated?");
     await user.click(screen.getByRole("button", { name: "Run query" }));
 
@@ -284,6 +310,7 @@ describe("Research route", () => {
         question: "Where is config validated?",
         repository_path: "/tmp/sample-repo",
         limit: 8,
+        session_id: "browser-session",
       }),
       expect.any(AbortSignal),
     );
@@ -296,6 +323,7 @@ describe("Research route", () => {
 
     renderResearchRoute();
 
+    await ingestSampleRepository(user);
     await user.click(screen.getByRole("radio", { name: "agentic RAG" }));
     await user.type(screen.getByLabelText("Question"), "Which modules change for feedback?");
     await user.click(screen.getByRole("button", { name: "Run query" }));
@@ -307,6 +335,7 @@ describe("Research route", () => {
         question: "Which modules change for feedback?",
         mode: "change",
         retrieval_limit: 8,
+        session_id: "browser-session",
       }),
       expect.any(AbortSignal),
     );
@@ -320,6 +349,7 @@ describe("Research route", () => {
 
     renderResearchRoute();
 
+    await ingestSampleRepository(user);
     await user.click(screen.getByRole("radio", { name: "agentic RAG" }));
     await user.type(
       screen.getByLabelText("Question"),
@@ -333,5 +363,39 @@ describe("Research route", () => {
     expect(screen.getByText("evidence 1")).toBeInTheDocument();
     expect(screen.queryByText("Network error")).not.toBeInTheDocument();
     expect(screen.queryByText(/Backend returned/)).not.toBeInTheDocument();
+  });
+
+  it("submits persisted feedback for the latest result", async () => {
+    vi.mocked(loadLatestRagRun).mockReturnValue(okResult);
+    vi.mocked(submitFeedback).mockResolvedValue({
+      feedback_id: "feedback-1",
+      session_id: "browser-session",
+      request_id: "req-1",
+      run_kind: "direct",
+      useful: true,
+      comment: "Grounded enough.",
+      submitted_at: "2026-08-07T12:00:00Z",
+    });
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await user.click(screen.getByRole("button", { name: "Useful" }));
+    await user.type(screen.getByLabelText("Comment"), "Grounded enough.");
+    await user.click(screen.getByRole("button", { name: "Submit feedback" }));
+
+    await waitFor(() => expect(submitFeedback).toHaveBeenCalled());
+    expect(submitFeedback).toHaveBeenCalledWith("/api", {
+      session_id: "browser-session",
+      request_id: "req-1",
+      run_kind: "direct",
+      useful: true,
+      comment: "Grounded enough.",
+    });
+    await screen.findByText("submitted");
+    expect(screen.getByRole("button", { name: "Feedback recorded" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Useful" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Not useful" })).toBeDisabled();
+    expect(screen.getByLabelText("Comment")).toBeDisabled();
   });
 });

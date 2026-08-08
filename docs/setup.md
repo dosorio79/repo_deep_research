@@ -23,22 +23,49 @@ make typecheck
 make test
 ```
 
-## Qdrant
+## Local services
 
-The current local stack uses Qdrant as the only containerized dependency. Start
-it with:
+The current local stack uses Qdrant for repository vectors and PostgreSQL for
+monitoring and feedback persistence. Start both with:
 
 ```bash
 make docker-up
 ```
 
-The service persists data in the Docker-managed `qdrant_storage` volume. Its
-HTTP API and dashboard use port 6333 by default; change the host ports through
+Qdrant persists data in the Docker-managed `qdrant_storage` volume. Its HTTP
+API and dashboard use port 6333 by default; change the host ports through
 `QDRANT_HTTP_PORT` and `QDRANT_GRPC_PORT` in `.env` if needed. No collection is
 created until the first repository ingestion.
 
-Use `make docker-down` to stop the container. The named volume remains so local
-data is preserved.
+PostgreSQL persists data in the Docker-managed `postgres_storage` volume. The
+local DSN in `.env.example` is:
+
+```text
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research
+```
+
+Use `RDR_TELEMETRY_ENABLED=false` to run without recording monitoring and
+feedback. When telemetry is enabled but `RDR_POSTGRES_DSN` is unset, the app
+uses an in-process no-op recorder.
+
+Use `make qdrant` or `make postgres` to start one service. Use
+`make docker-down` to stop containers. Named volumes remain so local data is
+preserved.
+
+## Optional Logfire
+
+Logfire instrumentation is disabled by default. To enable local spans without
+sending them to Logfire, set:
+
+```text
+RDR_LOGFIRE_ENABLED=true
+RDR_LOGFIRE_SEND_TO_LOGFIRE=false
+```
+
+To send spans to Logfire, authenticate through Logfire's normal local setup and
+set `RDR_LOGFIRE_SEND_TO_LOGFIRE=true`. The app instruments FastAPI and
+PydanticAI without capturing headers, prompts, source content, or evidence
+excerpts as custom payloads.
 
 ## Local embeddings
 
@@ -71,6 +98,45 @@ Run the minimal API with:
 make api
 ```
 
+## Full Docker Compose stack
+
+Start all four services (Qdrant, PostgreSQL, API, frontend) with:
+
+```bash
+docker compose up --build -d --wait
+```
+
+Or use the Make target:
+
+```bash
+make compose-up
+```
+
+The frontend is accessible at `http://localhost:3000` and proxies API requests to
+the backend. The API is accessible at `http://localhost:8000`. Health checks
+ensure dependencies are ready before the API and frontend start.
+
+The API container reads secrets from `.env.local`; ensure `OPENAI_API_KEY` is
+set there before building. Host ports default to 8000 for the API and 3000 for
+the frontend; change them through `API_PORT` and `FRONTEND_PORT` in `.env`.
+
+Stop all services with:
+
+```bash
+make compose-down
+```
+
+## Local development mode
+
+Run the API and frontend together in local development mode:
+
+```bash
+make app
+```
+
+This starts Qdrant, PostgreSQL, the API (with reload), and the Vite dev server.
+The frontend proxies `/api/*` to `http://127.0.0.1:8000`.
+
 ## Repository workflow
 
 The project uses two long-lived branches:
@@ -91,5 +157,5 @@ terraform -chdir=infra/github plan \
   -var repository_name=repo_deep_research
 ```
 
-Review the plan before applying it. The current M3 direct-RAG release is
-`v0.3.0`.
+Review the plan before applying it. The current release is `v0.5.0`.
+

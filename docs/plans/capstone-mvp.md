@@ -156,28 +156,34 @@ client-facing research screen from the admin/backoffice harness.
 
 ### 3. Persist feedback and run telemetry
 
-Purpose: unlock monitoring points without adding a heavy operations stack.
+Purpose: unlock monitoring points with durable Postgres-backed run and feedback
+records.
 
 Tasks:
 
-1. Add a small SQLite store under application control.
+1. Add PostgreSQL as the persistence store for monitoring and feedback.
 2. Persist `RagRunTrace` / `ResearchRunResult` summary metadata after successful
-   runs.
-3. Add `POST /feedback` with useful/not-useful, optional comment, request ID,
-   and run mode.
-4. Store feedback linked to request ID when possible.
-5. Add focused tests for schema creation, insert/read paths, and API contracts.
+   `/rag` and `/research` responses.
+3. Store monitoring and feedback in separate tables connected by `session_id`;
+   retain `request_id` as the identifier for a single returned run.
+4. Add `POST /feedback` with useful/not-useful, optional comment, `session_id`,
+   request ID, and run mode.
+5. Add `GET /monitoring/summary` for dashboard aggregates.
+6. Add opt-in Logfire instrumentation for FastAPI and PydanticAI.
+7. Add focused tests for schema creation, insert/read paths, aggregate queries,
+   API contracts, and frontend session propagation.
 
 Keep it simple:
 
 - no authentication;
 - no background workers;
 - no event bus;
-- no migration framework unless SQLite schema changes become painful;
+- no ORM or migration framework in this milestone;
+- no SQLite fallback;
 - no full source content in telemetry.
 
 Exit condition: feedback and run summaries survive process restart in a local
-SQLite file.
+PostgreSQL database and can be joined by `session_id`.
 
 ### 4. Build the monitoring dashboard
 
@@ -198,7 +204,7 @@ Tasks:
 4. Add empty states that say no data exists rather than inventing sample data.
 
 Exit condition: after a few local `/rag` and `/research` runs plus feedback,
-the dashboard renders real charts from SQLite-backed data.
+the dashboard renders real charts from PostgreSQL-backed data.
 
 ### 5. Containerize the full reviewer path
 
@@ -256,7 +262,9 @@ Only start these after the core rubric is covered:
 
 1. `docs/capstone-mvp-plan` - this plan only.
 2. `feat/mvp-agentic-ui` - live M4 audit plus Direct/Agentic UI.
-3. `feat/mvp-feedback-monitoring` - SQLite feedback and dashboard.
+3. `feat/mvp-feedback-monitoring` - PostgreSQL feedback, monitoring dashboard,
+   and opt-in Logfire instrumentation. See
+   `docs/plans/mvp-postgres-feedback-monitoring.md`.
 4. `feat/mvp-compose-docs` - full Compose, final evaluation, README rubric map.
 
 Keep PRs small enough to review, but do not create more branches than needed:
