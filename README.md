@@ -11,7 +11,7 @@ repository paths, symbols, and line ranges.
 
 ## Current status
 
-The `v0.5.1` release is the first reviewable MVP stack. It supports dense,
+The `v0.5.2` release is the first reviewable MVP stack. It supports dense,
 sparse, and Qdrant RRF-hybrid retrieval, direct RAG, bounded agentic research,
 a React TypeScript frontend, local Qdrant/PostgreSQL services, persisted
 run monitoring, and useful/not-useful feedback. CLI, API, and browser runs
@@ -151,7 +151,7 @@ promote to `main` by pull request when ready for production.
 
 Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`; pushing a version tag
 creates a GitHub Release. The current reviewable MVP stack is released as
-`v0.5.1`.
+`v0.5.2`.
 
 GitHub branch protection and repository environments are managed with Terraform
 under [infra/github](infra/github/). The workflow details are recorded in
