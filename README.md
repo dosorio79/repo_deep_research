@@ -11,18 +11,17 @@ repository paths, symbols, and line ranges.
 
 ## Current status
 
-M4 — Agentic deep research is in progress. The project supports dense,
-sparse, and Qdrant RRF-hybrid retrieval, then uses a direct OpenAI Responses API
-RAG baseline to produce structured answers with application-validated
-citations. CLI and API RAG runs return an answer-plus-trace envelope with
-repository identity, retrieval settings, latency, model usage, and estimated cost
-metadata where pricing is known. A minimal FastAPI backend exposes `/health` and
-`/rag`; browser CORS is opt-in through local configuration. The vendored React
-TypeScript frontend under `frontend/` calls that `/rag` API and renders answer,
-evidence, trace, cost telemetry, errors, and raw JSON. The first M4 agentic
-slice adds a PydanticAI-backed bounded research service at `/research` and
-`repo-research research`; the current feature branch adds PostgreSQL-backed run
-recording and feedback persistence for the next monitoring dashboard slice.
+The `v0.5.1` release is the first reviewable MVP stack. It supports dense,
+sparse, and Qdrant RRF-hybrid retrieval, direct RAG, bounded agentic research,
+a React TypeScript frontend, local Qdrant/PostgreSQL services, persisted
+run monitoring, and useful/not-useful feedback. CLI, API, and browser runs
+return grounded answers with repository paths, line ranges, trace metadata,
+model usage, latency, and estimated cost where pricing is known.
+
+The reviewer-facing frontend exposes repository research at `/` and persisted
+monitoring at `/monitoring`. Monitoring data is backed by PostgreSQL through
+`GET /monitoring/summary`; optional Logfire instrumentation can be enabled for
+span-level inspection, but it is not required for the local dashboard.
 
 ## Requirements
 
@@ -44,7 +43,19 @@ Qdrant is then available at `http://localhost:6333`; its local dashboard is at
 `http://localhost:6333/dashboard`. PostgreSQL uses the local DSN declared in
 `.env.example`.
 
-Stop the local service with `make docker-down`.
+For the full reviewer app, set `OPENAI_API_KEY` in `.env.local`, then run:
+
+```bash
+make compose-up
+```
+
+Open `http://localhost:3000`, ingest the repository, run a direct or agentic
+question, submit feedback, then open `http://localhost:3000/monitoring` to see
+persisted run counts, latency, retrieval volume, token/cost, feedback, and
+error panels.
+
+Stop local services with `make docker-down` or the full app stack with
+`make compose-down`.
 
 ## Developer commands
 
@@ -139,8 +150,8 @@ environment. Feature work should branch from `dev`, merge back to `dev`, and
 promote to `main` by pull request when ready for production.
 
 Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`; pushing a version tag
-creates a GitHub Release. The first release for the M3 grounded direct-RAG state
-is `v0.3.0`.
+creates a GitHub Release. The current reviewable MVP stack is released as
+`v0.5.1`.
 
 GitHub branch protection and repository environments are managed with Terraform
 under [infra/github](infra/github/). The workflow details are recorded in
@@ -154,10 +165,9 @@ ingestion before searching or evaluating M2 modes.
 
 ## Roadmap
 
-Next milestone: Capstone MVP reviewable release. It completes the minimum
-M4/M5 surface needed for LLM Zoomcamp scoring: audited agentic research,
-client-facing research UI, admin backoffice, feedback persistence, monitoring
-dashboard, full Docker Compose, final evaluation, and README rubric mapping.
-Post-MVP work adds query rewriting, reranking, public GitHub ingestion, cloud
-deployment, and production-grade authentication.
+Next milestone: final capstone evidence polish. The remaining review work is
+to publish final retrieval and answer-evaluation outputs, add README rubric
+mapping, and include reviewer screenshots for the research and monitoring
+screens. Post-MVP work adds query rewriting, reranking, public GitHub ingestion,
+cloud deployment, and production-grade authentication.
 The complete scope is in [docs/PRD.md](docs/PRD.md).

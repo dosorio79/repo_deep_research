@@ -5,13 +5,13 @@ import { PlannedBackofficePanel } from "@/components/PlannedBackofficePanel";
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Settings (planned) — Repo Deep Research M3.6" },
+      { title: "Settings (planned) - Repo Deep Research" },
       {
         name: "description",
         content:
-          "Settings are minimal in M3.6: the API base URL and repository path are configured per query in the Research view.",
+          "Settings are minimal: the API base URL and repository path are configured per query in the Research view.",
       },
-      { property: "og:title", content: "Settings (planned) — Repo Deep Research M3.6" },
+      { property: "og:title", content: "Settings (planned) - Repo Deep Research" },
       {
         property: "og:description",
         content: "Minimal settings surface for the Repo Deep Research harness.",

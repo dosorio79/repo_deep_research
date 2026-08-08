@@ -20,7 +20,7 @@ export function PlannedBackofficePanel({
       </div>
       <p className="mt-2 text-[13px] text-muted-foreground">{description}</p>
       <p className="mt-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        Not implemented in M3.6
+        Not implemented yet
       </p>
       <ul className="mt-2 space-y-1">
         {scope.map((s) => (

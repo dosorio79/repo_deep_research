@@ -5,12 +5,12 @@ import { PlannedBackofficePanel } from "@/components/PlannedBackofficePanel";
 export const Route = createFileRoute("/evaluations")({
   head: () => ({
     meta: [
-      { title: "Evaluations (planned) — Repo Deep Research M3.6" },
+      { title: "Evaluations (planned) - Repo Deep Research" },
       {
         name: "description",
-        content: "Placeholder for the planned evaluation surface. Not implemented in M3.6.",
+        content: "Placeholder for the planned evaluation surface.",
       },
-      { property: "og:title", content: "Evaluations (planned) — Repo Deep Research M3.6" },
+      { property: "og:title", content: "Evaluations (planned) - Repo Deep Research" },
       {
         property: "og:description",
         content: "Planned evaluation surface for the Repo Deep Research harness.",

@@ -120,6 +120,19 @@ The API container reads secrets from `.env.local`; ensure `OPENAI_API_KEY` is
 set there before building. Host ports default to 8000 for the API and 3000 for
 the frontend; change them through `API_PORT` and `FRONTEND_PORT` in `.env`.
 
+To verify reviewer-visible monitoring:
+
+1. Open `http://localhost:3000`.
+2. Ingest the repository from the research screen.
+3. Run at least one direct or agentic question.
+4. Submit useful/not-useful feedback for the returned answer.
+5. Open `http://localhost:3000/monitoring`.
+
+The monitoring screen reads `GET /monitoring/summary` and should show persisted
+run counts, average latency, retrieval volume, token/cost totals, feedback, and
+error panels. If it is empty, confirm `RDR_TELEMETRY_ENABLED=true`,
+`RDR_POSTGRES_DSN` is set, and the PostgreSQL container is healthy.
+
 Stop all services with:
 
 ```bash
@@ -157,5 +170,4 @@ terraform -chdir=infra/github plan \
   -var repository_name=repo_deep_research
 ```
 
-Review the plan before applying it. The current release is `v0.5.0`.
-
+Review the plan before applying it. The current release is `v0.5.1`.

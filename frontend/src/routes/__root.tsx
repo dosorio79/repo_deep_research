@@ -73,16 +73,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Repo Deep Research M3.6" },
+      { title: "Repo Deep Research" },
       {
         name: "description",
-        content: "Frontend testing harness for the Repo Deep Research RAG backend.",
+        content: "Evidence-grounded repository research with persisted monitoring.",
       },
 
-      { property: "og:title", content: "Repo Deep Research M3.6" },
+      { property: "og:title", content: "Repo Deep Research" },
       {
         property: "og:description",
-        content: "Frontend testing harness for the Repo Deep Research RAG backend.",
+        content: "Evidence-grounded repository research with persisted monitoring.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
