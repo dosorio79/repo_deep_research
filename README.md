@@ -146,20 +146,6 @@ GitHub branch protection and repository environments are managed with Terraform
 under [infra/github](infra/github/). The workflow details are recorded in
 [docs/plans/release-branching.md](docs/plans/release-branching.md).
 
-## Branches and releases
-
-`main` is production. `dev` is the integration branch and dev/preprod
-environment. Feature work should branch from `dev`, merge back to `dev`, and
-promote to `main` by pull request when ready for production.
-
-Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`; pushing a version tag
-creates a GitHub Release. The first release for the M3 grounded direct-RAG state
-is `v0.3.0`.
-
-GitHub branch protection and repository environments are managed with Terraform
-under [infra/github](infra/github/). The workflow details are recorded in
-[docs/plans/release-branching.md](docs/plans/release-branching.md).
-
 ## M2 migration
 
 M2 uses the new `repo_chunks_v2` default collection because its named

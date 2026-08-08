@@ -98,6 +98,45 @@ Run the minimal API with:
 make api
 ```
 
+## Full Docker Compose stack
+
+Start all four services (Qdrant, PostgreSQL, API, frontend) with:
+
+```bash
+docker compose up --build -d --wait
+```
+
+Or use the Make target:
+
+```bash
+make compose-up
+```
+
+The frontend is accessible at `http://localhost:3000` and proxies API requests to
+the backend. The API is accessible at `http://localhost:8000`. Health checks
+ensure dependencies are ready before the API and frontend start.
+
+The API container reads secrets from `.env.local`; ensure `OPENAI_API_KEY` is
+set there before building. Host ports default to 8000 for the API and 3000 for
+the frontend; change them through `API_PORT` and `FRONTEND_PORT` in `.env`.
+
+Stop all services with:
+
+```bash
+make compose-down
+```
+
+## Local development mode
+
+Run the API and frontend together in local development mode:
+
+```bash
+make app
+```
+
+This starts Qdrant, PostgreSQL, the API (with reload), and the Vite dev server.
+The frontend proxies `/api/*` to `http://127.0.0.1:8000`.
+
 ## Repository workflow
 
 The project uses two long-lived branches:
@@ -118,5 +157,5 @@ terraform -chdir=infra/github plan \
   -var repository_name=repo_deep_research
 ```
 
-Review the plan before applying it. The current M3 direct-RAG release is
-`v0.3.0`.
+Review the plan before applying it. The current release is `v0.4.0`.
+

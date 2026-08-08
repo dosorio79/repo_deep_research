@@ -9,7 +9,7 @@ FRONTEND_NODE_VERSION := $(shell cat frontend/.nvmrc 2>/dev/null)
 FRONTEND_NODE_BIN := $(HOME)/.nvm/versions/node/v$(FRONTEND_NODE_VERSION)/bin
 FRONTEND_NPM := PATH=$(FRONTEND_NODE_BIN):$$PATH npm
 
-.PHONY: help install format lint typecheck test coverage validate check test-all qdrant postgres stop ready ingest ingest-self evidence rag research api-rag evaluate-retrieval evaluate-answers api app frontend-install frontend-format frontend-lint frontend-typecheck frontend-test frontend-build frontend-dev docker-up docker-down
+.PHONY: help install format lint typecheck test coverage validate check test-all qdrant postgres stop ready ingest ingest-self evidence rag research api-rag evaluate-retrieval evaluate-answers api app compose-up compose-down frontend-install frontend-format frontend-lint frontend-typecheck frontend-test frontend-build frontend-dev docker-up docker-down
 
 help:
 	printf '%s\n' 'Common:'
@@ -26,9 +26,11 @@ help:
 	printf '%s\n' '  make frontend-test | frontend-typecheck | frontend-build'
 	printf '%s\n' ''
 	printf '%s\n' 'Operations:'
+	printf '%s\n' '  make compose-up               build and start the full app stack (API + frontend + services)'
+	printf '%s\n' '  make compose-down             stop the full app stack'
 	printf '%s\n' '  make qdrant                   start Qdrant only'
 	printf '%s\n' '  make postgres                 start PostgreSQL only'
-	printf '%s\n' '  make docker-up                start local services'
+	printf '%s\n' '  make docker-up                start local services (Qdrant + Postgres)'
 	printf '%s\n' '  make stop | make docker-down     stop local services'
 	printf '%s\n' '  make ingest | make ingest-self   index this repository'
 	printf '%s\n' '  make api-rag                     exercise FastAPI /rag'
@@ -76,6 +78,13 @@ stop:
 	docker compose down
 
 docker-up: qdrant postgres
+
+compose-up:
+	docker compose up --build -d --wait
+
+compose-down:
+	docker compose down
+
 
 docker-down: stop
 
