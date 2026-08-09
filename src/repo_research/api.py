@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Protocol
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAIError
 from qdrant_client.http.exceptions import ResponseHandlingException
@@ -22,6 +22,9 @@ from repo_research.models import (
     FeedbackEvent,
     FeedbackRequest,
     IngestSummary,
+    MonitoringFeedbackFilter,
+    MonitoringRunDetail,
+    MonitoringRunList,
     MonitoringSummary,
     ParsedChunk,
     RagRequest,
@@ -74,6 +77,20 @@ class RecordingStore(Protocol):
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return aggregate monitoring panels."""
+
+    def list_monitoring_runs(
+        self,
+        *,
+        limit: int = 50,
+        run_kind: RunKind | None = None,
+        repository_name: str | None = None,
+        has_error: bool | None = None,
+        feedback: MonitoringFeedbackFilter = MonitoringFeedbackFilter.ALL,
+    ) -> MonitoringRunList:
+        """Return recent persisted monitoring runs."""
+
+    def get_monitoring_run(self, request_id: str) -> MonitoringRunDetail | None:
+        """Return one persisted monitoring run detail when available."""
 
 
 def package_version() -> str:
@@ -263,6 +280,29 @@ def create_app(
     @app.get("/monitoring/summary", response_model=MonitoringSummary)
     async def monitoring_summary() -> MonitoringSummary:
         return get_recording_store().monitoring_summary()
+
+    @app.get("/monitoring/runs", response_model=MonitoringRunList)
+    async def monitoring_runs(
+        limit: int = Query(default=50, ge=1, le=100),
+        run_kind: RunKind | None = None,
+        repository_name: str | None = Query(default=None, min_length=1),
+        has_error: bool | None = None,
+        feedback: MonitoringFeedbackFilter = MonitoringFeedbackFilter.ALL,
+    ) -> MonitoringRunList:
+        return get_recording_store().list_monitoring_runs(
+            limit=limit,
+            run_kind=run_kind,
+            repository_name=repository_name,
+            has_error=has_error,
+            feedback=feedback,
+        )
+
+    @app.get("/monitoring/runs/{request_id}", response_model=MonitoringRunDetail)
+    async def monitoring_run_detail(request_id: str) -> MonitoringRunDetail:
+        detail = get_recording_store().get_monitoring_run(request_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="monitoring run not found")
+        return detail
 
     return app
 

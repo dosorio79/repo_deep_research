@@ -372,6 +372,68 @@ class MonitoringSummary(BaseModel):
     errors_by_type: list[ErrorCountSummary] = Field(default_factory=list)
 
 
+class MonitoringFeedbackFilter(StrEnum):
+    """Feedback filters supported by the monitoring run list."""
+
+    ALL = "all"
+    USEFUL = "useful"
+    NOT_USEFUL = "not_useful"
+    NONE = "none"
+
+
+class MonitoringRunFeedback(BaseModel):
+    """Feedback displayed in a monitoring run detail view."""
+
+    feedback_id: str = Field(min_length=1)
+    useful: bool
+    comment: str | None = None
+    submitted_at: datetime
+
+
+class MonitoringRunSummary(BaseModel):
+    """One persisted run row for the monitoring history table."""
+
+    request_id: str = Field(min_length=1)
+    session_id: str = Field(min_length=1)
+    run_kind: RunKind
+    started_at: datetime
+    completed_at: datetime
+    repository_name: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    commit_hash: str = Field(min_length=1)
+    question_mode: RagMode
+    retrieval_mode: RetrievalMode
+    retrieved_chunk_count: int = Field(ge=0)
+    unique_file_count: int = Field(ge=0)
+    evidence_count: int = Field(ge=0)
+    latency_ms_total: int = Field(ge=0)
+    latency_ms_retrieval: int = Field(ge=0)
+    latency_ms_model: int | None = Field(default=None, ge=0)
+    tool_call_count: int = Field(ge=0)
+    insufficient_evidence: bool
+    has_error: bool
+    feedback_useful: int = Field(ge=0)
+    feedback_not_useful: int = Field(ge=0)
+    total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+
+
+class MonitoringRunDetail(MonitoringRunSummary):
+    """Detailed persisted monitoring data for one run."""
+
+    repository_id: str = Field(min_length=1)
+    retrieval_limit: int = Field(ge=1)
+    error_type: str | None = None
+    error_message: str | None = None
+    model_usage: list[ModelUsage] = Field(default_factory=list)
+    feedback_events: list[MonitoringRunFeedback] = Field(default_factory=list)
+
+
+class MonitoringRunList(BaseModel):
+    """Recent persisted monitoring runs."""
+
+    runs: list[MonitoringRunSummary] = Field(default_factory=list)
+
+
 class EvaluationRecord(BaseModel):
     """One manually verified retrieval question and its expected evidence."""
 

@@ -4,6 +4,9 @@ import type {
   FeedbackEvent,
   FeedbackRequest,
   IngestSummary,
+  MonitoringRunDetail,
+  MonitoringRunList,
+  MonitoringRunListParams,
   MonitoringSummary,
   RagRequest,
   RagRunResult,
@@ -91,7 +94,7 @@ async function postJson<TPayload, TResult>(
 
 async function getJson<TResult>(
   baseUrl: string,
-  path: "/health" | "/monitoring/summary",
+  path: string,
   signal?: AbortSignal,
 ): Promise<TResult> {
   const url = `${baseUrl.replace(/\/+$/, "")}${path}`;
@@ -173,6 +176,26 @@ export async function getMonitoringSummary(
   return getJson<MonitoringSummary>(baseUrl, "/monitoring/summary", signal);
 }
 
+export async function getMonitoringRuns(
+  baseUrl: string,
+  params: MonitoringRunListParams = {},
+  signal?: AbortSignal,
+): Promise<MonitoringRunList> {
+  return getJson<MonitoringRunList>(baseUrl, `/monitoring/runs${queryString(params)}`, signal);
+}
+
+export async function getMonitoringRunDetail(
+  baseUrl: string,
+  requestId: string,
+  signal?: AbortSignal,
+): Promise<MonitoringRunDetail> {
+  return getJson<MonitoringRunDetail>(
+    baseUrl,
+    `/monitoring/runs/${encodeURIComponent(requestId)}`,
+    signal,
+  );
+}
+
 export async function ingestRepository(
   baseUrl: string,
   payload: RepositoryIngestRequest,
@@ -184,4 +207,15 @@ export async function ingestRepository(
     payload,
     signal,
   );
+}
+
+function queryString(params: MonitoringRunListParams) {
+  const search = new URLSearchParams();
+  if (params.limit) search.set("limit", String(params.limit));
+  if (params.run_kind) search.set("run_kind", params.run_kind);
+  if (params.repository_name) search.set("repository_name", params.repository_name);
+  if (typeof params.has_error === "boolean") search.set("has_error", String(params.has_error));
+  if (params.feedback && params.feedback !== "all") search.set("feedback", params.feedback);
+  const value = search.toString();
+  return value ? `?${value}` : "";
 }

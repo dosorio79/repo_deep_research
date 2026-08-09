@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getBackendHealth,
+  getMonitoringRunDetail,
+  getMonitoringRuns,
   getMonitoringSummary,
   ingestRepository,
   runAgenticResearch,
@@ -9,6 +11,9 @@ import {
 } from "./rag-client";
 import type {
   IngestSummary,
+  MonitoringRunDetail,
+  MonitoringRunList,
+  MonitoringRunSummary,
   MonitoringSummary,
   RagRunResult,
   ResearchRunResult,
@@ -93,6 +98,61 @@ const monitoringSummary: MonitoringSummary = {
   model_usage_by_model: [],
   feedback: { useful: 1, not_useful: 0 },
   errors_by_type: [],
+};
+
+const monitoringRunSummary: MonitoringRunSummary = {
+  request_id: "req-1",
+  session_id: "session-1",
+  run_kind: "agentic",
+  started_at: "2026-08-07T12:00:00Z",
+  completed_at: "2026-08-07T12:00:02Z",
+  repository_name: "repo_deep_research",
+  branch: "main",
+  commit_hash: "abcdef123456",
+  question_mode: "change",
+  retrieval_mode: "hybrid",
+  retrieved_chunk_count: 12,
+  unique_file_count: 5,
+  evidence_count: 4,
+  latency_ms_total: 2000,
+  latency_ms_retrieval: 200,
+  latency_ms_model: 1500,
+  tool_call_count: 3,
+  insufficient_evidence: false,
+  has_error: false,
+  feedback_useful: 1,
+  feedback_not_useful: 0,
+  total_estimated_cost_usd: "0.012",
+};
+
+const monitoringRuns: MonitoringRunList = {
+  runs: [monitoringRunSummary],
+};
+
+const monitoringRunDetail: MonitoringRunDetail = {
+  ...monitoringRunSummary,
+  repository_id: "repo-id",
+  retrieval_limit: 5,
+  error_type: null,
+  error_message: null,
+  model_usage: [
+    {
+      provider: "openai",
+      model: "gpt-5-mini",
+      input_tokens: 10,
+      output_tokens: 5,
+      total_tokens: 15,
+      estimated_cost_usd: "0.012",
+    },
+  ],
+  feedback_events: [
+    {
+      feedback_id: "feedback-1",
+      useful: true,
+      comment: "Grounded enough.",
+      submitted_at: "2026-08-07T12:05:00Z",
+    },
+  ],
 };
 
 describe("runRagQuery", () => {
@@ -286,6 +346,49 @@ describe("runRagQuery", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/monitoring/summary",
+      expect.objectContaining({ signal: null }),
+    );
+  });
+
+  it("loads monitoring run history with filters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(monitoringRuns), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getMonitoringRuns("http://localhost:8000///", {
+        limit: 25,
+        run_kind: "agentic",
+        has_error: false,
+        feedback: "useful",
+      }),
+    ).resolves.toEqual(monitoringRuns);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/monitoring/runs?limit=25&run_kind=agentic&has_error=false&feedback=useful",
+      expect.objectContaining({ signal: null }),
+    );
+  });
+
+  it("loads one monitoring run detail", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(monitoringRunDetail), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getMonitoringRunDetail("http://localhost:8000///", "req-1")).resolves.toEqual(
+      monitoringRunDetail,
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/monitoring/runs/req-1",
       expect.objectContaining({ signal: null }),
     );
   });

@@ -122,8 +122,8 @@ return `ResearchRunResult` using the same trace contract as direct RAG.
 `recording_store.py` persists run summaries and feedback events in PostgreSQL.
 The `monitoring_runs` table stores per-request trace metrics; the
 `feedback_events` table stores useful/not-useful feedback. Both are linked by
-`session_id` for dashboard aggregation. A `NoOpRecordingStore` is used when
-PostgreSQL is not configured.
+`session_id` for dashboard aggregation and run-level drill-down. A
+`NoOpRecordingStore` is used when PostgreSQL is not configured.
 
 `monitoring.py` provides opt-in Logfire instrumentation for FastAPI and
 PydanticAI. It complements the PostgreSQL-backed dashboard; it does not replace
@@ -134,9 +134,9 @@ It is a client of the FastAPI contract: it submits question mode, retrieval
 mode, limit, research kind (direct/agentic), and session ID, then renders
 the answer, evidence, trace metadata, model usage, cost telemetry, research
 steps, and change targets. The monitoring route renders real PostgreSQL-backed
-dashboard panels. Feedback controls allow useful/not-useful submission with
-optional comments. Browser access is enabled only when FastAPI CORS origins
-are configured.
+dashboard panels, recent run history, and run detail. Feedback controls allow
+useful/not-useful submission with optional comments. Browser access is enabled
+only when FastAPI CORS origins are configured.
 
 `pricing.py` keeps OpenAI cost estimation separate from answer generation.
 Unknown model prices, explicit empty pricing overrides, and inconsistent provider

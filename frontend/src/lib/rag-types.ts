@@ -212,6 +212,61 @@ export interface MonitoringSummary {
   errors_by_type: ErrorCountSummary[];
 }
 
+export type MonitoringFeedbackFilter = "all" | "useful" | "not_useful" | "none";
+
+export interface MonitoringRunSummary {
+  request_id: string;
+  session_id: string;
+  run_kind: ResearchKind;
+  started_at: string;
+  completed_at: string;
+  repository_name: string;
+  branch: string;
+  commit_hash: string;
+  question_mode: QuestionMode;
+  retrieval_mode: RetrievalMode;
+  retrieved_chunk_count: number;
+  unique_file_count: number;
+  evidence_count: number;
+  latency_ms_total: number;
+  latency_ms_retrieval: number;
+  latency_ms_model: number | null;
+  tool_call_count: number;
+  insufficient_evidence: boolean;
+  has_error: boolean;
+  feedback_useful: number;
+  feedback_not_useful: number;
+  total_estimated_cost_usd: number | string | null;
+}
+
+export interface MonitoringRunFeedback {
+  feedback_id: string;
+  useful: boolean;
+  comment: string | null;
+  submitted_at: string;
+}
+
+export interface MonitoringRunDetail extends MonitoringRunSummary {
+  repository_id: string;
+  retrieval_limit: number;
+  error_type: string | null;
+  error_message: string | null;
+  model_usage: ModelUsage[];
+  feedback_events: MonitoringRunFeedback[];
+}
+
+export interface MonitoringRunList {
+  runs: MonitoringRunSummary[];
+}
+
+export interface MonitoringRunListParams {
+  limit?: number;
+  run_kind?: ResearchKind;
+  repository_name?: string;
+  has_error?: boolean;
+  feedback?: MonitoringFeedbackFilter;
+}
+
 export interface ApiErrorShape {
   title: string;
   detail: string;

@@ -11,6 +11,7 @@ from psycopg.types.json import Jsonb
 from repo_research.models import (
     FeedbackEvent,
     ModelUsage,
+    MonitoringFeedbackFilter,
     RagMode,
     RagRunTrace,
     RetrievalMode,
@@ -86,6 +87,7 @@ def test_recording_store_initializes_postgres_schema() -> None:
         "CREATE TABLE IF NOT EXISTS feedback_events" in sql for sql in statements
     )
     assert any("monitoring_runs_session_id_idx" in sql for sql in statements)
+    assert any("monitoring_runs_completed_at_idx" in sql for sql in statements)
     assert any("feedback_events_session_id_idx" in sql for sql in statements)
     assert factory.calls[0]["dsn"] == "postgresql://example"
 
@@ -212,6 +214,104 @@ def test_recording_store_returns_monitoring_summary() -> None:
     assert summary.errors_by_type[0].error_type == "ResearchBudgetExceeded"
 
 
+def test_recording_store_lists_monitoring_runs_with_feedback_counts() -> None:
+    connection = FakeConnection(
+        run_rows=[
+            _run_row(
+                request_id="request-1",
+                run_kind="direct",
+                completed_at=datetime(2026, 8, 7, 12, 0, 1, tzinfo=UTC),
+            ),
+            _run_row(
+                request_id="request-2",
+                run_kind="agentic",
+                completed_at=datetime(2026, 8, 7, 12, 0, 2, tzinfo=UTC),
+                error_type="ResearchBudgetExceeded",
+                tool_call_count=4,
+            ),
+        ],
+        feedback_rows=[
+            _feedback_row("feedback-1", "request-2", useful=False),
+            _feedback_row("feedback-2", "request-2", useful=True),
+        ],
+    )
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    runs = store.list_monitoring_runs(limit=10)
+
+    assert [run.request_id for run in runs.runs] == ["request-2", "request-1"]
+    assert runs.runs[0].run_kind == RunKind.AGENTIC
+    assert runs.runs[0].has_error is True
+    assert runs.runs[0].tool_call_count == 4
+    assert runs.runs[0].feedback_useful == 1
+    assert runs.runs[0].feedback_not_useful == 1
+
+
+def test_recording_store_filters_monitoring_runs() -> None:
+    connection = FakeConnection(
+        run_rows=[
+            _run_row(request_id="request-1", run_kind="direct"),
+            _run_row(
+                request_id="request-2",
+                run_kind="agentic",
+                repository_name="other-repo",
+                error_type="ResearchBudgetExceeded",
+            ),
+        ],
+        feedback_rows=[_feedback_row("feedback-1", "request-2", useful=False)],
+    )
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    runs = store.list_monitoring_runs(
+        limit=10,
+        run_kind=RunKind.AGENTIC,
+        repository_name="other",
+        has_error=True,
+        feedback=MonitoringFeedbackFilter.NOT_USEFUL,
+    )
+
+    assert [run.request_id for run in runs.runs] == ["request-2"]
+
+
+def test_recording_store_returns_monitoring_run_detail() -> None:
+    connection = FakeConnection(
+        run_rows=[
+            _run_row(
+                request_id="request-1",
+                error_type="OpenAIError",
+                error_message="Missing credentials",
+            )
+        ],
+        feedback_rows=[_feedback_row("feedback-1", "request-1", useful=False)],
+    )
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    detail = store.get_monitoring_run("request-1")
+
+    assert detail is not None
+    assert detail.request_id == "request-1"
+    assert detail.repository_id == "repo-id"
+    assert detail.error_type == "OpenAIError"
+    assert detail.error_message == "Missing credentials"
+    assert detail.model_usage[0].model == "gpt-5-mini"
+    assert detail.feedback_events[0].comment == "Needs clearer targets."
+
+
+def test_recording_store_returns_none_for_missing_monitoring_run() -> None:
+    connection = FakeConnection(run_rows=[_run_row(request_id="request-1")])
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    assert store.get_monitoring_run("missing") is None
+
+
 def _trace() -> RagRunTrace:
     return RagRunTrace(
         request_id="request-1",
@@ -245,3 +345,66 @@ def _trace() -> RagRunTrace:
         ],
         total_estimated_cost_usd=Decimal("0.012"),
     )
+
+
+def _run_row(
+    *,
+    request_id: str,
+    run_kind: str = "direct",
+    repository_name: str = "repo",
+    completed_at: datetime | None = None,
+    error_type: str | None = None,
+    error_message: str | None = None,
+    tool_call_count: int = 0,
+) -> dict[str, Any]:
+    return {
+        "request_id": request_id,
+        "session_id": "session-1",
+        "run_kind": run_kind,
+        "started_at": datetime(2026, 8, 7, 12, tzinfo=UTC),
+        "completed_at": completed_at or datetime(2026, 8, 7, 12, 0, 1, tzinfo=UTC),
+        "repository_id": "repo-id",
+        "repository_name": repository_name,
+        "branch": "main",
+        "commit_hash": "abc123",
+        "question_mode": "change",
+        "retrieval_mode": "hybrid",
+        "retrieval_limit": 5,
+        "retrieved_chunk_count": 3,
+        "unique_file_count": 2,
+        "evidence_count": 2,
+        "latency_ms_total": 1000,
+        "latency_ms_retrieval": 200,
+        "latency_ms_model": 800,
+        "tool_call_count": tool_call_count,
+        "insufficient_evidence": False,
+        "error_type": error_type,
+        "error_message": error_message,
+        "total_estimated_cost_usd": Decimal("0.012"),
+        "model_usage": [
+            {
+                "provider": "openai",
+                "model": "gpt-5-mini",
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "total_tokens": 15,
+                "estimated_cost_usd": "0.012",
+            }
+        ],
+    }
+
+
+def _feedback_row(
+    feedback_id: str,
+    request_id: str | None,
+    *,
+    useful: bool,
+) -> dict[str, Any]:
+    return {
+        "feedback_id": feedback_id,
+        "session_id": "session-1",
+        "request_id": request_id,
+        "useful": useful,
+        "comment": "Needs clearer targets.",
+        "submitted_at": datetime(2026, 8, 7, 12, 5, tzinfo=UTC),
+    }

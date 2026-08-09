@@ -18,8 +18,15 @@ from repo_research.models import (
     FeedbackUsefulSummary,
     LatencyByRunKind,
     ModelUsageSummary,
+    MonitoringFeedbackFilter,
+    MonitoringRunDetail,
+    MonitoringRunFeedback,
+    MonitoringRunList,
+    MonitoringRunSummary,
     MonitoringSummary,
+    RagMode,
     RagRunTrace,
+    RetrievalMode,
     RetrievalVolumeSummary,
     RunKind,
     RunKindCount,
@@ -45,6 +52,24 @@ class NoOpRecordingStore:
     def monitoring_summary(self) -> MonitoringSummary:
         """Return an empty dashboard summary."""
         return MonitoringSummary(total_runs=0)
+
+    def list_monitoring_runs(
+        self,
+        *,
+        limit: int = 50,
+        run_kind: RunKind | None = None,
+        repository_name: str | None = None,
+        has_error: bool | None = None,
+        feedback: MonitoringFeedbackFilter = MonitoringFeedbackFilter.ALL,
+    ) -> MonitoringRunList:
+        """Return an empty run history."""
+        del limit, run_kind, repository_name, has_error, feedback
+        return MonitoringRunList()
+
+    def get_monitoring_run(self, request_id: str) -> MonitoringRunDetail | None:
+        """Return no detail when telemetry persistence is disabled."""
+        del request_id
+        return None
 
 
 @dataclass(frozen=True)
@@ -117,6 +142,61 @@ class PostgresRecordingStore:
             run_rows = list(connection.execute(_SELECT_MONITORING_ROWS).fetchall())
             feedback_rows = list(connection.execute(_SELECT_FEEDBACK_ROWS).fetchall())
         return _build_summary(run_rows=run_rows, feedback_rows=feedback_rows)
+
+    def list_monitoring_runs(
+        self,
+        *,
+        limit: int = 50,
+        run_kind: RunKind | None = None,
+        repository_name: str | None = None,
+        has_error: bool | None = None,
+        feedback: MonitoringFeedbackFilter = MonitoringFeedbackFilter.ALL,
+    ) -> MonitoringRunList:
+        """Return recent persisted monitoring runs for reviewer inspection."""
+        with self._connect() as connection:
+            run_rows = list(
+                connection.execute(_SELECT_MONITORING_RUN_HISTORY).fetchall()
+            )
+            feedback_rows = list(
+                connection.execute(_SELECT_FEEDBACK_DETAIL_ROWS).fetchall()
+            )
+        runs = [
+            _run_summary_from_row(row, feedback_rows)
+            for row in sorted(
+                run_rows,
+                key=lambda item: item["completed_at"],
+                reverse=True,
+            )
+        ]
+        filtered = [
+            run
+            for run in runs
+            if _matches_run_filters(
+                run,
+                run_kind=run_kind,
+                repository_name=repository_name,
+                has_error=has_error,
+                feedback=feedback,
+            )
+        ]
+        return MonitoringRunList(runs=filtered[:limit])
+
+    def get_monitoring_run(self, request_id: str) -> MonitoringRunDetail | None:
+        """Return detailed persisted monitoring data for one request."""
+        with self._connect() as connection:
+            run_rows = list(
+                connection.execute(
+                    _SELECT_MONITORING_RUN_DETAIL,
+                    {"request_id": request_id},
+                ).fetchall()
+            )
+            feedback_rows = list(
+                connection.execute(_SELECT_FEEDBACK_DETAIL_ROWS).fetchall()
+            )
+        for row in run_rows:
+            if row["request_id"] == request_id:
+                return _run_detail_from_row(row, feedback_rows)
+        return None
 
     def _connect(self) -> AbstractContextManager[Any]:
         return self.connection_factory(
@@ -237,6 +317,124 @@ def _decimal_or_none(value: int | Decimal | None) -> Decimal | None:
     return value if isinstance(value, Decimal) else None
 
 
+def _run_summary_from_row(
+    row: dict[str, Any],
+    feedback_rows: list[dict[str, Any]],
+) -> MonitoringRunSummary:
+    useful, not_useful = _feedback_counts(row, feedback_rows)
+    return MonitoringRunSummary(
+        request_id=str(row["request_id"]),
+        session_id=str(row["session_id"]),
+        run_kind=RunKind(str(row["run_kind"])),
+        started_at=row["started_at"],
+        completed_at=row["completed_at"],
+        repository_name=str(row["repository_name"]),
+        branch=str(row["branch"]),
+        commit_hash=str(row["commit_hash"]),
+        question_mode=RagMode(str(row["question_mode"])),
+        retrieval_mode=RetrievalMode(str(row["retrieval_mode"])),
+        retrieved_chunk_count=int(row["retrieved_chunk_count"]),
+        unique_file_count=int(row["unique_file_count"]),
+        evidence_count=int(row["evidence_count"]),
+        latency_ms_total=int(row["latency_ms_total"]),
+        latency_ms_retrieval=int(row["latency_ms_retrieval"]),
+        latency_ms_model=_optional_int(row.get("latency_ms_model")),
+        tool_call_count=int(row["tool_call_count"]),
+        insufficient_evidence=bool(row["insufficient_evidence"]),
+        has_error=bool(row.get("error_type")),
+        feedback_useful=useful,
+        feedback_not_useful=not_useful,
+        total_estimated_cost_usd=_optional_decimal(row.get("total_estimated_cost_usd")),
+    )
+
+
+def _run_detail_from_row(
+    row: dict[str, Any],
+    feedback_rows: list[dict[str, Any]],
+) -> MonitoringRunDetail:
+    summary = _run_summary_from_row(row, feedback_rows)
+    return MonitoringRunDetail(
+        **summary.model_dump(),
+        repository_id=str(row["repository_id"]),
+        retrieval_limit=int(row["retrieval_limit"]),
+        error_type=row.get("error_type"),
+        error_message=row.get("error_message"),
+        model_usage=row.get("model_usage") or [],
+        feedback_events=[
+            MonitoringRunFeedback(
+                feedback_id=str(feedback["feedback_id"]),
+                useful=bool(feedback["useful"]),
+                comment=feedback.get("comment"),
+                submitted_at=feedback["submitted_at"],
+            )
+            for feedback in feedback_rows
+            if _feedback_matches_run(feedback, row)
+        ],
+    )
+
+
+def _matches_run_filters(
+    run: MonitoringRunSummary,
+    *,
+    run_kind: RunKind | None,
+    repository_name: str | None,
+    has_error: bool | None,
+    feedback: MonitoringFeedbackFilter,
+) -> bool:
+    if run_kind is not None and run.run_kind != run_kind:
+        return False
+    if repository_name and repository_name.lower() not in run.repository_name.lower():
+        return False
+    if has_error is not None and run.has_error != has_error:
+        return False
+    if feedback == MonitoringFeedbackFilter.USEFUL and run.feedback_useful == 0:
+        return False
+    if feedback == MonitoringFeedbackFilter.NOT_USEFUL and run.feedback_not_useful == 0:
+        return False
+    if (
+        feedback == MonitoringFeedbackFilter.NONE
+        and run.feedback_useful + run.feedback_not_useful > 0
+    ):
+        return False
+    return True
+
+
+def _feedback_counts(
+    run_row: dict[str, Any],
+    feedback_rows: list[dict[str, Any]],
+) -> tuple[int, int]:
+    useful = 0
+    not_useful = 0
+    for feedback in feedback_rows:
+        if not _feedback_matches_run(feedback, run_row):
+            continue
+        if feedback["useful"] is True:
+            useful += 1
+        else:
+            not_useful += 1
+    return useful, not_useful
+
+
+def _feedback_matches_run(
+    feedback: dict[str, Any],
+    run_row: dict[str, Any],
+) -> bool:
+    if feedback.get("request_id") == run_row["request_id"]:
+        return True
+    return (
+        feedback.get("request_id") is None
+        and feedback.get("session_id") == run_row["session_id"]
+    )
+
+
+def _optional_int(value: Any) -> int | None:
+    return int(value) if value is not None else None
+
+
+def _optional_decimal(value: Any) -> Decimal | None:
+    return Decimal(str(value)) if value is not None else None
+
+
 _SCHEMA_STATEMENTS = (
     """
     CREATE TABLE IF NOT EXISTS monitoring_runs (
@@ -270,6 +468,10 @@ _SCHEMA_STATEMENTS = (
     """
     CREATE INDEX IF NOT EXISTS monitoring_runs_session_id_idx
     ON monitoring_runs (session_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS monitoring_runs_completed_at_idx
+    ON monitoring_runs (completed_at DESC)
     """,
     """
     CREATE TABLE IF NOT EXISTS feedback_events (
@@ -392,5 +594,71 @@ FROM monitoring_runs
 
 _SELECT_FEEDBACK_ROWS = """
 SELECT useful
+FROM feedback_events
+"""
+
+_SELECT_MONITORING_RUN_HISTORY = """
+SELECT
+    request_id,
+    session_id,
+    run_kind,
+    started_at,
+    completed_at,
+    repository_name,
+    branch,
+    commit_hash,
+    question_mode,
+    retrieval_mode,
+    retrieved_chunk_count,
+    unique_file_count,
+    evidence_count,
+    latency_ms_total,
+    latency_ms_retrieval,
+    latency_ms_model,
+    tool_call_count,
+    insufficient_evidence,
+    error_type,
+    total_estimated_cost_usd
+FROM monitoring_runs
+"""
+
+_SELECT_MONITORING_RUN_DETAIL = """
+SELECT
+    request_id,
+    session_id,
+    run_kind,
+    started_at,
+    completed_at,
+    repository_id,
+    repository_name,
+    branch,
+    commit_hash,
+    question_mode,
+    retrieval_mode,
+    retrieval_limit,
+    retrieved_chunk_count,
+    unique_file_count,
+    evidence_count,
+    latency_ms_total,
+    latency_ms_retrieval,
+    latency_ms_model,
+    tool_call_count,
+    insufficient_evidence,
+    error_type,
+    error_message,
+    total_estimated_cost_usd,
+    model_usage
+FROM monitoring_runs
+WHERE request_id = %(request_id)s
+"""
+
+_SELECT_FEEDBACK_DETAIL_ROWS = """
+SELECT
+    feedback_id,
+    session_id,
+    request_id,
+    useful,
+    comment,
+    submitted_at
 FROM feedback_events
 """

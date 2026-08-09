@@ -128,10 +128,17 @@ To verify reviewer-visible monitoring:
 4. Submit useful/not-useful feedback for the returned answer.
 5. Open `http://localhost:3000/monitoring`.
 
-The monitoring screen reads `GET /monitoring/summary` and should show persisted
-run counts, average latency, retrieval volume, token/cost totals, feedback, and
-error panels. If it is empty, confirm `RDR_TELEMETRY_ENABLED=true`,
-`RDR_POSTGRES_DSN` is set, and the PostgreSQL container is healthy.
+The monitoring screen reads `GET /monitoring/summary`,
+`GET /monitoring/runs`, and `GET /monitoring/runs/{request_id}`. It should show
+persisted run counts, average latency, retrieval volume, token/cost totals,
+feedback, error panels, recent run rows, and a run detail panel. If it is empty,
+confirm `RDR_TELEMETRY_ENABLED=true`, `RDR_POSTGRES_DSN` is set, and the
+PostgreSQL container is healthy.
+
+Logfire is optional APM/tracing support. It is not required for the reviewer
+dashboard and does not replace PostgreSQL persistence. Enable it only when you
+want external traces by setting `RDR_LOGFIRE_ENABLED=true` and configuring
+Logfire credentials.
 
 Stop all services with:
 
@@ -170,4 +177,4 @@ terraform -chdir=infra/github plan \
   -var repository_name=repo_deep_research
 ```
 
-Review the plan before applying it. The current release is `v0.5.4`.
+Review the plan before applying it. The current release is `v0.5.5`.

@@ -3,6 +3,7 @@
 import asyncio
 import os
 import subprocess
+from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
 
@@ -16,6 +17,9 @@ from repo_research.api import create_app
 from repo_research.config import Settings
 from repo_research.models import (
     FeedbackEvent,
+    MonitoringRunDetail,
+    MonitoringRunList,
+    MonitoringRunSummary,
     MonitoringSummary,
     ParsedChunk,
     RagMode,
@@ -24,6 +28,7 @@ from repo_research.models import (
     RepositoryIdentity,
     ResearchAnswer,
     ResearchRequest,
+    RetrievalMode,
     RunKind,
     SearchResult,
 )
@@ -133,6 +138,8 @@ class FakeRecordingStore:
         self.runs: list[tuple[RunKind, RagRunTrace]] = []
         self.feedback_events: list[FeedbackEvent] = []
         self.summary = MonitoringSummary(total_runs=0)
+        self.run_list = MonitoringRunList()
+        self.run_detail: MonitoringRunDetail | None = None
 
     def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
         self.runs.append((run_kind, trace))
@@ -142,6 +149,14 @@ class FakeRecordingStore:
 
     def monitoring_summary(self) -> MonitoringSummary:
         return self.summary
+
+    def list_monitoring_runs(self, **_kwargs: object) -> MonitoringRunList:
+        return self.run_list
+
+    def get_monitoring_run(self, request_id: str) -> MonitoringRunDetail | None:
+        if self.run_detail and self.run_detail.request_id == request_id:
+            return self.run_detail
+        return None
 
 
 @pytest.fixture
@@ -169,6 +184,33 @@ def _commit_test_repo(path: Path) -> None:
         ],
         check=True,
         capture_output=True,
+    )
+
+
+def _monitoring_run_summary(*, request_id: str) -> MonitoringRunSummary:
+    return MonitoringRunSummary(
+        request_id=request_id,
+        session_id="session-1",
+        run_kind=RunKind.DIRECT,
+        started_at=datetime(2026, 8, 7, 12, tzinfo=UTC),
+        completed_at=datetime(2026, 8, 7, 12, 0, 1, tzinfo=UTC),
+        repository_name="repo",
+        branch="main",
+        commit_hash="abc123",
+        question_mode=RagMode.CHANGE,
+        retrieval_mode=RetrievalMode.HYBRID,
+        retrieved_chunk_count=3,
+        unique_file_count=2,
+        evidence_count=2,
+        latency_ms_total=1000,
+        latency_ms_retrieval=200,
+        latency_ms_model=800,
+        tool_call_count=0,
+        insufficient_evidence=False,
+        has_error=False,
+        feedback_useful=0,
+        feedback_not_useful=0,
+        total_estimated_cost_usd=None,
     )
 
 
@@ -572,6 +614,83 @@ async def test_monitoring_summary_returns_recorder_aggregates() -> None:
 
     assert response.status_code == 200
     assert response.json()["total_runs"] == 3
+
+
+@pytest.mark.anyio
+async def test_monitoring_runs_returns_recorder_history() -> None:
+    recording_store = FakeRecordingStore()
+    recording_store.run_list = MonitoringRunList(
+        runs=[_monitoring_run_summary(request_id="request-1")]
+    )
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get(
+            "/monitoring/runs",
+            params={"limit": 25, "run_kind": "direct", "feedback": "none"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["runs"][0]["request_id"] == "request-1"
+
+
+@pytest.mark.anyio
+async def test_monitoring_run_detail_returns_recorder_detail() -> None:
+    recording_store = FakeRecordingStore()
+    recording_store.run_detail = MonitoringRunDetail(
+        **_monitoring_run_summary(request_id="request-1").model_dump(),
+        repository_id="repo-id",
+        retrieval_limit=5,
+        error_type=None,
+        error_message=None,
+        model_usage=[],
+        feedback_events=[],
+    )
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get("/monitoring/runs/request-1")
+
+    assert response.status_code == 200
+    assert response.json()["repository_id"] == "repo-id"
+
+
+@pytest.mark.anyio
+async def test_monitoring_run_detail_returns_404_for_missing_run() -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=FakeRecordingStore(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get("/monitoring/runs/missing")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "monitoring run not found"}
 
 
 @pytest.mark.anyio
