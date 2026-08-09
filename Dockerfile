@@ -9,6 +9,7 @@ RUN uv sync --frozen --no-dev
 FROM python:3.12-slim
 WORKDIR /app
 COPY --from=builder /app/.venv ./.venv
+COPY --from=builder /app/src ./src
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1

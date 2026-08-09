@@ -13,6 +13,11 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/.env.production ./.env.production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./
+COPY scripts/serve-dist.mjs ./scripts/serve-dist.mjs
+
+ENV HOST=0.0.0.0 \
+    PORT=3000 \
+    VITE_API_PROXY_TARGET=http://api:8000
 
 EXPOSE 3000
-CMD ["npm", "run", "preview", "--", "--host", "--port", "3000"]
+CMD ["node", "scripts/serve-dist.mjs"]
