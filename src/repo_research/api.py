@@ -1,14 +1,14 @@
 """Minimal FastAPI backend for M3 grounded direct RAG."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from typing import Protocol
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from openai import OpenAIError
 from qdrant_client.http.exceptions import ResponseHandlingException
 
@@ -19,6 +19,7 @@ from repo_research.ingestion import (
     materialize_repository_address,
 )
 from repo_research.models import (
+    AnswerSnapshot,
     FeedbackEvent,
     FeedbackRequest,
     IngestSummary,
@@ -27,10 +28,12 @@ from repo_research.models import (
     MonitoringRunList,
     MonitoringSummary,
     ParsedChunk,
+    RagAnswer,
     RagRequest,
     RagRunResult,
     RagRunTrace,
     RepositoryIngestRequest,
+    ResearchAnswer,
     ResearchRequest,
     ResearchRunResult,
     RunKind,
@@ -74,6 +77,9 @@ class RecordingStore(Protocol):
 
     def record_feedback(self, event: FeedbackEvent) -> None:
         """Persist one feedback event."""
+
+    def record_answer_snapshot(self, snapshot: AnswerSnapshot) -> None:
+        """Persist one completed answer for later evaluation."""
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return aggregate monitoring panels."""
@@ -200,8 +206,10 @@ def create_app(
                 repository=repository,
                 request=request.model_copy(update={"repository_path": root_path}),
             )
-            get_recording_store().record_run(
+            _record_completed_answer(
+                recording_store=get_recording_store(),
                 run_kind=RunKind.DIRECT,
+                answer=result.answer,
                 trace=result.trace,
             )
             return result
@@ -225,7 +233,7 @@ def create_app(
             ) from error
 
     @app.post("/research", response_model=ResearchRunResult)
-    def research(request: ResearchRequest) -> ResearchRunResult:
+    async def research(request: ResearchRequest) -> JSONResponse:
         root_path = (request.repository_path or app_settings.repository_root).resolve()
         try:
             repository, _ = discover_repository(
@@ -236,15 +244,18 @@ def create_app(
                 database=get_database(),
                 agent=get_research_agent(),
             )
-            result = service.run(
+            research_request = request.model_copy(update={"repository_path": root_path})
+            result = await service.run_async(
                 repository=repository,
-                request=request.model_copy(update={"repository_path": root_path}),
+                request=research_request,
             )
-            get_recording_store().record_run(
+            _record_completed_answer(
+                recording_store=get_recording_store(),
                 run_kind=RunKind.AGENTIC,
+                answer=result.answer,
                 trace=result.trace,
             )
-            return result
+            return JSONResponse(content=jsonable_encoder(result))
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         except ResponseHandlingException as error:
@@ -305,6 +316,35 @@ def create_app(
         return detail
 
     return app
+
+
+def _record_completed_answer(
+    *,
+    recording_store: RecordingStore,
+    run_kind: RunKind,
+    answer: RagAnswer | ResearchAnswer,
+    trace: RagRunTrace,
+) -> None:
+    """Persist monitoring metadata and the answer snapshot used by evaluation."""
+    recording_store.record_run(run_kind=run_kind, trace=trace)
+    recording_store.record_answer_snapshot(
+        AnswerSnapshot(
+            request_id=trace.request_id,
+            session_id=trace.session_id,
+            run_kind=run_kind,
+            question=answer.question,
+            answer=answer,
+            evidence=answer.evidence,
+            repository_id=trace.repository_id,
+            repository_name=trace.repository_name,
+            branch=trace.branch,
+            commit_hash=trace.commit_hash,
+            question_mode=trace.question_mode,
+            retrieval_mode=trace.retrieval_mode,
+            retrieval_limit=trace.retrieval_limit,
+            created_at=trace.completed_at,
+        )
+    )
 
 
 app = create_app()

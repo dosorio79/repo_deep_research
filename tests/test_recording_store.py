@@ -9,9 +9,16 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from repo_research.models import (
+    AnswerSnapshot,
+    EvaluationRunRecord,
+    EvaluationRunStatus,
+    EvaluationSourceType,
+    EvidenceItem,
     FeedbackEvent,
     ModelUsage,
     MonitoringFeedbackFilter,
+    PersistedEvaluationResult,
+    RagAnswer,
     RagMode,
     RagRunTrace,
     RetrievalMode,
@@ -86,9 +93,20 @@ def test_recording_store_initializes_postgres_schema() -> None:
     assert any(
         "CREATE TABLE IF NOT EXISTS feedback_events" in sql for sql in statements
     )
+    assert any(
+        "CREATE TABLE IF NOT EXISTS answer_snapshots" in sql for sql in statements
+    )
+    assert any(
+        "CREATE TABLE IF NOT EXISTS evaluation_runs" in sql for sql in statements
+    )
+    assert any(
+        "CREATE TABLE IF NOT EXISTS evaluation_results" in sql for sql in statements
+    )
     assert any("monitoring_runs_session_id_idx" in sql for sql in statements)
     assert any("monitoring_runs_completed_at_idx" in sql for sql in statements)
     assert any("feedback_events_session_id_idx" in sql for sql in statements)
+    assert any("answer_snapshots_session_id_idx" in sql for sql in statements)
+    assert any("evaluation_results_request_id_idx" in sql for sql in statements)
     assert factory.calls[0]["dsn"] == "postgresql://example"
 
 
@@ -152,6 +170,81 @@ def test_recording_store_persists_feedback_event() -> None:
     assert params["run_kind"] == "agentic"
     assert params["useful"] is False
     assert params["comment"] == "Needs clearer targets."
+
+
+def test_recording_store_persists_answer_snapshot() -> None:
+    connection = FakeConnection()
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+    snapshot = _answer_snapshot()
+
+    store.record_answer_snapshot(snapshot)
+
+    _statement, params = connection.executed[0]
+    assert params is not None
+    assert params["request_id"] == "request-1"
+    assert params["session_id"] == "session-1"
+    assert params["run_kind"] == "direct"
+    assert params["question"] == "Where is target?"
+    assert params["repository_name"] == "repo"
+    assert params["question_mode"] == "locate"
+    assert params["retrieval_mode"] == "dense"
+    assert isinstance(params["answer"], Jsonb)
+    assert params["answer"].obj["summary"] == "Target lives in src/example.py."
+    assert isinstance(params["evidence"], Jsonb)
+    assert params["evidence"].obj[0]["path"] == "src/example.py"
+
+
+def test_recording_store_persists_evaluation_run_and_result() -> None:
+    connection = FakeConnection()
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+    started_at = datetime(2026, 8, 10, 12, tzinfo=UTC)
+    evaluation_run = EvaluationRunRecord(
+        evaluation_run_id="eval-run-1",
+        source_type=EvaluationSourceType.MONITORED_RUNS,
+        source_label="latest monitored answers",
+        judge_model="gpt-5.1",
+        status=EvaluationRunStatus.RUNNING,
+        started_at=started_at,
+    )
+    result = PersistedEvaluationResult(
+        result_id="result-1",
+        evaluation_run_id="eval-run-1",
+        request_id="request-1",
+        run_kind=RunKind.DIRECT,
+        question="Where is target?",
+        correctness=4,
+        groundedness=5,
+        citation_accuracy=5,
+        completeness=4,
+        usefulness=4,
+        unsupported_claim_count=0,
+        feedback_useful=1,
+        feedback_not_useful=0,
+        latency_ms_total=1000,
+        total_estimated_cost_usd=Decimal("0.012"),
+        notes="Grounded answer.",
+        created_at=started_at,
+    )
+
+    store.record_evaluation_run(evaluation_run)
+    store.record_evaluation_result(result)
+
+    _run_statement, run_params = connection.executed[0]
+    _result_statement, result_params = connection.executed[1]
+    assert run_params is not None
+    assert run_params["evaluation_run_id"] == "eval-run-1"
+    assert run_params["source_type"] == "monitored_runs"
+    assert run_params["status"] == "running"
+    assert result_params is not None
+    assert result_params["result_id"] == "result-1"
+    assert result_params["request_id"] == "request-1"
+    assert result_params["run_kind"] == "direct"
+    assert result_params["groundedness"] == 5
+    assert result_params["feedback_useful"] == 1
 
 
 def test_recording_store_returns_monitoring_summary() -> None:
@@ -344,6 +437,42 @@ def _trace() -> RagRunTrace:
             )
         ],
         total_estimated_cost_usd=Decimal("0.012"),
+    )
+
+
+def _answer_snapshot() -> AnswerSnapshot:
+    evidence = EvidenceItem(
+        evidence_id="E1",
+        path="src/example.py",
+        start_line=1,
+        end_line=2,
+        symbol="target",
+        score=0.9,
+        reason="Relevant implementation.",
+    )
+    return AnswerSnapshot(
+        request_id="request-1",
+        session_id="session-1",
+        run_kind=RunKind.DIRECT,
+        question="Where is target?",
+        answer=RagAnswer(
+            question="Where is target?",
+            mode=RagMode.LOCATE,
+            summary="Target lives in src/example.py.",
+            evidence=[evidence],
+            relevant_files=["src/example.py"],
+            relevant_symbols=["target"],
+            confidence=0.9,
+        ),
+        evidence=[evidence],
+        repository_id="repo-id",
+        repository_name="repo",
+        branch="main",
+        commit_hash="abc123",
+        question_mode=RagMode.LOCATE,
+        retrieval_mode=RetrievalMode.DENSE,
+        retrieval_limit=5,
+        created_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
     )
 
 

@@ -13,7 +13,9 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from repo_research.models import (
+    AnswerSnapshot,
     ErrorCountSummary,
+    EvaluationRunRecord,
     FeedbackEvent,
     FeedbackUsefulSummary,
     LatencyByRunKind,
@@ -24,6 +26,7 @@ from repo_research.models import (
     MonitoringRunList,
     MonitoringRunSummary,
     MonitoringSummary,
+    PersistedEvaluationResult,
     RagMode,
     RagRunTrace,
     RetrievalMode,
@@ -45,9 +48,21 @@ class NoOpRecordingStore:
         """Accept run traces without persisting them."""
         del run_kind, trace
 
+    def record_answer_snapshot(self, snapshot: AnswerSnapshot) -> None:
+        """Accept answer snapshots without persisting them."""
+        del snapshot
+
     def record_feedback(self, event: FeedbackEvent) -> None:
         """Accept feedback without persisting it."""
         del event
+
+    def record_evaluation_run(self, evaluation_run: EvaluationRunRecord) -> None:
+        """Accept evaluation-run metadata without persisting it."""
+        del evaluation_run
+
+    def record_evaluation_result(self, result: PersistedEvaluationResult) -> None:
+        """Accept evaluation-result metadata without persisting it."""
+        del result
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return an empty dashboard summary."""
@@ -133,6 +148,75 @@ class PostgresRecordingStore:
                     "useful": event.useful,
                     "comment": event.comment,
                     "submitted_at": event.submitted_at,
+                },
+            )
+
+    def record_answer_snapshot(self, snapshot: AnswerSnapshot) -> None:
+        """Persist the answer shape needed for later quality evaluation."""
+        with self._connect() as connection:
+            connection.execute(
+                _UPSERT_ANSWER_SNAPSHOT,
+                {
+                    "request_id": snapshot.request_id,
+                    "session_id": snapshot.session_id,
+                    "run_kind": snapshot.run_kind.value,
+                    "question": snapshot.question,
+                    "answer": Jsonb(snapshot.answer.model_dump(mode="json")),
+                    "evidence": Jsonb(
+                        [item.model_dump(mode="json") for item in snapshot.evidence]
+                    ),
+                    "repository_id": snapshot.repository_id,
+                    "repository_name": snapshot.repository_name,
+                    "branch": snapshot.branch,
+                    "commit_hash": snapshot.commit_hash,
+                    "question_mode": snapshot.question_mode.value,
+                    "retrieval_mode": snapshot.retrieval_mode.value,
+                    "retrieval_limit": snapshot.retrieval_limit,
+                    "created_at": snapshot.created_at,
+                },
+            )
+
+    def record_evaluation_run(self, evaluation_run: EvaluationRunRecord) -> None:
+        """Persist one evaluation batch lifecycle record."""
+        with self._connect() as connection:
+            connection.execute(
+                _UPSERT_EVALUATION_RUN,
+                {
+                    "evaluation_run_id": evaluation_run.evaluation_run_id,
+                    "source_type": evaluation_run.source_type.value,
+                    "source_label": evaluation_run.source_label,
+                    "judge_model": evaluation_run.judge_model,
+                    "status": evaluation_run.status.value,
+                    "started_at": evaluation_run.started_at,
+                    "completed_at": evaluation_run.completed_at,
+                    "error_message": evaluation_run.error_message,
+                },
+            )
+
+    def record_evaluation_result(self, result: PersistedEvaluationResult) -> None:
+        """Persist one judged answer-quality result."""
+        with self._connect() as connection:
+            connection.execute(
+                _UPSERT_EVALUATION_RESULT,
+                {
+                    "result_id": result.result_id,
+                    "evaluation_run_id": result.evaluation_run_id,
+                    "record_id": result.record_id,
+                    "request_id": result.request_id,
+                    "run_kind": result.run_kind.value if result.run_kind else None,
+                    "question": result.question,
+                    "correctness": result.correctness,
+                    "groundedness": result.groundedness,
+                    "citation_accuracy": result.citation_accuracy,
+                    "completeness": result.completeness,
+                    "usefulness": result.usefulness,
+                    "unsupported_claim_count": result.unsupported_claim_count,
+                    "feedback_useful": result.feedback_useful,
+                    "feedback_not_useful": result.feedback_not_useful,
+                    "latency_ms_total": result.latency_ms_total,
+                    "total_estimated_cost_usd": result.total_estimated_cost_usd,
+                    "notes": result.notes,
+                    "created_at": result.created_at,
                 },
             )
 
@@ -489,6 +573,85 @@ _SCHEMA_STATEMENTS = (
     CREATE INDEX IF NOT EXISTS feedback_events_session_id_idx
     ON feedback_events (session_id)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS answer_snapshots (
+        request_id TEXT PRIMARY KEY REFERENCES monitoring_runs (request_id)
+            ON DELETE CASCADE,
+        session_id TEXT NOT NULL CHECK (length(session_id) > 0),
+        run_kind TEXT NOT NULL CHECK (run_kind IN ('direct', 'agentic')),
+        question TEXT NOT NULL CHECK (length(question) > 0),
+        answer JSONB NOT NULL,
+        evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+        repository_id TEXT NOT NULL,
+        repository_name TEXT NOT NULL,
+        branch TEXT NOT NULL,
+        commit_hash TEXT NOT NULL,
+        question_mode TEXT NOT NULL,
+        retrieval_mode TEXT NOT NULL,
+        retrieval_limit INTEGER NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS answer_snapshots_session_id_idx
+    ON answer_snapshots (session_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS answer_snapshots_created_at_idx
+    ON answer_snapshots (created_at DESC)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS evaluation_runs (
+        evaluation_run_id TEXT PRIMARY KEY,
+        source_type TEXT NOT NULL CHECK (
+            source_type IN ('dataset', 'monitored_runs')
+        ),
+        source_label TEXT NOT NULL CHECK (length(source_label) > 0),
+        judge_model TEXT NOT NULL CHECK (length(judge_model) > 0),
+        status TEXT NOT NULL CHECK (
+            status IN ('pending', 'running', 'completed', 'failed')
+        ),
+        started_at TIMESTAMPTZ NOT NULL,
+        completed_at TIMESTAMPTZ,
+        error_message TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS evaluation_runs_started_at_idx
+    ON evaluation_runs (started_at DESC)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS evaluation_results (
+        result_id TEXT PRIMARY KEY,
+        evaluation_run_id TEXT NOT NULL REFERENCES evaluation_runs
+            (evaluation_run_id) ON DELETE CASCADE,
+        record_id TEXT,
+        request_id TEXT REFERENCES answer_snapshots (request_id) ON DELETE SET NULL,
+        run_kind TEXT CHECK (run_kind IN ('direct', 'agentic')),
+        question TEXT NOT NULL CHECK (length(question) > 0),
+        correctness NUMERIC NOT NULL,
+        groundedness NUMERIC NOT NULL,
+        citation_accuracy NUMERIC NOT NULL,
+        completeness NUMERIC NOT NULL,
+        usefulness NUMERIC NOT NULL,
+        unsupported_claim_count INTEGER NOT NULL,
+        feedback_useful INTEGER NOT NULL DEFAULT 0,
+        feedback_not_useful INTEGER NOT NULL DEFAULT 0,
+        latency_ms_total INTEGER,
+        total_estimated_cost_usd NUMERIC,
+        notes TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS evaluation_results_evaluation_run_id_idx
+    ON evaluation_results (evaluation_run_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS evaluation_results_request_id_idx
+    ON evaluation_results (request_id)
+    """,
 )
 
 _UPSERT_MONITORING_RUN = """
@@ -579,6 +742,143 @@ INSERT INTO feedback_events (
     %(comment)s,
     %(submitted_at)s
 )
+"""
+
+_UPSERT_ANSWER_SNAPSHOT = """
+INSERT INTO answer_snapshots (
+    request_id,
+    session_id,
+    run_kind,
+    question,
+    answer,
+    evidence,
+    repository_id,
+    repository_name,
+    branch,
+    commit_hash,
+    question_mode,
+    retrieval_mode,
+    retrieval_limit,
+    created_at
+) VALUES (
+    %(request_id)s,
+    %(session_id)s,
+    %(run_kind)s,
+    %(question)s,
+    %(answer)s,
+    %(evidence)s,
+    %(repository_id)s,
+    %(repository_name)s,
+    %(branch)s,
+    %(commit_hash)s,
+    %(question_mode)s,
+    %(retrieval_mode)s,
+    %(retrieval_limit)s,
+    %(created_at)s
+)
+ON CONFLICT (request_id) DO UPDATE SET
+    session_id = EXCLUDED.session_id,
+    run_kind = EXCLUDED.run_kind,
+    question = EXCLUDED.question,
+    answer = EXCLUDED.answer,
+    evidence = EXCLUDED.evidence,
+    repository_id = EXCLUDED.repository_id,
+    repository_name = EXCLUDED.repository_name,
+    branch = EXCLUDED.branch,
+    commit_hash = EXCLUDED.commit_hash,
+    question_mode = EXCLUDED.question_mode,
+    retrieval_mode = EXCLUDED.retrieval_mode,
+    retrieval_limit = EXCLUDED.retrieval_limit,
+    created_at = EXCLUDED.created_at
+"""
+
+_UPSERT_EVALUATION_RUN = """
+INSERT INTO evaluation_runs (
+    evaluation_run_id,
+    source_type,
+    source_label,
+    judge_model,
+    status,
+    started_at,
+    completed_at,
+    error_message
+) VALUES (
+    %(evaluation_run_id)s,
+    %(source_type)s,
+    %(source_label)s,
+    %(judge_model)s,
+    %(status)s,
+    %(started_at)s,
+    %(completed_at)s,
+    %(error_message)s
+)
+ON CONFLICT (evaluation_run_id) DO UPDATE SET
+    source_type = EXCLUDED.source_type,
+    source_label = EXCLUDED.source_label,
+    judge_model = EXCLUDED.judge_model,
+    status = EXCLUDED.status,
+    completed_at = EXCLUDED.completed_at,
+    error_message = EXCLUDED.error_message
+"""
+
+_UPSERT_EVALUATION_RESULT = """
+INSERT INTO evaluation_results (
+    result_id,
+    evaluation_run_id,
+    record_id,
+    request_id,
+    run_kind,
+    question,
+    correctness,
+    groundedness,
+    citation_accuracy,
+    completeness,
+    usefulness,
+    unsupported_claim_count,
+    feedback_useful,
+    feedback_not_useful,
+    latency_ms_total,
+    total_estimated_cost_usd,
+    notes,
+    created_at
+) VALUES (
+    %(result_id)s,
+    %(evaluation_run_id)s,
+    %(record_id)s,
+    %(request_id)s,
+    %(run_kind)s,
+    %(question)s,
+    %(correctness)s,
+    %(groundedness)s,
+    %(citation_accuracy)s,
+    %(completeness)s,
+    %(usefulness)s,
+    %(unsupported_claim_count)s,
+    %(feedback_useful)s,
+    %(feedback_not_useful)s,
+    %(latency_ms_total)s,
+    %(total_estimated_cost_usd)s,
+    %(notes)s,
+    %(created_at)s
+)
+ON CONFLICT (result_id) DO UPDATE SET
+    evaluation_run_id = EXCLUDED.evaluation_run_id,
+    record_id = EXCLUDED.record_id,
+    request_id = EXCLUDED.request_id,
+    run_kind = EXCLUDED.run_kind,
+    question = EXCLUDED.question,
+    correctness = EXCLUDED.correctness,
+    groundedness = EXCLUDED.groundedness,
+    citation_accuracy = EXCLUDED.citation_accuracy,
+    completeness = EXCLUDED.completeness,
+    usefulness = EXCLUDED.usefulness,
+    unsupported_claim_count = EXCLUDED.unsupported_claim_count,
+    feedback_useful = EXCLUDED.feedback_useful,
+    feedback_not_useful = EXCLUDED.feedback_not_useful,
+    latency_ms_total = EXCLUDED.latency_ms_total,
+    total_estimated_cost_usd = EXCLUDED.total_estimated_cost_usd,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at
 """
 
 _SELECT_MONITORING_ROWS = """
