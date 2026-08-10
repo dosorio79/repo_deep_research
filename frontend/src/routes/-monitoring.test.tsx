@@ -23,7 +23,7 @@ vi.mock("@/lib/rag-client", () => ({
 }));
 
 const summary: MonitoringSummary = {
-  total_runs: 2,
+  total_runs: 4,
   runs_by_kind: [
     { run_kind: "agentic", count: 1 },
     { run_kind: "direct", count: 1 },
@@ -32,7 +32,7 @@ const summary: MonitoringSummary = {
     { run_kind: "agentic", average_latency_ms: 300 },
     { run_kind: "direct", average_latency_ms: 100 },
   ],
-  retrieval_volume: { retrieved_chunk_count: 7, unique_file_count: 5 },
+  retrieval_volume: { retrieved_chunk_count: 40, unique_file_count: 23 },
   model_usage_by_model: [
     {
       provider: "openai",
@@ -73,7 +73,39 @@ const runSummary: MonitoringRunSummary = {
 };
 
 const runList: MonitoringRunList = {
-  runs: [runSummary],
+  runs: [
+    runSummary,
+    {
+      ...runSummary,
+      request_id: "req-2",
+      session_id: "session-2",
+      run_kind: "direct",
+      completed_at: "2026-08-07T12:05:00Z",
+      retrieval_mode: "dense",
+      retrieved_chunk_count: 8,
+      unique_file_count: 3,
+      latency_ms_total: 1000,
+      latency_ms_retrieval: 120,
+      latency_ms_model: 700,
+      tool_call_count: 0,
+      has_error: true,
+      feedback_useful: 0,
+      feedback_not_useful: 1,
+      total_estimated_cost_usd: "0.006",
+    },
+    {
+      ...runSummary,
+      request_id: "req-3",
+      session_id: "session-3",
+      completed_at: "2026-08-07T12:10:00Z",
+      retrieved_chunk_count: 5,
+      unique_file_count: 2,
+      latency_ms_total: 3000,
+      latency_ms_retrieval: 240,
+      tool_call_count: 4,
+      feedback_useful: 0,
+    },
+  ],
 };
 
 const runDetail: MonitoringRunDetail = {
@@ -125,15 +157,29 @@ describe("Monitoring route", () => {
 
     renderMonitoringRoute();
 
-    expect(await screen.findByText("2")).toBeInTheDocument();
-    expect(screen.getByText("7 chunks")).toBeInTheDocument();
-    expect(screen.getByText("5 files")).toBeInTheDocument();
+    expect(await screen.findByText("4")).toBeInTheDocument();
+    expect(screen.getByText("40 chunks")).toBeInTheDocument();
+    expect(screen.getByText("23 files")).toBeInTheDocument();
     expect(screen.getByText("45")).toBeInTheDocument();
     expect(screen.getByText("$0.036000")).toBeInTheDocument();
     expect(screen.getByText("1 useful, 2 not useful")).toBeInTheDocument();
     expect(screen.getAllByText("ResearchBudgetExceeded").length).toBeGreaterThan(0);
+    expect(screen.getByText("Runs over time")).toBeInTheDocument();
+    expect(screen.getByText("3 recent runs in the current view")).toBeInTheDocument();
+    expect(screen.getByText("Latency by mode")).toBeInTheDocument();
+    expect(screen.getByText("Slowest average 2,500 ms")).toBeInTheDocument();
+    expect(screen.getByText("Retrieval volume")).toBeInTheDocument();
+    expect(
+      screen.getByText("25 chunks, 10 files in the current view (40 chunks, 23 files total)"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Estimated cost by mode")).toBeInTheDocument();
+    expect(screen.getByText("$0.030000 in the current view")).toBeInTheDocument();
+    expect(screen.getByText("Feedback mix")).toBeInTheDocument();
+    expect(screen.getByText("50% positive feedback rate")).toBeInTheDocument();
+    expect(screen.getByText("Errors and tool calls")).toBeInTheDocument();
+    expect(screen.getByText("1 errors, 3.5 avg agentic tool calls")).toBeInTheDocument();
     expect(await screen.findByText("Recent runs")).toBeInTheDocument();
-    expect(screen.getByText("repo_deep_research")).toBeInTheDocument();
+    expect(screen.getAllByText("repo_deep_research").length).toBeGreaterThan(0);
     expect(screen.getByText("12 / 5")).toBeInTheDocument();
   });
 
@@ -143,7 +189,8 @@ describe("Monitoring route", () => {
 
     renderMonitoringRoute();
 
-    await user.click(await screen.findByText("repo_deep_research"));
+    const repositoryCells = await screen.findAllByText("repo_deep_research");
+    await user.click(repositoryCells[0] as HTMLElement);
 
     expect(await screen.findByText("Grounded enough.")).toBeInTheDocument();
     expect(screen.getByText("req-1")).toBeInTheDocument();
