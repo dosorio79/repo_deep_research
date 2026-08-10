@@ -2,22 +2,24 @@
 
 ## Summary
 
-`v0.5.5` makes monitoring visible and inspectable, but the remaining capstone
-evidence work is not finished. The next releases should focus on reviewer
-scoring evidence, not new product surface area.
+`v0.5.5` makes monitoring visible and inspectable. The `dev` branch now also
+contains the monitoring chart and run-first dashboard follow-ups, but the final
+capstone evidence work is not finished. The next releases should focus on
+reviewer scoring evidence, not new product surface area.
 
 Highest priorities:
 
-1. Monitoring graphs that satisfy the dashboard rubric.
-2. Final retrieval and answer-evaluation evidence.
-3. Reviewer packaging: screenshots, examples, README rubric map, and runbook.
+1. Final retrieval and answer-evaluation evidence.
+2. Reviewer packaging: screenshots, examples, README rubric map, and runbook.
+3. Optional release promotion for the current monitoring dashboard work.
 
 ## v0.5.6: Monitoring charts
 
 Goal: turn the PostgreSQL-backed monitoring page from cards and tables into a
 dashboard with at least five useful charts.
 
-Status: in progress on `feat/mvp-monitoring-charts`.
+Status: complete on `dev` through PR #11 and PR #12; not yet promoted to
+`main` as a tagged release.
 
 Requirements from the PRD:
 
@@ -35,10 +37,15 @@ Implementation approach:
 - Use existing `GET /monitoring/runs` and `GET /monitoring/runs/{request_id}`
   data where possible.
 - Use the existing Recharts dependency for line/bar charts.
-- Keep current summary cards, recent run table, filters, and detail panel.
-- Add chart panels below the summary cards and above or beside the run table.
-- Add time-window or limit controls only if the existing `limit` filter is not
-  enough for readable charts.
+- Put recent runs near the top of `/monitoring` so operators start from the
+  inspectable run history.
+- Feed the cards and charts from the same scoped loaded-run set.
+- Add an explicit dashboard scope toolbar with kind/status/feedback/limit chips
+  and date slicers: all loaded, newest 24h, newest 7d, and newest 30d.
+- Keep row selection inspect-only by opening run detail in a sheet; selecting a
+  row does not filter cards or charts.
+- Keep all-time PostgreSQL summary panels, but label them separately from the
+  current dashboard scope.
 
 Acceptance checks:
 
@@ -46,9 +53,29 @@ Acceptance checks:
   exist.
 - Empty states remain honest when no run rows exist.
 - Tests cover chart rendering from representative direct and agentic run data.
+- Tests cover scoped cards/charts, run-first layout order, date slicing, and
+  selected run detail in a sheet.
 - `make test-all` passes.
 - `make compose-up` passes.
 - README/setup docs explain how to produce a monitoring screenshot.
+
+Implemented chart panels:
+
+- Runs over time.
+- Latency by mode.
+- Retrieval volume.
+- Estimated cost by mode.
+- Feedback mix.
+- Errors and tool calls.
+
+Current validation evidence:
+
+- `npm test -- src/routes/-monitoring.test.tsx`: passed.
+- `npm run typecheck`: passed.
+- `npm run lint`: passed with existing Fast Refresh warnings in shared UI
+  primitives.
+- Playwright visual check on the branch build confirmed desktop/mobile order,
+  the detail sheet interaction, and no page-level horizontal overflow at 390px.
 
 Out of scope:
 

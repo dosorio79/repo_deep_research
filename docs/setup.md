@@ -130,10 +130,13 @@ To verify reviewer-visible monitoring:
 
 The monitoring screen reads `GET /monitoring/summary`,
 `GET /monitoring/runs`, and `GET /monitoring/runs/{request_id}`. It should show
-persisted run counts, average latency, retrieval volume, token/cost totals,
-feedback, error panels, recent run rows, and a run detail panel. If it is empty,
-confirm `RDR_TELEMETRY_ENABLED=true`, `RDR_POSTGRES_DSN` is set, and the
-PostgreSQL container is healthy.
+recent run rows, scoped summary cards, at least five real chart panels, an
+all-time persisted summary, feedback and error panels, and a run detail sheet
+when a row is selected. Cards and charts summarize the loaded runs that match
+the selected filters and date slicer; the all-time persisted summary remains
+independent of that dashboard scope. If the page is empty, confirm
+`RDR_TELEMETRY_ENABLED=true`, `RDR_POSTGRES_DSN` is set, and the PostgreSQL
+container is healthy.
 
 Logfire is optional APM/tracing support. It is not required for the reviewer
 dashboard and does not replace PostgreSQL persistence. Enable it only when you

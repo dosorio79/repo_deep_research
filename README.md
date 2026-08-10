@@ -11,17 +11,23 @@ repository paths, symbols, and line ranges.
 
 ## Current status
 
-The `v0.5.5` release is the first reviewable MVP stack. It supports dense,
-sparse, and Qdrant RRF-hybrid retrieval, direct RAG, bounded agentic research,
-a React TypeScript frontend, local Qdrant/PostgreSQL services, persisted
-run monitoring, and useful/not-useful feedback. CLI, API, and browser runs
-return grounded answers with repository paths, line ranges, trace metadata,
+The `v0.5.5` release is the first reviewable MVP stack. The `dev` branch now
+extends it with a PostgreSQL-backed monitoring dashboard that includes real
+charts, scoped run aggregation, and run-level drill-down. The stack supports
+dense, sparse, and Qdrant RRF-hybrid retrieval, direct RAG, bounded agentic
+research, a React TypeScript frontend, local Qdrant/PostgreSQL services,
+persisted run monitoring, and useful/not-useful feedback. CLI, API, and browser
+runs return grounded answers with repository paths, line ranges, trace metadata,
 model usage, latency, and estimated cost where pricing is known.
 
 The reviewer-facing frontend exposes repository research at `/` and persisted
 monitoring at `/monitoring`. Monitoring data is backed by PostgreSQL through
-`GET /monitoring/summary`; optional Logfire instrumentation can be enabled for
-span-level inspection, but it is not required for the local dashboard.
+`GET /monitoring/summary`, `GET /monitoring/runs`, and
+`GET /monitoring/runs/{request_id}`. The dashboard puts recent runs first,
+opens selected run detail in a sheet, and makes cards and charts aggregate over
+the loaded run scope, including explicit date slicers anchored to the newest
+loaded run. Optional Logfire instrumentation can be enabled for span-level
+inspection, but it is not required for the local dashboard.
 
 ## Requirements
 
@@ -51,8 +57,8 @@ make compose-up
 
 Open `http://localhost:3000`, ingest the repository, run a direct or agentic
 question, submit feedback, then open `http://localhost:3000/monitoring` to see
-persisted run counts, latency, retrieval volume, token/cost, feedback, and
-error panels.
+persisted run history, scoped summary cards, monitoring charts, all-time
+summary panels, feedback, errors, and run detail.
 
 Stop local services with `make docker-down` or the full app stack with
 `make compose-down`.
@@ -167,8 +173,9 @@ ingestion before searching or evaluating M2 modes.
 
 Next milestone: final capstone evidence polish. The next follow-up releases are
 planned in [docs/plans/capstone-follow-ups.md](docs/plans/capstone-follow-ups.md):
-monitoring charts, final retrieval and answer-evaluation evidence, README rubric
-mapping, and reviewer screenshots. Post-MVP work adds query rewriting,
+final retrieval and answer-evaluation evidence, README rubric mapping, and
+reviewer screenshots. Monitoring charts and run-first dashboard polish are now
+merged on `dev`. Post-MVP work adds query rewriting,
 reranking, public GitHub ingestion, cloud deployment, and production-grade
 authentication.
 The complete scope is in [docs/PRD.md](docs/PRD.md).

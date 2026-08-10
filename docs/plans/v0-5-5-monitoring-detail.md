@@ -42,7 +42,7 @@ In scope:
 - `GET /monitoring/runs` for recent run history.
 - `GET /monitoring/runs/{request_id}` for one run detail.
 - Frontend monitoring table with recent runs.
-- Frontend run detail panel or route.
+- Frontend run detail panel, route, or sheet.
 - Minimal filters for run kind, repository, error status, feedback state, and
   limit.
 - Tests for backend storage/API and frontend rendering.
@@ -140,8 +140,8 @@ Keep `/monitoring/summary` unchanged for compatibility.
    - Use compact table rows, not large cards.
 
 3. Add details interaction.
-   - Clicking a row opens a right-side detail panel or a detail section below
-     the table.
+   - Clicking a row opens a right-side detail panel, detail section below the
+     table, or sheet.
    - Show repository identity, timings, retrieval counts, model usage, tool-call
      count, insufficient-evidence flag, error detail, and feedback comments.
    - For direct runs, make clear that tool-call count is expected to be zero.
@@ -211,8 +211,8 @@ Manual reviewer smoke:
 3. Run one direct query and one agentic query.
 4. Submit useful or not-useful feedback for at least one run.
 5. Open `/monitoring`.
-6. Confirm aggregate cards, recent run table, filters, and run detail all show
-   persisted PostgreSQL-backed data.
+6. Confirm scoped aggregate cards, monitoring charts, recent run table,
+   filters, and run detail sheet all show persisted PostgreSQL-backed data.
 
 ## Exit condition
 
@@ -220,6 +220,10 @@ Manual reviewer smoke:
 individual run details from the browser after running direct and agentic
 queries. The release should show at least five useful aggregate panels plus a
 recent run table and one-click detail view backed by persisted PostgreSQL data.
+
+Current `dev` note: PR #11 and PR #12 extended this with six chart panels,
+run-first layout, current-scope aggregation, loaded-run date slicers, a separate
+all-time persisted summary, and a right-side run detail sheet.
 
 ## Risks
 
