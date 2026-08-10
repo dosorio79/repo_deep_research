@@ -134,9 +134,12 @@ It is a client of the FastAPI contract: it submits question mode, retrieval
 mode, limit, research kind (direct/agentic), and session ID, then renders
 the answer, evidence, trace metadata, model usage, cost telemetry, research
 steps, and change targets. The monitoring route renders real PostgreSQL-backed
-dashboard panels, recent run history, and run detail. Feedback controls allow
-useful/not-useful submission with optional comments. Browser access is enabled
-only when FastAPI CORS origins are configured.
+recent run history, scoped summary cards, Recharts chart panels, an all-time
+persisted summary, and selected run detail in a sheet. Run selection is
+inspect-only; cards and charts are scoped by the loaded run filters and date
+slicer, not by the selected row. Feedback controls allow useful/not-useful
+submission with optional comments. Browser access is enabled only when FastAPI
+CORS origins are configured.
 
 `pricing.py` keeps OpenAI cost estimation separate from answer generation.
 Unknown model prices, explicit empty pricing overrides, and inconsistent provider
