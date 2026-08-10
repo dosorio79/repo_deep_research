@@ -16,6 +16,8 @@ import repo_research.api as api_module
 from repo_research.api import create_app
 from repo_research.config import Settings
 from repo_research.models import (
+    AnswerSnapshot,
+    EvidenceItem,
     FeedbackEvent,
     MonitoringRunDetail,
     MonitoringRunList,
@@ -136,6 +138,7 @@ class FakeRecordingStore:
 
     def __init__(self) -> None:
         self.runs: list[tuple[RunKind, RagRunTrace]] = []
+        self.answer_snapshots: list[AnswerSnapshot] = []
         self.feedback_events: list[FeedbackEvent] = []
         self.summary = MonitoringSummary(total_runs=0)
         self.run_list = MonitoringRunList()
@@ -143,6 +146,9 @@ class FakeRecordingStore:
 
     def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
         self.runs.append((run_kind, trace))
+
+    def record_answer_snapshot(self, snapshot: AnswerSnapshot) -> None:
+        self.answer_snapshots.append(snapshot)
 
     def record_feedback(self, event: FeedbackEvent) -> None:
         self.feedback_events.append(event)
@@ -157,6 +163,60 @@ class FakeRecordingStore:
         if self.run_detail and self.run_detail.request_id == request_id:
             return self.run_detail
         return None
+
+
+def test_record_completed_answer_persists_agentic_snapshot() -> None:
+    recording_store = FakeRecordingStore()
+    trace = RagRunTrace(
+        request_id="request-1",
+        session_id="session-1",
+        started_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
+        completed_at=datetime(2026, 8, 10, 12, 0, 1, tzinfo=UTC),
+        repository_id="repo-id",
+        repository_name="repo",
+        branch="main",
+        commit_hash="abc123",
+        question_mode=RagMode.CHANGE,
+        retrieval_mode=RetrievalMode.DENSE,
+        retrieval_limit=5,
+        retrieved_chunk_count=1,
+        unique_file_count=1,
+        evidence_ids=["E1"],
+        latency_ms_total=1000,
+        latency_ms_retrieval=100,
+        tool_call_count=2,
+    )
+    evidence = EvidenceItem(
+        evidence_id="E1",
+        path="src/repo_research/api.py",
+        start_line=1,
+        end_line=5,
+        symbol="create_app",
+        score=0.9,
+        reason="Relevant API route.",
+    )
+    answer = ResearchAnswer(
+        question="Which modules change for evaluation persistence?",
+        mode=RagMode.CHANGE,
+        summary="Persist answer snapshots from API routes.",
+        evidence=[evidence],
+        confidence=0.8,
+    )
+
+    api_module._record_completed_answer(
+        recording_store=recording_store,
+        run_kind=RunKind.AGENTIC,
+        answer=answer,
+        trace=trace,
+    )
+
+    assert recording_store.runs == [(RunKind.AGENTIC, trace)]
+    assert len(recording_store.answer_snapshots) == 1
+    snapshot = recording_store.answer_snapshots[0]
+    assert snapshot.request_id == "request-1"
+    assert snapshot.run_kind is RunKind.AGENTIC
+    assert snapshot.answer.summary == "Persist answer snapshots from API routes."
+    assert snapshot.evidence[0].path == "src/repo_research/api.py"
 
 
 @pytest.fixture
@@ -495,6 +555,13 @@ async def test_rag_persists_monitoring_run_with_session_id() -> None:
     assert run_kind is RunKind.DIRECT
     assert trace.session_id == "browser-session"
     assert trace.request_id == response.json()["trace"]["request_id"]
+    assert len(recording_store.answer_snapshots) == 1
+    snapshot = recording_store.answer_snapshots[0]
+    assert snapshot.request_id == trace.request_id
+    assert snapshot.session_id == "browser-session"
+    assert snapshot.run_kind is RunKind.DIRECT
+    assert snapshot.question == "Where is missing logic?"
+    assert snapshot.answer.summary == response.json()["answer"]["summary"]
 
 
 @pytest.mark.anyio
@@ -557,6 +624,13 @@ async def test_research_generates_fallback_session_id_for_monitoring() -> None:
     run_kind, trace = recording_store.runs[0]
     assert run_kind is RunKind.AGENTIC
     assert trace.session_id == session_id
+    assert len(recording_store.answer_snapshots) == 1
+    snapshot = recording_store.answer_snapshots[0]
+    assert snapshot.request_id == trace.request_id
+    assert snapshot.session_id == session_id
+    assert snapshot.run_kind is RunKind.AGENTIC
+    assert snapshot.question == "Which modules change for bounded research?"
+    assert snapshot.answer.insufficient_evidence is True
 
 
 @pytest.mark.anyio
