@@ -152,18 +152,34 @@ describe("Monitoring route", () => {
     vi.mocked(getMonitoringRunDetail).mockResolvedValue(runDetail);
   });
 
-  it("renders persisted monitoring summary panels", async () => {
+  it("renders scoped monitoring cards, runs, and aggregations", async () => {
     vi.mocked(getMonitoringSummary).mockResolvedValue(summary);
 
     renderMonitoringRoute();
 
-    expect(await screen.findByText("4")).toBeInTheDocument();
-    expect(screen.getByText("40 chunks")).toBeInTheDocument();
-    expect(screen.getByText("23 files")).toBeInTheDocument();
-    expect(screen.getByText("45")).toBeInTheDocument();
-    expect(screen.getByText("$0.036000")).toBeInTheDocument();
-    expect(screen.getByText("1 useful, 2 not useful")).toBeInTheDocument();
+    expect(await screen.findByText("Dashboard scope")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Cards and charts summarize the loaded runs that match these filters. Date ranges are anchored to the newest loaded run.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("3 / 3 loaded")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("25 chunks")).toBeInTheDocument();
+    expect(screen.getByText("10 files")).toBeInTheDocument();
+    expect(screen.getAllByText("$0.030000").length).toBeGreaterThan(0);
+    expect(screen.getByText("1 useful, 1 not useful")).toBeInTheDocument();
+    expect(screen.getByText("45 tokens")).toBeInTheDocument();
     expect(screen.getAllByText("ResearchBudgetExceeded").length).toBeGreaterThan(0);
+    expect(await screen.findByText("Recent runs")).toBeInTheDocument();
+    expect(screen.getAllByText("repo_deep_research").length).toBeGreaterThan(0);
+    expect(screen.getByText("12 / 5")).toBeInTheDocument();
+    expect(screen.getByText("Aggregations for current scope")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Charts summarize the runs currently shown above, including date and filter selections.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("Runs over time")).toBeInTheDocument();
     expect(screen.getByText("3 recent runs in the current view")).toBeInTheDocument();
     expect(screen.getByText("Latency by mode")).toBeInTheDocument();
@@ -178,12 +194,21 @@ describe("Monitoring route", () => {
     expect(screen.getByText("50% positive feedback rate")).toBeInTheDocument();
     expect(screen.getByText("Errors and tool calls")).toBeInTheDocument();
     expect(screen.getByText("1 errors, 3.5 avg agentic tool calls")).toBeInTheDocument();
-    expect(await screen.findByText("Recent runs")).toBeInTheDocument();
-    expect(screen.getAllByText("repo_deep_research").length).toBeGreaterThan(0);
-    expect(screen.getByText("12 / 5")).toBeInTheDocument();
+    expect(screen.getByText("All-time persisted summary")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "These panels use the full persisted monitoring summary, independent of dashboard scope.",
+      ),
+    ).toBeInTheDocument();
+
+    const recentRuns = screen.getByText("Recent runs");
+    const aggregations = screen.getByText("Aggregations for current scope");
+    expect(
+      recentRuns.compareDocumentPosition(aggregations) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
-  it("loads run detail when a recent run is selected", async () => {
+  it("opens run detail in a sheet when a recent run is selected", async () => {
     const user = userEvent.setup();
     vi.mocked(getMonitoringSummary).mockResolvedValue(summary);
 
@@ -192,9 +217,55 @@ describe("Monitoring route", () => {
     const repositoryCells = await screen.findAllByText("repo_deep_research");
     await user.click(repositoryCells[0] as HTMLElement);
 
+    expect(await screen.findByRole("dialog", { name: "Run detail" })).toBeInTheDocument();
     expect(await screen.findByText("Grounded enough.")).toBeInTheDocument();
     expect(screen.getByText("req-1")).toBeInTheDocument();
     expect(screen.getAllByText("3").length).toBeGreaterThan(0);
+  });
+
+  it("closes run detail from the sheet close button", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getMonitoringSummary).mockResolvedValue(summary);
+
+    renderMonitoringRoute();
+
+    const repositoryCells = await screen.findAllByText("repo_deep_research");
+    await user.click(repositoryCells[0] as HTMLElement);
+
+    expect(await screen.findByRole("dialog", { name: "Run detail" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: "Run detail" })).not.toBeInTheDocument();
+  });
+
+  it("filters loaded rows and aggregations with the date slicer", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getMonitoringSummary).mockResolvedValue(summary);
+    vi.mocked(getMonitoringRuns).mockResolvedValue({
+      runs: [
+        ...runList.runs,
+        {
+          ...runSummary,
+          request_id: "req-old",
+          session_id: "session-old",
+          completed_at: "2026-07-01T12:00:00Z",
+          repository_name: "old_repo",
+          retrieved_chunk_count: 20,
+          unique_file_count: 4,
+          total_estimated_cost_usd: "0.010",
+        },
+      ],
+    });
+
+    renderMonitoringRoute();
+
+    expect(await screen.findByText("old_repo")).toBeInTheDocument();
+    expect(screen.getByText("4 / 4 loaded")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Newest 24h" }));
+
+    expect(screen.queryByText("old_repo")).not.toBeInTheDocument();
+    expect(screen.getByText("3 / 4 loaded")).toBeInTheDocument();
+    expect(screen.getByText("25 chunks")).toBeInTheDocument();
   });
 
   it("sends selected filters to the monitoring run list endpoint", async () => {

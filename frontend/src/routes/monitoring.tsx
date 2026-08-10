@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import {
   Activity,
@@ -14,6 +14,13 @@ import { ApiError } from "@/components/ApiError";
 import { AppShell } from "@/components/AppShell";
 import { EmptyLine, Field, Panel } from "@/components/primitives";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { getMonitoringRunDetail, getMonitoringRuns, getMonitoringSummary } from "@/lib/rag-client";
 import type {
   ApiErrorShape,
@@ -27,6 +34,13 @@ import type {
 
 const DEFAULT_API_BASE_URL = (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "/api";
 const LIMIT_OPTIONS = [25, 50, 100] as const;
+const DATE_RANGE_OPTIONS = [
+  ["all", "All loaded"],
+  ["24h", "Newest 24h"],
+  ["7d", "Newest 7d"],
+  ["30d", "Newest 30d"],
+] as const;
+type DateRangeFilter = (typeof DATE_RANGE_OPTIONS)[number][0];
 const RUN_KIND_CHART_CONFIG = {
   direct: { label: "Direct", color: "var(--color-chart-1)" },
   agentic: { label: "Agentic", color: "var(--color-chart-2)" },
@@ -55,6 +69,7 @@ function MonitoringView() {
   const [status, setStatus] = useState<"all" | "error" | "ok">("all");
   const [feedback, setFeedback] = useState<MonitoringFeedbackFilter>("all");
   const [limit, setLimit] = useState<(typeof LIMIT_OPTIONS)[number]>(50);
+  const [dateRange, setDateRange] = useState<DateRangeFilter>("all");
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const runListParams = useMemo<MonitoringRunListParams>(() => {
     const params: MonitoringRunListParams = { limit, feedback };
@@ -62,6 +77,11 @@ function MonitoringView() {
     if (status !== "all") params.has_error = status === "error";
     return params;
   }, [feedback, limit, runKind, status]);
+
+  useEffect(() => {
+    setSelectedRequestId(null);
+  }, [dateRange, feedback, limit, runKind, status]);
+
   const summaryQuery = useQuery({
     queryKey: ["monitoring-summary", DEFAULT_API_BASE_URL],
     queryFn: ({ signal }) => getMonitoringSummary(DEFAULT_API_BASE_URL, signal),
@@ -101,12 +121,14 @@ function MonitoringView() {
           selectedRequestId={selectedRequestId}
           selectedDetail={detailQuery.data ?? null}
           detailLoading={detailQuery.isLoading}
-          filters={{ runKind, status, feedback, limit }}
+          filters={{ runKind, status, feedback, limit, dateRange }}
           onSelectRun={setSelectedRequestId}
+          onCloseRunDetail={() => setSelectedRequestId(null)}
           onRunKindChange={setRunKind}
           onStatusChange={setStatus}
           onFeedbackChange={setFeedback}
           onLimitChange={setLimit}
+          onDateRangeChange={setDateRange}
         />
       ) : summaryQuery.isLoading ? (
         <Panel title="Monitoring">
@@ -138,10 +160,12 @@ function MonitoringDashboard({
   detailLoading,
   filters,
   onSelectRun,
+  onCloseRunDetail,
   onRunKindChange,
   onStatusChange,
   onFeedbackChange,
   onLimitChange,
+  onDateRangeChange,
 }: {
   summary: MonitoringSummary;
   runs: MonitoringRunSummary[];
@@ -154,130 +178,168 @@ function MonitoringDashboard({
     status: "all" | "error" | "ok";
     feedback: MonitoringFeedbackFilter;
     limit: (typeof LIMIT_OPTIONS)[number];
+    dateRange: DateRangeFilter;
   };
   onSelectRun: (requestId: string) => void;
+  onCloseRunDetail: () => void;
   onRunKindChange: (value: ResearchKind | "all") => void;
   onStatusChange: (value: "all" | "error" | "ok") => void;
   onFeedbackChange: (value: MonitoringFeedbackFilter) => void;
   onLimitChange: (value: (typeof LIMIT_OPTIONS)[number]) => void;
+  onDateRangeChange: (value: DateRangeFilter) => void;
 }) {
-  if (summary.total_runs === 0) return <EmptyMonitoring />;
+  const scopedRuns = useMemo(
+    () => filterRunsByDateRange(runs, filters.dateRange),
+    [filters.dateRange, runs],
+  );
+  const scopeSummary = useMemo(() => buildRunScopeSummary(scopedRuns), [scopedRuns]);
 
-  const feedbackTotal = summary.feedback.useful + summary.feedback.not_useful;
-  const modelCost = summary.model_usage_by_model.reduce(
-    (total, item) => total + numericCost(item.estimated_cost_usd),
-    0,
-  );
-  const totalTokens = summary.model_usage_by_model.reduce(
-    (total, item) => total + item.total_tokens,
-    0,
-  );
-  const totalErrors = summary.errors_by_type.reduce((total, item) => total + item.count, 0);
+  useEffect(() => {
+    if (
+      selectedRequestId !== null &&
+      !runsLoading &&
+      !scopedRuns.some((run) => run.request_id === selectedRequestId)
+    ) {
+      onCloseRunDetail();
+    }
+  }, [onCloseRunDetail, runsLoading, scopedRuns, selectedRequestId]);
+
+  if (summary.total_runs === 0) return <EmptyMonitoring />;
 
   return (
     <div className="space-y-3">
+      <DashboardScopeToolbar
+        filters={filters}
+        displayedRunCount={scopedRuns.length}
+        loadedRunCount={runs.length}
+        onDateRangeChange={onDateRangeChange}
+      />
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <MetricCard
           icon={Activity}
           label="Runs"
-          value={summary.total_runs.toLocaleString()}
-          detail={summary.runs_by_kind.map((item) => `${item.run_kind} ${item.count}`).join(", ")}
+          value={scopeSummary.totalRuns.toLocaleString()}
+          detail={`${scopeSummary.directRuns.toLocaleString()} direct, ${scopeSummary.agenticRuns.toLocaleString()} agentic`}
         />
         <MetricCard
           icon={Clock3}
           label="Latency"
-          value={formatLatency(summary.average_latency_by_kind[0]?.average_latency_ms)}
-          detail={summary.average_latency_by_kind
-            .map((item) => `${item.run_kind} ${formatLatency(item.average_latency_ms)}`)
-            .join(", ")}
+          value={formatLatency(scopeSummary.averageLatencyMs)}
+          detail={`retrieval avg ${formatLatency(scopeSummary.averageRetrievalLatencyMs)}`}
         />
         <MetricCard
           icon={FileSearch}
           label="Retrieval"
-          value={`${summary.retrieval_volume.retrieved_chunk_count.toLocaleString()} chunks`}
-          detail={`${summary.retrieval_volume.unique_file_count.toLocaleString()} files`}
+          value={`${scopeSummary.retrievedChunkCount.toLocaleString()} chunks`}
+          detail={`${scopeSummary.uniqueFileCount.toLocaleString()} files`}
         />
         <MetricCard
           icon={CircleDollarSign}
-          label="Tokens"
-          value={totalTokens.toLocaleString()}
-          detail={modelCost > 0 ? `$${modelCost.toFixed(6)}` : "cost unavailable"}
+          label="Cost"
+          value={formatCost(scopeSummary.estimatedCostUsd) ?? "$0.000000"}
+          detail="estimated for current scope"
         />
         <MetricCard
           icon={MessageSquare}
           label="Feedback"
-          value={feedbackTotal.toLocaleString()}
-          detail={`${summary.feedback.useful} useful, ${summary.feedback.not_useful} not useful`}
+          value={scopeSummary.feedbackTotal.toLocaleString()}
+          detail={`${scopeSummary.feedbackUseful} useful, ${scopeSummary.feedbackNotUseful} not useful`}
         />
         <MetricCard
           icon={TriangleAlert}
           label="Errors"
-          value={totalErrors.toLocaleString()}
-          detail={summary.errors_by_type[0]?.error_type ?? "none"}
+          value={scopeSummary.errorCount.toLocaleString()}
+          detail="in current scope"
         />
       </div>
 
-      <MonitoringCharts summary={summary} runs={runs} loading={runsLoading} />
+      <Panel title="Recent runs">
+        <RunFilters
+          filters={filters}
+          onRunKindChange={onRunKindChange}
+          onStatusChange={onStatusChange}
+          onFeedbackChange={onFeedbackChange}
+          onLimitChange={onLimitChange}
+        />
+        <RunTable
+          runs={scopedRuns}
+          loading={runsLoading}
+          selectedRequestId={selectedRequestId}
+          onSelectRun={onSelectRun}
+        />
+      </Panel>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Runs by kind">
-          {summary.runs_by_kind.map((item) => (
-            <Field key={item.run_kind} label={item.run_kind}>
-              {item.count.toLocaleString()}
-            </Field>
-          ))}
-        </Panel>
-        <Panel title="Average latency">
-          {summary.average_latency_by_kind.map((item) => (
-            <Field key={item.run_kind} label={item.run_kind}>
-              {formatLatency(item.average_latency_ms)}
-            </Field>
-          ))}
-        </Panel>
-        <Panel title="Model usage">
-          {summary.model_usage_by_model.length ? (
-            summary.model_usage_by_model.map((item) => (
-              <Field key={`${item.provider}-${item.model}`} label={item.model}>
-                {item.total_tokens.toLocaleString()} tokens
-              </Field>
-            ))
-          ) : (
-            <EmptyLine>No model usage rows with token totals yet.</EmptyLine>
-          )}
-        </Panel>
-        <Panel title="Errors by type">
-          {summary.errors_by_type.length ? (
-            summary.errors_by_type.map((item) => (
-              <Field key={item.error_type} label={item.error_type}>
+      <section className="space-y-2">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-[15px] font-semibold">Aggregations for current scope</h2>
+            <p className="text-[12px] text-muted-foreground">
+              Charts summarize the runs currently shown above, including date and filter selections.
+            </p>
+          </div>
+          <span className="mono text-[11px] text-muted-foreground">
+            {scopedRuns.length.toLocaleString()} of {runs.length.toLocaleString()} loaded runs
+          </span>
+        </div>
+        <MonitoringCharts summary={summary} runs={scopedRuns} loading={runsLoading} />
+      </section>
+
+      <section className="space-y-2">
+        <div>
+          <h2 className="text-[15px] font-semibold">All-time persisted summary</h2>
+          <p className="text-[12px] text-muted-foreground">
+            These panels use the full persisted monitoring summary, independent of dashboard scope.
+          </p>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <Panel title="Runs by kind">
+            {summary.runs_by_kind.map((item) => (
+              <Field key={item.run_kind} label={item.run_kind}>
                 {item.count.toLocaleString()}
               </Field>
-            ))
-          ) : (
-            <EmptyLine>No persisted run errors.</EmptyLine>
-          )}
-        </Panel>
-      </div>
+            ))}
+          </Panel>
+          <Panel title="Average latency">
+            {summary.average_latency_by_kind.map((item) => (
+              <Field key={item.run_kind} label={item.run_kind}>
+                {formatLatency(item.average_latency_ms)}
+              </Field>
+            ))}
+          </Panel>
+          <Panel title="Model usage">
+            {summary.model_usage_by_model.length ? (
+              summary.model_usage_by_model.map((item) => (
+                <Field key={`${item.provider}-${item.model}`} label={item.model}>
+                  {item.total_tokens.toLocaleString()} tokens
+                </Field>
+              ))
+            ) : (
+              <EmptyLine>No model usage rows with token totals yet.</EmptyLine>
+            )}
+          </Panel>
+          <Panel title="Errors by type">
+            {summary.errors_by_type.length ? (
+              summary.errors_by_type.map((item) => (
+                <Field key={item.error_type} label={item.error_type}>
+                  {item.count.toLocaleString()}
+                </Field>
+              ))
+            ) : (
+              <EmptyLine>No persisted run errors.</EmptyLine>
+            )}
+          </Panel>
+        </div>
+      </section>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
-        <Panel title="Recent runs">
-          <RunFilters
-            filters={filters}
-            onRunKindChange={onRunKindChange}
-            onStatusChange={onStatusChange}
-            onFeedbackChange={onFeedbackChange}
-            onLimitChange={onLimitChange}
-          />
-          <RunTable
-            runs={runs}
-            loading={runsLoading}
-            selectedRequestId={selectedRequestId}
-            onSelectRun={onSelectRun}
-          />
-        </Panel>
-        <Panel title="Run detail">
-          <RunDetail detail={selectedDetail} loading={detailLoading} />
-        </Panel>
-      </div>
+      <RunDetailSheet
+        open={selectedRequestId !== null}
+        detail={selectedDetail}
+        loading={detailLoading}
+        onOpenChange={(open) => {
+          if (!open) onCloseRunDetail();
+        }}
+      />
     </div>
   );
 }
@@ -315,7 +377,10 @@ function MonitoringCharts({
         title="Runs over time"
         detail={`${chartData.totalDisplayedRuns.toLocaleString()} recent runs in the current view`}
       >
-        <ChartContainer config={RUN_KIND_CHART_CONFIG} className="h-[220px] w-full">
+        <ChartContainer
+          config={RUN_KIND_CHART_CONFIG}
+          className="h-[220px] w-full min-w-0 aspect-auto"
+        >
           <LineChart accessibilityLayer data={chartData.runsOverTime}>
             <CartesianGrid vertical={false} />
             <XAxis dataKey="bucket" tickLine={false} axisLine={false} minTickGap={16} />
@@ -348,7 +413,7 @@ function MonitoringCharts({
             total: { label: "Total latency", color: "var(--color-chart-1)" },
             retrieval: { label: "Retrieval latency", color: "var(--color-chart-2)" },
           }}
-          className="h-[220px] w-full"
+          className="h-[220px] w-full min-w-0 aspect-auto"
         >
           <BarChart accessibilityLayer data={chartData.latencyByKind}>
             <CartesianGrid vertical={false} />
@@ -370,7 +435,7 @@ function MonitoringCharts({
             chunks: { label: "Chunks", color: "var(--color-chart-3)" },
             files: { label: "Files", color: "var(--color-chart-4)" },
           }}
-          className="h-[220px] w-full"
+          className="h-[220px] w-full min-w-0 aspect-auto"
         >
           <BarChart accessibilityLayer data={chartData.retrievalByRun}>
             <CartesianGrid vertical={false} />
@@ -392,7 +457,7 @@ function MonitoringCharts({
             config={{
               cost: { label: "Estimated cost", color: "var(--color-chart-1)" },
             }}
-            className="h-[220px] w-full"
+            className="h-[220px] w-full min-w-0 aspect-auto"
           >
             <BarChart accessibilityLayer data={chartData.costByKind}>
               <CartesianGrid vertical={false} />
@@ -415,7 +480,7 @@ function MonitoringCharts({
           config={{
             count: { label: "Feedback", color: "var(--color-chart-5)" },
           }}
-          className="h-[220px] w-full"
+          className="h-[220px] w-full min-w-0 aspect-auto"
         >
           <BarChart accessibilityLayer data={chartData.feedbackMix}>
             <CartesianGrid vertical={false} />
@@ -436,7 +501,7 @@ function MonitoringCharts({
             errors: { label: "Errors", color: "var(--color-chart-1)" },
             toolCalls: { label: "Avg tool calls", color: "var(--color-chart-2)" },
           }}
-          className="h-[220px] w-full"
+          className="h-[220px] w-full min-w-0 aspect-auto"
         >
           <BarChart accessibilityLayer data={chartData.errorsAndToolCalls}>
             <CartesianGrid vertical={false} />
@@ -464,11 +529,104 @@ function ChartPanel({
   return (
     <Panel
       title={title}
-      right={<span className="mono text-[11px] text-muted-foreground">{detail}</span>}
+      right={
+        <span className="max-w-[190px] truncate text-right mono text-[11px] text-muted-foreground sm:max-w-[320px]">
+          {detail}
+        </span>
+      }
     >
       {children}
     </Panel>
   );
+}
+
+function DashboardScopeToolbar({
+  filters,
+  displayedRunCount,
+  loadedRunCount,
+  onDateRangeChange,
+}: {
+  filters: {
+    runKind: ResearchKind | "all";
+    status: "all" | "error" | "ok";
+    feedback: MonitoringFeedbackFilter;
+    limit: (typeof LIMIT_OPTIONS)[number];
+    dateRange: DateRangeFilter;
+  };
+  displayedRunCount: number;
+  loadedRunCount: number;
+  onDateRangeChange: (value: DateRangeFilter) => void;
+}) {
+  return (
+    <Panel
+      title="Dashboard scope"
+      right={
+        <span className="mono text-[11px] text-muted-foreground">
+          {displayedRunCount.toLocaleString()} / {loadedRunCount.toLocaleString()} loaded
+        </span>
+      }
+    >
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-[12px] text-muted-foreground">
+            Cards and charts summarize the loaded runs that match these filters. Date ranges are
+            anchored to the newest loaded run.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <ScopeChip label="Kind" value={scopeKindLabel(filters.runKind)} />
+            <ScopeChip label="Status" value={scopeStatusLabel(filters.status)} />
+            <ScopeChip label="Feedback" value={scopeFeedbackLabel(filters.feedback)} />
+            <ScopeChip label="Limit" value={filters.limit.toLocaleString()} />
+            <ScopeChip label="Date" value={scopeDateLabel(filters.dateRange)} />
+          </div>
+        </div>
+        <div
+          className="inline-flex w-full rounded-md border border-border bg-secondary/50 p-1 sm:w-auto"
+          aria-label="Date range"
+        >
+          {DATE_RANGE_OPTIONS.map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className="h-8 flex-1 rounded px-2 text-[12px] font-medium text-muted-foreground transition hover:text-foreground data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-sm sm:flex-none"
+              data-active={filters.dateRange === value}
+              aria-pressed={filters.dateRange === value}
+              onClick={() => onDateRangeChange(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function ScopeChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground">
+      <span className="font-semibold text-foreground">{label}</span>: {value}
+    </span>
+  );
+}
+
+function scopeKindLabel(value: ResearchKind | "all") {
+  if (value === "all") return "All";
+  return value === "agentic" ? "Agentic" : "Direct";
+}
+
+function scopeStatusLabel(value: "all" | "error" | "ok") {
+  if (value === "all") return "All";
+  return value === "error" ? "Error" : "No error";
+}
+
+function scopeFeedbackLabel(value: MonitoringFeedbackFilter) {
+  if (value === "not_useful") return "Not useful";
+  return value === "all" ? "All" : value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function scopeDateLabel(value: DateRangeFilter) {
+  return DATE_RANGE_OPTIONS.find(([optionValue]) => optionValue === value)?.[1] ?? "All loaded";
 }
 
 function buildMonitoringChartData(runs: MonitoringRunSummary[]) {
@@ -539,6 +697,39 @@ function buildMonitoringChartData(runs: MonitoringRunSummary[]) {
       : 0,
     visibleErrors: runs.filter((run) => run.has_error).length,
     averageAgenticToolCalls: average(agenticRuns.map((run) => run.tool_call_count)),
+  };
+}
+
+function filterRunsByDateRange(runs: MonitoringRunSummary[], dateRange: DateRangeFilter) {
+  if (dateRange === "all" || runs.length === 0) return runs;
+
+  const windowMsByRange: Record<Exclude<DateRangeFilter, "all">, number> = {
+    "24h": 24 * 60 * 60 * 1_000,
+    "7d": 7 * 24 * 60 * 60 * 1_000,
+    "30d": 30 * 24 * 60 * 60 * 1_000,
+  };
+  const anchorTime = Math.max(...runs.map((run) => new Date(run.completed_at).getTime()));
+  const cutoffTime = anchorTime - windowMsByRange[dateRange];
+  return runs.filter((run) => new Date(run.completed_at).getTime() >= cutoffTime);
+}
+
+function buildRunScopeSummary(runs: MonitoringRunSummary[]) {
+  const feedbackUseful = sum(runs.map((run) => run.feedback_useful));
+  const feedbackNotUseful = sum(runs.map((run) => run.feedback_not_useful));
+
+  return {
+    totalRuns: runs.length,
+    directRuns: runs.filter((run) => run.run_kind === "direct").length,
+    agenticRuns: runs.filter((run) => run.run_kind === "agentic").length,
+    averageLatencyMs: average(runs.map((run) => run.latency_ms_total)),
+    averageRetrievalLatencyMs: average(runs.map((run) => run.latency_ms_retrieval)),
+    retrievedChunkCount: sum(runs.map((run) => run.retrieved_chunk_count)),
+    uniqueFileCount: sum(runs.map((run) => run.unique_file_count)),
+    estimatedCostUsd: sum(runs.map((run) => numericCost(run.total_estimated_cost_usd))),
+    feedbackUseful,
+    feedbackNotUseful,
+    feedbackTotal: feedbackUseful + feedbackNotUseful,
+    errorCount: runs.filter((run) => run.has_error).length,
   };
 }
 
@@ -657,8 +848,8 @@ function RunTable({
   if (runs.length === 0) return <EmptyLine>No runs match the selected filters.</EmptyLine>;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full table-fixed border-collapse text-left text-[13px]">
+    <div className="max-w-full overflow-x-auto">
+      <table className="min-w-[820px] table-fixed border-collapse text-left text-[13px]">
         <thead>
           <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
             <th className="w-[126px] py-2 pr-3 font-semibold">Time</th>
@@ -709,6 +900,32 @@ function RunTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function RunDetailSheet({
+  open,
+  detail,
+  loading,
+  onOpenChange,
+}: {
+  open: boolean;
+  detail: MonitoringRunDetail | null;
+  loading: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="flex w-full flex-col overflow-y-auto p-4 sm:max-w-md">
+        <SheetHeader className="pr-8 text-left">
+          <SheetTitle>Run detail</SheetTitle>
+          <SheetDescription>Persisted metadata and feedback for the selected run.</SheetDescription>
+        </SheetHeader>
+        <div className="mt-3">
+          <RunDetail detail={detail} loading={loading} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
