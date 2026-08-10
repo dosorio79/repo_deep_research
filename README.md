@@ -83,7 +83,7 @@ Stop local services with `make docker-down` or the full app stack with
 | `make research QUESTION="..."` | Ingest this repo if needed and return a bounded agentic-RAG answer. |
 | `make api-rag QUESTION="..."` | Start Qdrant and return answer-plus-trace JSON through the local FastAPI `/rag` endpoint. |
 | `make evaluate-retrieval` | Evaluate dense, sparse, and hybrid retrieval on the development records. |
-| `make evaluate-answers` | Run opt-in live answer judging with OpenAI. |
+| `make evaluate-answers` | Run opt-in live answer judging with OpenAI; CLI flags also support dataset direct-vs-agentic and monitored-run sources. |
 | `make api` | Run the minimal FastAPI backend on localhost. |
 | `make app` | Run FastAPI and the MVP frontend; choose and ingest a repository from the UI. |
 | `make frontend-install` | Install the vendored frontend dependencies with npm. |
