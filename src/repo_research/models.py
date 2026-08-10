@@ -325,6 +325,15 @@ class AnswerSnapshot(BaseModel):
     created_at: datetime
 
 
+class EvaluatableAnswerSnapshot(AnswerSnapshot):
+    """Persisted answer plus monitoring context needed by judge evaluation."""
+
+    feedback_useful: int = Field(default=0, ge=0)
+    feedback_not_useful: int = Field(default=0, ge=0)
+    latency_ms_total: int | None = Field(default=None, ge=0)
+    total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+
+
 class FeedbackRequest(BaseModel):
     """A user feedback submission for one browser session or returned run."""
 
@@ -480,6 +489,14 @@ class EvaluationRecord(BaseModel):
     notes: str = ""
 
 
+class EvaluationDatasetAudit(BaseModel):
+    """Deterministic summary of versioned evaluation records."""
+
+    dataset_count: int = Field(ge=0)
+    record_count: int = Field(ge=0)
+    question_type_counts: dict[str, int] = Field(default_factory=dict)
+
+
 class EvaluationResult(BaseModel):
     """Aggregate retrieval metrics for a dataset and one retrieval mode."""
 
@@ -495,7 +512,7 @@ class EvaluationResult(BaseModel):
 
 
 class AnswerEvaluationResult(BaseModel):
-    """LLM-judge scores for one grounded direct-RAG answer."""
+    """LLM-judge scores for one grounded repository answer."""
 
     record_id: str = Field(min_length=1)
     question: str = Field(min_length=1)

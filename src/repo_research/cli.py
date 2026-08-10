@@ -6,13 +6,25 @@ import argparse
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from repo_research import runtime
+from repo_research.answer_evaluation import (
+    audit_evaluation_records,
+    dataset_candidates,
+    judge_answer_candidates,
+    monitored_answer_candidates,
+    write_persisted_answer_evaluation_report,
+)
 from repo_research.config import Settings
 from repo_research.evaluation import evaluate_records, load_records, write_report
 from repo_research.ingestion import discover_repository, ingest_repository_if_needed
 from repo_research.models import (
+    EvaluationRunRecord,
+    EvaluationRunStatus,
+    EvaluationSourceType,
+    PersistedEvaluationResult,
     RagMode,
     RagRequest,
     RagRunResult,
@@ -21,13 +33,11 @@ from repo_research.models import (
     ResearchRequest,
     ResearchRunResult,
     RetrievalMode,
+    RunKind,
     SearchQuery,
 )
 from repo_research.protocols import RepositorySearcher
-from repo_research.rag import (
-    evaluate_answers_from_dataset,
-    write_answer_evaluation_report,
-)
+from repo_research.rag import AnswerJudge, DirectRagService
 from repo_research.research import ResearchAgentRunner
 
 
@@ -108,6 +118,33 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
     )
     answer_eval.add_argument("--limit", type=int, default=None)
+    answer_eval.add_argument(
+        "--source",
+        choices=["dataset", "monitored-runs"],
+        default="dataset",
+    )
+    answer_eval.add_argument(
+        "--approach",
+        choices=["direct", "agentic", "both"],
+        default="direct",
+        help="answer-generation approach used for dataset source",
+    )
+    answer_eval.add_argument(
+        "--run-kind",
+        choices=[run_kind.value for run_kind in RunKind],
+        default=None,
+        help="optional monitored-runs filter",
+    )
+    answer_eval.add_argument(
+        "--repository-name",
+        default=None,
+        help="optional monitored-runs repository-name filter",
+    )
+    answer_eval.add_argument(
+        "--persist",
+        action="store_true",
+        help="persist evaluation run and result rows to PostgreSQL",
+    )
     return parser
 
 
@@ -223,17 +260,15 @@ def main() -> None:
             database=database,
             generator=model,
         )
-        answer_results = evaluate_answers_from_dataset(
-            service=service,
-            judge=model,
+        answer_results = _run_unified_answer_evaluation(
+            arguments=arguments,
+            settings=settings,
             repository=repository,
-            dataset=arguments.dataset,
-            retrieval_mode=RetrievalMode(arguments.retrieval_mode)
-            if arguments.retrieval_mode
-            else settings.retrieval_mode,
-            limit=arguments.limit or settings.answer_evaluation_limit,
+            database=database,
+            direct_service=service,
+            judge=model,
         )
-        write_answer_evaluation_report(answer_results, arguments.output)
+        write_persisted_answer_evaluation_report(answer_results, arguments.output)
         print(
             json.dumps(
                 [result.model_dump(mode="json") for result in answer_results],
@@ -313,6 +348,113 @@ def _run_agentic_research(
             budget=budget,
         ),
     )
+
+
+def _run_unified_answer_evaluation(
+    *,
+    arguments: argparse.Namespace,
+    settings: Settings,
+    repository: RepositoryIdentity,
+    database: RepositorySearcher,
+    direct_service: DirectRagService,
+    judge: AnswerJudge,
+) -> list[PersistedEvaluationResult]:
+    retrieval_mode = (
+        RetrievalMode(arguments.retrieval_mode)
+        if arguments.retrieval_mode
+        else settings.retrieval_mode
+    )
+    limit = arguments.limit or settings.answer_evaluation_limit
+    source_type = (
+        EvaluationSourceType.MONITORED_RUNS
+        if arguments.source == "monitored-runs"
+        else EvaluationSourceType.DATASET
+    )
+    if source_type is EvaluationSourceType.DATASET:
+        records = load_records(arguments.dataset)
+        audit = audit_evaluation_records({arguments.dataset.as_posix(): records})
+        _report_step(
+            f"loaded {audit.record_count} evaluation records across "
+            f"{audit.question_type_counts}"
+        )
+        candidates = dataset_candidates(
+            direct_service=direct_service,
+            research_service=runtime.create_bounded_research_service(
+                settings=settings,
+                database=database,
+                agent=runtime.create_research_agent(settings),
+            )
+            if arguments.approach in {"agentic", "both"}
+            else None,
+            repository=repository,
+            records=records,
+            retrieval_mode=retrieval_mode,
+            limit=limit,
+            approaches=_evaluation_approaches(arguments.approach),
+        )
+        source_label = arguments.dataset.as_posix()
+    else:
+        recording_store = runtime.create_recording_store(settings)
+        candidates = monitored_answer_candidates(
+            source=recording_store,
+            limit=limit,
+            run_kind=RunKind(arguments.run_kind) if arguments.run_kind else None,
+            repository_name=arguments.repository_name,
+        )
+        source_label = "monitored-runs"
+
+    evaluation_run = EvaluationRunRecord(
+        source_type=source_type,
+        source_label=source_label,
+        judge_model=settings.openai_judge_model,
+        started_at=datetime.now(UTC),
+    )
+    evaluation_store = (
+        runtime.create_recording_store(settings) if arguments.persist else None
+    )
+    if evaluation_store is not None:
+        evaluation_store.record_evaluation_run(
+            evaluation_run.model_copy(update={"status": EvaluationRunStatus.RUNNING})
+        )
+    try:
+        results = judge_answer_candidates(
+            candidates=candidates,
+            judge=judge,
+            evaluation_run_id=evaluation_run.evaluation_run_id,
+        )
+        if evaluation_store is not None:
+            for result in results:
+                evaluation_store.record_evaluation_result(result)
+            evaluation_store.record_evaluation_run(
+                evaluation_run.model_copy(
+                    update={
+                        "status": EvaluationRunStatus.COMPLETED,
+                        "completed_at": datetime.now(UTC),
+                        "error_message": None,
+                    }
+                )
+            )
+    except Exception as error:
+        if evaluation_store is not None:
+            evaluation_store.record_evaluation_run(
+                evaluation_run.model_copy(
+                    update={
+                        "status": EvaluationRunStatus.FAILED,
+                        "completed_at": datetime.now(UTC),
+                        "error_message": str(error),
+                    }
+                )
+            )
+        raise
+    return results
+
+
+def _evaluation_approaches(value: str) -> list[RunKind]:
+    if value == "both":
+        return [RunKind.DIRECT, RunKind.AGENTIC]
+    if value == "agentic":
+        return [RunKind.AGENTIC]
+    return [RunKind.DIRECT]
 
 
 def _start_qdrant_if_available() -> None:

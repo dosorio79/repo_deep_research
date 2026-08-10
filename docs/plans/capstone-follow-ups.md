@@ -99,7 +99,7 @@ runner and UI behavior:
 
 ### v0.5.7a: Evaluation persistence foundation
 
-Status: in progress on `feat/v0.5.7a-evaluation-persistence`.
+Status: merged to `dev`.
 
 Scope:
 
@@ -122,6 +122,8 @@ Acceptance checks:
 
 ### v0.5.7b: Unified evaluation runner
 
+Status: in progress on `feat/v0.5.7b-unified-evaluation-runner`.
+
 Retrieval evaluation:
 
 - Confirm `eval/development.json` and `eval/held_out.json` jointly satisfy the
@@ -135,6 +137,13 @@ Retrieval evaluation:
 Answer evaluation:
 
 - Compare direct RAG baseline against bounded agentic research.
+- Evaluate persisted monitored answers from `answer_snapshots` without
+  regenerating answers.
+- Persist evaluation-run lifecycle and per-answer judge results to PostgreSQL
+  when `--persist` is supplied.
+- Keep dataset evaluation results linked by `record_id`; only monitored-run
+  evaluation results should set `request_id` because that column references
+  `answer_snapshots`.
 - Use a small but explicit reviewed dataset first if full live evaluation is too
   slow or costly.
 - Report correctness, groundedness, citation accuracy, completeness,
@@ -146,6 +155,10 @@ Answer evaluation:
 Acceptance checks:
 
 - Evaluation commands are documented and copy-pasteable.
+- `evaluate-answers --source dataset --approach both` produces direct and
+  agentic result rows.
+- `evaluate-answers --source monitored-runs --persist` reads answer snapshots
+  and writes `evaluation_runs` plus `evaluation_results`.
 - Final retrieval metrics are visible in `docs/evaluation.md` and README.
 - Direct-vs-agentic answer evaluation summary is visible in docs and README.
 - Generated outputs remain ignored unless intentionally promoted to a stable

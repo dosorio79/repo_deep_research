@@ -29,6 +29,7 @@ from repo_research.models import (
     RagRunResult,
     RagRunTrace,
     RepositoryIdentity,
+    ResearchAnswer,
     RetrievalMode,
     SearchQuery,
     SearchResult,
@@ -73,9 +74,9 @@ class AnswerJudge(Protocol):
         self,
         *,
         record: EvaluationRecord,
-        answer: RagAnswer,
+        answer: RagAnswer | ResearchAnswer,
     ) -> AnswerEvaluationResult:
-        """Return judge scores for one answer."""
+        """Return judge scores for one direct or agentic answer."""
 
 
 class EvidenceReference(BaseModel):
@@ -277,7 +278,7 @@ class OpenAIResponsesModel:
         self,
         *,
         record: EvaluationRecord,
-        answer: RagAnswer,
+        answer: RagAnswer | ResearchAnswer,
     ) -> AnswerEvaluationResult:
         """Judge one answer using the configured judge model."""
         prompt = _judge_prompt(record=record, answer=answer)
@@ -598,7 +599,9 @@ def _filtered_unresolved_questions(questions: list[str]) -> list[str]:
     return filtered
 
 
-def _judge_prompt(*, record: EvaluationRecord, answer: RagAnswer) -> str:
+def _judge_prompt(
+    *, record: EvaluationRecord, answer: RagAnswer | ResearchAnswer
+) -> str:
     return "\n\n".join(
         [
             "Judge this repository answer against the manually verified record. "
