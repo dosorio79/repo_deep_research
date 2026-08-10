@@ -15,6 +15,7 @@ from psycopg.types.json import Jsonb
 from repo_research.models import (
     AnswerSnapshot,
     ErrorCountSummary,
+    EvaluatableAnswerSnapshot,
     EvaluationRunRecord,
     FeedbackEvent,
     FeedbackUsefulSummary,
@@ -27,8 +28,10 @@ from repo_research.models import (
     MonitoringRunSummary,
     MonitoringSummary,
     PersistedEvaluationResult,
+    RagAnswer,
     RagMode,
     RagRunTrace,
+    ResearchAnswer,
     RetrievalMode,
     RetrievalVolumeSummary,
     RunKind,
@@ -63,6 +66,17 @@ class NoOpRecordingStore:
     def record_evaluation_result(self, result: PersistedEvaluationResult) -> None:
         """Accept evaluation-result metadata without persisting it."""
         del result
+
+    def list_answer_snapshots_for_evaluation(
+        self,
+        *,
+        limit: int = 50,
+        run_kind: RunKind | None = None,
+        repository_name: str | None = None,
+    ) -> list[EvaluatableAnswerSnapshot]:
+        """Return no answer snapshots when telemetry persistence is disabled."""
+        del limit, run_kind, repository_name
+        return []
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return an empty dashboard summary."""
@@ -219,6 +233,27 @@ class PostgresRecordingStore:
                     "created_at": result.created_at,
                 },
             )
+
+    def list_answer_snapshots_for_evaluation(
+        self,
+        *,
+        limit: int = 50,
+        run_kind: RunKind | None = None,
+        repository_name: str | None = None,
+    ) -> list[EvaluatableAnswerSnapshot]:
+        """Return recent monitored answers with context needed by evaluation."""
+        with self._connect() as connection:
+            rows = list(
+                connection.execute(
+                    _SELECT_ANSWER_SNAPSHOTS_FOR_EVALUATION,
+                    {
+                        "limit": limit,
+                        "run_kind": run_kind.value if run_kind else None,
+                        "repository_name": repository_name,
+                    },
+                ).fetchall()
+            )
+        return [_evaluatable_answer_snapshot_from_row(row) for row in rows]
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return dashboard aggregates from persisted monitoring and feedback."""
@@ -455,6 +490,41 @@ def _run_detail_from_row(
             if _feedback_matches_run(feedback, row)
         ],
     )
+
+
+def _evaluatable_answer_snapshot_from_row(
+    row: dict[str, Any],
+) -> EvaluatableAnswerSnapshot:
+    run_kind = RunKind(str(row["run_kind"]))
+    answer_data = row["answer"]
+    return EvaluatableAnswerSnapshot(
+        request_id=str(row["request_id"]),
+        session_id=str(row["session_id"]),
+        run_kind=run_kind,
+        question=str(row["question"]),
+        answer=_answer_from_row(run_kind=run_kind, answer_data=answer_data),
+        evidence=row.get("evidence") or [],
+        repository_id=str(row["repository_id"]),
+        repository_name=str(row["repository_name"]),
+        branch=str(row["branch"]),
+        commit_hash=str(row["commit_hash"]),
+        question_mode=RagMode(str(row["question_mode"])),
+        retrieval_mode=RetrievalMode(str(row["retrieval_mode"])),
+        retrieval_limit=int(row["retrieval_limit"]),
+        created_at=row["created_at"],
+        feedback_useful=int(row["feedback_useful"]),
+        feedback_not_useful=int(row["feedback_not_useful"]),
+        latency_ms_total=_optional_int(row.get("latency_ms_total")),
+        total_estimated_cost_usd=_optional_decimal(row.get("total_estimated_cost_usd")),
+    )
+
+
+def _answer_from_row(
+    *, run_kind: RunKind, answer_data: Any
+) -> RagAnswer | ResearchAnswer:
+    if run_kind is RunKind.AGENTIC:
+        return ResearchAnswer.model_validate(answer_data)
+    return RagAnswer.model_validate(answer_data)
 
 
 def _matches_run_filters(
@@ -895,6 +965,63 @@ FROM monitoring_runs
 _SELECT_FEEDBACK_ROWS = """
 SELECT useful
 FROM feedback_events
+"""
+
+_SELECT_ANSWER_SNAPSHOTS_FOR_EVALUATION = """
+SELECT
+    s.request_id,
+    s.session_id,
+    s.run_kind,
+    s.question,
+    s.answer,
+    s.evidence,
+    s.repository_id,
+    s.repository_name,
+    s.branch,
+    s.commit_hash,
+    s.question_mode,
+    s.retrieval_mode,
+    s.retrieval_limit,
+    s.created_at,
+    m.latency_ms_total,
+    m.total_estimated_cost_usd,
+    COALESCE(
+        SUM(CASE WHEN f.useful IS TRUE THEN 1 ELSE 0 END),
+        0
+    )::integer AS feedback_useful,
+    COALESCE(
+        SUM(CASE WHEN f.useful IS FALSE THEN 1 ELSE 0 END),
+        0
+    )::integer AS feedback_not_useful
+FROM answer_snapshots s
+JOIN monitoring_runs m ON m.request_id = s.request_id
+LEFT JOIN feedback_events f
+    ON f.request_id = s.request_id
+    OR (f.request_id IS NULL AND f.session_id = s.session_id)
+WHERE (%(run_kind)s IS NULL OR s.run_kind = %(run_kind)s)
+  AND (
+      %(repository_name)s IS NULL
+      OR lower(s.repository_name) LIKE ('%%' || lower(%(repository_name)s) || '%%')
+  )
+GROUP BY
+    s.request_id,
+    s.session_id,
+    s.run_kind,
+    s.question,
+    s.answer,
+    s.evidence,
+    s.repository_id,
+    s.repository_name,
+    s.branch,
+    s.commit_hash,
+    s.question_mode,
+    s.retrieval_mode,
+    s.retrieval_limit,
+    s.created_at,
+    m.latency_ms_total,
+    m.total_estimated_cost_usd
+ORDER BY s.created_at DESC
+LIMIT %(limit)s
 """
 
 _SELECT_MONITORING_RUN_HISTORY = """

@@ -213,6 +213,27 @@ uv run repo-research evaluate-answers --dataset eval/development.json \
   --output eval/results/answer-development.json
 ```
 
+Compare direct and agentic answers on a curated dataset:
+
+```bash
+uv run repo-research evaluate-answers --source dataset \
+  --dataset eval/held_out.json --approach both \
+  --output eval/results/answer-held-out-both.json
+```
+
+Judge recent monitored answers that were already returned by the UI or API and
+persist the judge results to PostgreSQL:
+
+```bash
+uv run repo-research evaluate-answers --source monitored-runs \
+  --run-kind agentic --limit 10 --persist \
+  --output eval/results/answer-monitored-agentic.json
+```
+
+Persisted dataset evaluations are keyed by their versioned `record_id`.
+Persisted monitored-run evaluations also keep the original answer `request_id`,
+which links the judge result back to `answer_snapshots`.
+
 Generated answer reports under `eval/results/` are ignored by git. Copy audited
 summary numbers into documentation only after a deliberate held-out run.
 

@@ -103,12 +103,48 @@ def test_cli_parses_ask_request() -> None:
 
 def test_cli_parses_answer_evaluation_request() -> None:
     arguments = build_parser().parse_args(
-        ["evaluate-answers", "--dataset", "eval/held_out.json", "--limit", "3"]
+        [
+            "evaluate-answers",
+            "--dataset",
+            "eval/held_out.json",
+            "--limit",
+            "3",
+            "--source",
+            "dataset",
+            "--approach",
+            "both",
+            "--persist",
+        ]
     )
 
     assert arguments.command == "evaluate-answers"
     assert arguments.dataset == Path("eval/held_out.json")
     assert arguments.limit == 3
+    assert arguments.source == "dataset"
+    assert arguments.approach == "both"
+    assert arguments.persist is True
+
+
+def test_cli_parses_monitored_answer_evaluation_request() -> None:
+    arguments = build_parser().parse_args(
+        [
+            "evaluate-answers",
+            "--source",
+            "monitored-runs",
+            "--run-kind",
+            "agentic",
+            "--repository-name",
+            "repo",
+            "--limit",
+            "10",
+        ]
+    )
+
+    assert arguments.command == "evaluate-answers"
+    assert arguments.source == "monitored-runs"
+    assert arguments.run_kind == "agentic"
+    assert arguments.repository_name == "repo"
+    assert arguments.limit == 10
 
 
 class FakeDatabase:

@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from repo_research.answer_evaluation import audit_evaluation_records
 from repo_research.evaluation import evaluate_records, load_records, write_report
 from repo_research.models import (
     EvaluationRecord,
@@ -88,8 +89,6 @@ def test_versioned_ground_truth_sets_are_complete_and_disjoint() -> None:
     assert {record.id for record in development}.isdisjoint(
         record.id for record in held_out
     )
-    assert {record.question_type for record in development} == {
-        "locate",
-        "flow",
-        "change",
-    }
+    audit = audit_evaluation_records({"development": development, "held_out": held_out})
+    assert audit.record_count == 30
+    assert audit.question_type_counts == {"change": 10, "flow": 10, "locate": 10}

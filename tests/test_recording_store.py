@@ -21,6 +21,7 @@ from repo_research.models import (
     RagAnswer,
     RagMode,
     RagRunTrace,
+    ResearchAnswer,
     RetrievalMode,
     RunKind,
 )
@@ -45,9 +46,11 @@ class FakeConnection:
         *,
         run_rows: list[dict[str, Any]] | None = None,
         feedback_rows: list[dict[str, Any]] | None = None,
+        answer_snapshot_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self.run_rows = run_rows or []
         self.feedback_rows = feedback_rows or []
+        self.answer_snapshot_rows = answer_snapshot_rows or []
         self.executed: list[tuple[str, dict[str, Any] | None]] = []
 
     def __enter__(self) -> FakeConnection:
@@ -60,6 +63,8 @@ class FakeConnection:
         self, statement: str, params: dict[str, Any] | None = None
     ) -> FakeCursor:
         self.executed.append((statement, params))
+        if "FROM answer_snapshots" in statement:
+            return FakeCursor(self.answer_snapshot_rows)
         if "FROM monitoring_runs" in statement:
             return FakeCursor(self.run_rows)
         if "FROM feedback_events" in statement:
@@ -245,6 +250,70 @@ def test_recording_store_persists_evaluation_run_and_result() -> None:
     assert result_params["run_kind"] == "direct"
     assert result_params["groundedness"] == 5
     assert result_params["feedback_useful"] == 1
+
+
+def test_recording_store_lists_answer_snapshots_for_evaluation() -> None:
+    answer = ResearchAnswer(
+        question="Which modules change?",
+        mode=RagMode.CHANGE,
+        summary="Change src/example.py.",
+        evidence=[
+            EvidenceItem(
+                evidence_id="E1",
+                path="src/example.py",
+                start_line=1,
+                end_line=2,
+                symbol="target",
+                score=0.9,
+                reason="Relevant implementation.",
+            )
+        ],
+        confidence=0.8,
+    )
+    connection = FakeConnection(
+        answer_snapshot_rows=[
+            {
+                "request_id": "request-1",
+                "session_id": "session-1",
+                "run_kind": "agentic",
+                "question": "Which modules change?",
+                "answer": answer.model_dump(mode="json"),
+                "evidence": [item.model_dump(mode="json") for item in answer.evidence],
+                "repository_id": "repo-id",
+                "repository_name": "repo",
+                "branch": "main",
+                "commit_hash": "abc123",
+                "question_mode": "change",
+                "retrieval_mode": "dense",
+                "retrieval_limit": 5,
+                "created_at": datetime(2026, 8, 11, 12, tzinfo=UTC),
+                "latency_ms_total": 1000,
+                "total_estimated_cost_usd": Decimal("0.012"),
+                "feedback_useful": 1,
+                "feedback_not_useful": 2,
+            }
+        ]
+    )
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    snapshots = store.list_answer_snapshots_for_evaluation(
+        limit=10,
+        run_kind=RunKind.AGENTIC,
+        repository_name="repo",
+    )
+
+    _statement, params = connection.executed[0]
+    assert params == {"limit": 10, "run_kind": "agentic", "repository_name": "repo"}
+    assert len(snapshots) == 1
+    assert snapshots[0].request_id == "request-1"
+    assert snapshots[0].run_kind is RunKind.AGENTIC
+    assert isinstance(snapshots[0].answer, ResearchAnswer)
+    assert snapshots[0].feedback_useful == 1
+    assert snapshots[0].feedback_not_useful == 2
+    assert snapshots[0].latency_ms_total == 1000
+    assert snapshots[0].total_estimated_cost_usd == Decimal("0.012")
 
 
 def test_recording_store_returns_monitoring_summary() -> None:

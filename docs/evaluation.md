@@ -64,7 +64,8 @@ the measurements do not support making it the default yet.
 
 ## Answer evaluation
 
-M3 adds an opt-in live answer evaluation command for the direct-RAG baseline:
+Answer evaluation is opt-in because it calls OpenAI for judging. The default
+command remains the direct-RAG dataset baseline:
 
 ```bash
 uv run repo-research evaluate-answers --dataset eval/development.json \
@@ -73,22 +74,41 @@ uv run repo-research evaluate-answers --dataset eval/held_out.json \
   --output eval/results/answer-held-out.json
 ```
 
-The command reuses the versioned retrieval records, generates a grounded answer
-for each question, then asks the configured judge model to score correctness,
-groundedness, citation accuracy, completeness, usefulness, and unsupported-claim
-count. It requires `OPENAI_API_KEY`; default unit tests use fake model adapters
-and do not call OpenAI.
+`v0.5.7b` extends the same CLI into a unified runner. Dataset evaluation can
+compare direct RAG against bounded agentic research:
+
+```bash
+uv run repo-research evaluate-answers --source dataset \
+  --dataset eval/held_out.json --approach both \
+  --output eval/results/answer-held-out-both.json
+```
+
+Persisted monitored answers can also be judged without regenerating answers:
+
+```bash
+uv run repo-research evaluate-answers --source monitored-runs \
+  --run-kind agentic --limit 10 --persist \
+  --output eval/results/answer-monitored-agentic.json
+```
+
+The judge scores correctness, groundedness, citation accuracy, completeness,
+usefulness, and unsupported-claim count. Dataset runs use manually verified
+ground-truth records. Monitored-run evaluation uses the answer's returned
+citations as the available grounding record, so those scores are best read as
+post-hoc quality checks rather than held-out correctness measurements. Default
+unit tests use fake model adapters and do not call OpenAI.
+
+When `--persist` is supplied, dataset evaluations write `evaluation_results`
+with the dataset `record_id` and no `request_id`, because generated dataset
+answers are not stored in `answer_snapshots`. Monitored-run evaluations keep the
+snapshot `request_id`, linking each result back to the original `/rag` or
+`/research` answer returned by the UI or API.
 
 Generated answer reports remain under ignored `eval/results/`. Commit only
 audited summary measurements, not transient local report files.
 
 ## Evaluation workbench direction
 
-The capstone follow-up work expands answer evaluation beyond CLI-only generated
-JSON. `v0.5.7a` adds PostgreSQL persistence for monitored answer snapshots,
-evaluation-run metadata, and per-answer judge results. The intended source of
-truth for the future `/evaluations` dashboard is PostgreSQL; files under
-`eval/results/` remain optional exports for reproducible batch runs.
-
-The next slices will let the same evaluator consume either versioned datasets
-or monitored answers that were actually returned by `/rag` and `/research`.
+The intended source of truth for the future `/evaluations` dashboard is
+PostgreSQL. Files under `eval/results/` remain optional exports for reproducible
+batch runs.
