@@ -165,9 +165,10 @@ ingestion before searching or evaluating M2 modes.
 
 ## Roadmap
 
-Next milestone: final capstone evidence polish. The remaining review work is
-to publish final retrieval and answer-evaluation outputs, add README rubric
-mapping, and include reviewer screenshots for the research and monitoring
-screens. Post-MVP work adds query rewriting, reranking, public GitHub ingestion,
-cloud deployment, and production-grade authentication.
+Next milestone: final capstone evidence polish. The next follow-up releases are
+planned in [docs/plans/capstone-follow-ups.md](docs/plans/capstone-follow-ups.md):
+monitoring charts, final retrieval and answer-evaluation evidence, README rubric
+mapping, and reviewer screenshots. Post-MVP work adds query rewriting,
+reranking, public GitHub ingestion, cloud deployment, and production-grade
+authentication.
 The complete scope is in [docs/PRD.md](docs/PRD.md).

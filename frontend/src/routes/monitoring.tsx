@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import {
   Activity,
   CircleDollarSign,
@@ -12,6 +13,7 @@ import {
 import { ApiError } from "@/components/ApiError";
 import { AppShell } from "@/components/AppShell";
 import { EmptyLine, Field, Panel } from "@/components/primitives";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { getMonitoringRunDetail, getMonitoringRuns, getMonitoringSummary } from "@/lib/rag-client";
 import type {
   ApiErrorShape,
@@ -25,6 +27,10 @@ import type {
 
 const DEFAULT_API_BASE_URL = (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "/api";
 const LIMIT_OPTIONS = [25, 50, 100] as const;
+const RUN_KIND_CHART_CONFIG = {
+  direct: { label: "Direct", color: "var(--color-chart-1)" },
+  agentic: { label: "Agentic", color: "var(--color-chart-2)" },
+};
 
 export const Route = createFileRoute("/monitoring")({
   head: () => ({
@@ -211,6 +217,8 @@ function MonitoringDashboard({
         />
       </div>
 
+      <MonitoringCharts summary={summary} runs={runs} loading={runsLoading} />
+
       <div className="grid gap-3 lg:grid-cols-2">
         <Panel title="Runs by kind">
           {summary.runs_by_kind.map((item) => (
@@ -272,6 +280,276 @@ function MonitoringDashboard({
       </div>
     </div>
   );
+}
+
+function MonitoringCharts({
+  summary,
+  runs,
+  loading,
+}: {
+  summary: MonitoringSummary;
+  runs: MonitoringRunSummary[];
+  loading: boolean;
+}) {
+  const chartData = useMemo(() => buildMonitoringChartData(runs), [runs]);
+
+  if (loading) {
+    return (
+      <Panel title="Monitoring charts">
+        <EmptyLine>Loading chart data from persisted runs.</EmptyLine>
+      </Panel>
+    );
+  }
+
+  if (runs.length === 0) {
+    return (
+      <Panel title="Monitoring charts">
+        <EmptyLine>No chart data matches the selected filters.</EmptyLine>
+      </Panel>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+      <ChartPanel
+        title="Runs over time"
+        detail={`${chartData.totalDisplayedRuns.toLocaleString()} recent runs in the current view`}
+      >
+        <ChartContainer config={RUN_KIND_CHART_CONFIG} className="h-[220px] w-full">
+          <LineChart accessibilityLayer data={chartData.runsOverTime}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="bucket" tickLine={false} axisLine={false} minTickGap={16} />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={30} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Line
+              type="monotone"
+              dataKey="direct"
+              stroke="var(--color-direct)"
+              strokeWidth={2}
+              dot={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="agentic"
+              stroke="var(--color-agentic)"
+              strokeWidth={2}
+              dot={false}
+            />
+          </LineChart>
+        </ChartContainer>
+      </ChartPanel>
+
+      <ChartPanel
+        title="Latency by mode"
+        detail={`Slowest average ${formatLatency(chartData.maxAverageLatency)}`}
+      >
+        <ChartContainer
+          config={{
+            total: { label: "Total latency", color: "var(--color-chart-1)" },
+            retrieval: { label: "Retrieval latency", color: "var(--color-chart-2)" },
+          }}
+          className="h-[220px] w-full"
+        >
+          <BarChart accessibilityLayer data={chartData.latencyByKind}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="run_kind" tickLine={false} axisLine={false} />
+            <YAxis tickLine={false} axisLine={false} width={44} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar dataKey="total" fill="var(--color-total)" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="retrieval" fill="var(--color-retrieval)" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ChartContainer>
+      </ChartPanel>
+
+      <ChartPanel
+        title="Retrieval volume"
+        detail={`${chartData.visibleRetrievedChunks.toLocaleString()} chunks, ${chartData.visibleUniqueFiles.toLocaleString()} files in the current view (${summary.retrieval_volume.retrieved_chunk_count.toLocaleString()} chunks, ${summary.retrieval_volume.unique_file_count.toLocaleString()} files total)`}
+      >
+        <ChartContainer
+          config={{
+            chunks: { label: "Chunks", color: "var(--color-chart-3)" },
+            files: { label: "Files", color: "var(--color-chart-4)" },
+          }}
+          className="h-[220px] w-full"
+        >
+          <BarChart accessibilityLayer data={chartData.retrievalByRun}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={10} />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={34} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar dataKey="chunks" fill="var(--color-chunks)" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="files" fill="var(--color-files)" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ChartContainer>
+      </ChartPanel>
+
+      <ChartPanel
+        title="Estimated cost by mode"
+        detail={`${formatCost(chartData.totalVisibleCost) ?? "cost unavailable"} in the current view`}
+      >
+        {chartData.costByKind.some((item) => item.cost > 0) ? (
+          <ChartContainer
+            config={{
+              cost: { label: "Estimated cost", color: "var(--color-chart-1)" },
+            }}
+            className="h-[220px] w-full"
+          >
+            <BarChart accessibilityLayer data={chartData.costByKind}>
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey="run_kind" tickLine={false} axisLine={false} />
+              <YAxis tickLine={false} axisLine={false} width={54} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <Bar dataKey="cost" fill="var(--color-cost)" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ChartContainer>
+        ) : (
+          <EmptyLine>No estimated cost is available for the selected runs.</EmptyLine>
+        )}
+      </ChartPanel>
+
+      <ChartPanel
+        title="Feedback mix"
+        detail={`${chartData.visiblePositiveFeedbackRate}% positive feedback rate`}
+      >
+        <ChartContainer
+          config={{
+            count: { label: "Feedback", color: "var(--color-chart-5)" },
+          }}
+          className="h-[220px] w-full"
+        >
+          <BarChart accessibilityLayer data={chartData.feedbackMix}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={30} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar dataKey="count" fill="var(--color-count)" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ChartContainer>
+      </ChartPanel>
+
+      <ChartPanel
+        title="Errors and tool calls"
+        detail={`${chartData.visibleErrors.toLocaleString()} errors, ${chartData.averageAgenticToolCalls.toFixed(1)} avg agentic tool calls`}
+      >
+        <ChartContainer
+          config={{
+            errors: { label: "Errors", color: "var(--color-chart-1)" },
+            toolCalls: { label: "Avg tool calls", color: "var(--color-chart-2)" },
+          }}
+          className="h-[220px] w-full"
+        >
+          <BarChart accessibilityLayer data={chartData.errorsAndToolCalls}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={34} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar dataKey="errors" fill="var(--color-errors)" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="toolCalls" fill="var(--color-toolCalls)" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ChartContainer>
+      </ChartPanel>
+    </div>
+  );
+}
+
+function ChartPanel({
+  title,
+  detail,
+  children,
+}: {
+  title: string;
+  detail: string;
+  children: ReactNode;
+}) {
+  return (
+    <Panel
+      title={title}
+      right={<span className="mono text-[11px] text-muted-foreground">{detail}</span>}
+    >
+      {children}
+    </Panel>
+  );
+}
+
+function buildMonitoringChartData(runs: MonitoringRunSummary[]) {
+  const runsAscending = [...runs].sort(
+    (left, right) => new Date(left.completed_at).getTime() - new Date(right.completed_at).getTime(),
+  );
+  const buckets = new Map<string, { bucket: string; direct: number; agentic: number }>();
+  for (const run of runsAscending) {
+    const bucket = formatDateTime(run.completed_at);
+    const current = buckets.get(bucket) ?? { bucket, direct: 0, agentic: 0 };
+    current[run.run_kind] += 1;
+    buckets.set(bucket, current);
+  }
+
+  const latencyByKind = (["direct", "agentic"] as const).map((runKind) => {
+    const matching = runs.filter((run) => run.run_kind === runKind);
+    return {
+      run_kind: runKind,
+      total: average(matching.map((run) => run.latency_ms_total)),
+      retrieval: average(matching.map((run) => run.latency_ms_retrieval)),
+    };
+  });
+  const costByKind = (["direct", "agentic"] as const).map((runKind) => ({
+    run_kind: runKind,
+    cost: sum(
+      runs
+        .filter((run) => run.run_kind === runKind)
+        .map((run) => numericCost(run.total_estimated_cost_usd)),
+    ),
+  }));
+  const visibleFeedback = runs.reduce(
+    (total, run) => ({
+      useful: total.useful + run.feedback_useful,
+      notUseful: total.notUseful + run.feedback_not_useful,
+    }),
+    { useful: 0, notUseful: 0 },
+  );
+  const visibleFeedbackTotal = visibleFeedback.useful + visibleFeedback.notUseful;
+  const agenticRuns = runs.filter((run) => run.run_kind === "agentic");
+
+  return {
+    runsOverTime: [...buckets.values()],
+    latencyByKind,
+    retrievalByRun: runsAscending.slice(-12).map((run) => ({
+      label: `${run.run_kind} ${shortCommit(run.request_id)}`,
+      chunks: run.retrieved_chunk_count,
+      files: run.unique_file_count,
+    })),
+    costByKind,
+    feedbackMix: [
+      { label: "Useful", count: visibleFeedback.useful },
+      { label: "Not useful", count: visibleFeedback.notUseful },
+    ],
+    errorsAndToolCalls: [
+      {
+        label: "Current view",
+        errors: runs.filter((run) => run.has_error).length,
+        toolCalls: average(agenticRuns.map((run) => run.tool_call_count)),
+      },
+    ],
+    totalDisplayedRuns: runs.length,
+    visibleRetrievedChunks: sum(runs.map((run) => run.retrieved_chunk_count)),
+    visibleUniqueFiles: sum(runs.map((run) => run.unique_file_count)),
+    maxAverageLatency: Math.max(...latencyByKind.map((item) => item.total), 0),
+    totalVisibleCost: sum(costByKind.map((item) => item.cost)),
+    visiblePositiveFeedbackRate: visibleFeedbackTotal
+      ? Math.round((visibleFeedback.useful / visibleFeedbackTotal) * 100)
+      : 0,
+    visibleErrors: runs.filter((run) => run.has_error).length,
+    averageAgenticToolCalls: average(agenticRuns.map((run) => run.tool_call_count)),
+  };
+}
+
+function average(values: number[]) {
+  const validValues = values.filter((value) => Number.isFinite(value));
+  if (validValues.length === 0) return 0;
+  return validValues.reduce((total, value) => total + value, 0) / validValues.length;
+}
+
+function sum(values: number[]) {
+  return values.reduce((total, value) => total + value, 0);
 }
 
 function RunFilters({
