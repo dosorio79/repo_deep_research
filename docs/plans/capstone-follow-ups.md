@@ -82,9 +82,44 @@ Out of scope:
 - Making Logfire mandatory.
 - Storing prompts, answers, or source-code excerpts solely for charting.
 
-## v0.5.7: Evaluation finalization
+## v0.5.7: Evaluation workbench
 
-Goal: publish defensible evaluation evidence for retrieval and answer quality.
+Goal: publish defensible evaluation evidence for retrieval and answer quality,
+including both curated datasets and real monitored answers.
+
+Split the work into three release slices so the storage contract lands before
+runner and UI behavior:
+
+- `v0.5.7a`: PostgreSQL persistence foundation for answer snapshots,
+  evaluation runs, and evaluation results.
+- `v0.5.7b`: unified evaluation runner for dataset and monitored-run sources.
+- `v0.5.7c`: reviewer-visible `/evaluations` dashboard backed by persisted
+  evaluation results.
+
+### v0.5.7a: Evaluation persistence foundation
+
+Status: in progress on `feat/v0.5.7a-evaluation-persistence`.
+
+Scope:
+
+- Persist answer snapshots for completed `/rag` and `/research` runs when
+  telemetry persistence is configured.
+- Store answer JSON and citation metadata, not full retrieved source excerpts.
+- Add PostgreSQL tables for evaluation batch metadata and per-answer judge
+  results.
+- Keep the existing monitoring dashboard APIs unchanged.
+- Keep evaluation execution and `/evaluations` UI out of this slice.
+
+Acceptance checks:
+
+- `monitoring_runs`, `feedback_events`, `answer_snapshots`,
+  `evaluation_runs`, and `evaluation_results` are initialized together.
+- Direct API runs persist both monitoring trace metadata and an answer snapshot.
+- Agentic snapshot construction is covered without relying on the currently
+  fragile ASGI `/research` test boundary.
+- Focused recording-store and API tests pass.
+
+### v0.5.7b: Unified evaluation runner
 
 Retrieval evaluation:
 
@@ -114,6 +149,27 @@ Acceptance checks:
 - Direct-vs-agentic answer evaluation summary is visible in docs and README.
 - Generated outputs remain ignored unless intentionally promoted to a stable
   summary artifact.
+
+### v0.5.7c: Evaluation dashboard
+
+Goal: make evaluation inspectable from the browser rather than only from CLI
+JSON output.
+
+Planned dashboard panels:
+
+- Average score by approach: direct versus agentic.
+- Score distribution by metric.
+- Unsupported-claim rate by approach.
+- Feedback useful/not-useful compared with judge scores.
+- Quality compared with latency and estimated cost.
+- Worst-scoring evaluated answers for reviewer inspection.
+
+Acceptance checks:
+
+- `/evaluations` renders honest empty states before evaluation results exist.
+- Persisted evaluation results produce real summary cards, charts, and an
+  inspectable result table.
+- Frontend tests cover empty and populated states.
 
 ## v0.5.8: Reviewer packaging
 

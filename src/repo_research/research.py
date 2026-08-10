@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import queue
+import threading
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -374,6 +377,102 @@ class BoundedResearchService:
             ),
         )
 
+    async def run_async(
+        self,
+        *,
+        repository: RepositoryIdentity,
+        request: ResearchRequest,
+    ) -> ResearchRunResult:
+        """Return a research answer without blocking the ASGI event loop."""
+        started_at = datetime.now(UTC)
+        total_start = time.perf_counter()
+        request = request.model_copy(
+            update={
+                "mode": _infer_research_mode(request),
+                "repository_path": request.repository_path,
+                "session_id": request.session_id or uuid4().hex,
+            }
+        )
+        root_path = (request.repository_path or repository.root_path).resolve()
+        tools: ResearchToolContext | None = None
+        model_usage: list[ModelUsage] = []
+        latency_ms_model: int | None = None
+        error_type: str | None = None
+        error_message: str | None = None
+        model_start = time.perf_counter()
+        try:
+            seed_evidence = await _run_in_worker_thread(
+                lambda: self._initial_search(repository=repository, request=request)
+            )
+            tools = ResearchToolContext(
+                database=self._database,
+                repository=repository,
+                root_path=root_path,
+                request=request,
+                seed_evidence=seed_evidence,
+            )
+            model_start = time.perf_counter()
+            current_tools = tools
+            agent_result = await _run_in_worker_thread(
+                lambda: self._agent.run_research(
+                    request=request,
+                    tools=current_tools,
+                )
+            )
+            latency_ms_model = elapsed_ms(model_start)
+            if agent_result.usage is not None:
+                model_usage.append(agent_result.usage)
+            answer = _canonical_research_answer(
+                request=request,
+                answer=agent_result.answer,
+                available_evidence=tools.evidence_by_id,
+            )
+        except ValueError as error:
+            if latency_ms_model is None:
+                latency_ms_model = elapsed_ms(model_start)
+            if tools is None:
+                tools = ResearchToolContext(
+                    database=self._database,
+                    repository=repository,
+                    root_path=root_path,
+                    request=request,
+                )
+            usage = getattr(error, "usage", None)
+            if isinstance(usage, ModelUsage):
+                model_usage.append(usage)
+            error_type = getattr(error, "error_type", type(error).__name__)
+            error_message = str(error)
+            answer = _bounded_change_plan_answer(
+                request=request,
+                reason=str(error),
+                error_type=error_type,
+                closest_evidence=tools.evidence,
+                tool_call_count=tools.total_tool_calls,
+            ) or insufficient_evidence_research_answer(
+                request=request,
+                reason=str(error),
+                closest_evidence=tools.evidence,
+            )
+        completed_at = datetime.now(UTC)
+        return ResearchRunResult(
+            answer=answer,
+            trace=_build_research_trace(
+                request_id=uuid4().hex,
+                started_at=started_at,
+                completed_at=completed_at,
+                repository=repository,
+                request=request,
+                evidence=tools.evidence,
+                answer=answer,
+                latency_ms_total=elapsed_ms(total_start),
+                latency_ms_model=latency_ms_model,
+                model_usage=model_usage,
+                error_type=error_type,
+                error_message=error_message,
+                tool_call_count=tools.total_tool_calls,
+            ),
+        )
+
     def _initial_search(
         self,
         *,
@@ -390,6 +489,33 @@ class BoundedResearchService:
                 mode=request.retrieval_mode,
             )
         )
+
+
+async def _run_in_worker_thread[TResult](call: Callable[[], TResult]) -> TResult:
+    """Run one blocking call in a thread without relying on executor callbacks."""
+    results: queue.Queue[tuple[bool, TResult | Exception]] = queue.Queue(maxsize=1)
+
+    def worker() -> None:
+        try:
+            results.put((True, call()))
+        except Exception as error:
+            results.put((False, error))
+
+    thread = threading.Thread(
+        target=worker,
+        name="repo-research-worker",
+        daemon=True,
+    )
+    thread.start()
+    while True:
+        try:
+            success, value = results.get_nowait()
+            break
+        except queue.Empty:
+            await asyncio.sleep(0.001)
+    if success:
+        return cast(TResult, value)
+    raise cast(Exception, value)
 
 
 @dataclass(frozen=True)

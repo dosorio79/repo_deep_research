@@ -76,6 +76,22 @@ class RunKind(StrEnum):
     AGENTIC = "agentic"
 
 
+class EvaluationSourceType(StrEnum):
+    """Sources that can feed an answer-quality evaluation run."""
+
+    DATASET = "dataset"
+    MONITORED_RUNS = "monitored_runs"
+
+
+class EvaluationRunStatus(StrEnum):
+    """Lifecycle state for a persisted evaluation batch."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class SearchQuery(BaseModel):
     """A repository search request scoped to one source revision."""
 
@@ -290,6 +306,25 @@ class ResearchRunResult(BaseModel):
     trace: RagRunTrace
 
 
+class AnswerSnapshot(BaseModel):
+    """Persisted answer payload used as input for later evaluation."""
+
+    request_id: str = Field(min_length=1)
+    session_id: str = Field(min_length=1)
+    run_kind: RunKind
+    question: str = Field(min_length=1)
+    answer: RagAnswer | ResearchAnswer
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+    repository_id: str = Field(min_length=1)
+    repository_name: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    commit_hash: str = Field(min_length=1)
+    question_mode: RagMode
+    retrieval_mode: RetrievalMode
+    retrieval_limit: int = Field(ge=1)
+    created_at: datetime
+
+
 class FeedbackRequest(BaseModel):
     """A user feedback submission for one browser session or returned run."""
 
@@ -471,6 +506,42 @@ class AnswerEvaluationResult(BaseModel):
     usefulness: float = Field(ge=0, le=5)
     unsupported_claim_count: int = Field(ge=0)
     notes: str = ""
+
+
+class EvaluationRunRecord(BaseModel):
+    """Persisted metadata for one answer-evaluation batch."""
+
+    evaluation_run_id: str = Field(default_factory=lambda: uuid4().hex, min_length=1)
+    source_type: EvaluationSourceType
+    source_label: str = Field(min_length=1)
+    judge_model: str = Field(min_length=1)
+    status: EvaluationRunStatus = EvaluationRunStatus.PENDING
+    started_at: datetime
+    completed_at: datetime | None = None
+    error_message: str | None = None
+
+
+class PersistedEvaluationResult(BaseModel):
+    """Persisted judge result linked to a dataset record or monitored answer."""
+
+    evaluation_run_id: str = Field(min_length=1)
+    result_id: str = Field(default_factory=lambda: uuid4().hex, min_length=1)
+    record_id: str | None = Field(default=None, min_length=1)
+    request_id: str | None = Field(default=None, min_length=1)
+    run_kind: RunKind | None = None
+    question: str = Field(min_length=1)
+    correctness: float = Field(ge=0, le=5)
+    groundedness: float = Field(ge=0, le=5)
+    citation_accuracy: float = Field(ge=0, le=5)
+    completeness: float = Field(ge=0, le=5)
+    usefulness: float = Field(ge=0, le=5)
+    unsupported_claim_count: int = Field(ge=0)
+    feedback_useful: int = Field(default=0, ge=0)
+    feedback_not_useful: int = Field(default=0, ge=0)
+    latency_ms_total: int | None = Field(default=None, ge=0)
+    total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+    notes: str = ""
+    created_at: datetime
 
 
 class IngestionIssue(BaseModel):

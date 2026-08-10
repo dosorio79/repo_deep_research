@@ -81,3 +81,14 @@ and do not call OpenAI.
 
 Generated answer reports remain under ignored `eval/results/`. Commit only
 audited summary measurements, not transient local report files.
+
+## Evaluation workbench direction
+
+The capstone follow-up work expands answer evaluation beyond CLI-only generated
+JSON. `v0.5.7a` adds PostgreSQL persistence for monitored answer snapshots,
+evaluation-run metadata, and per-answer judge results. The intended source of
+truth for the future `/evaluations` dashboard is PostgreSQL; files under
+`eval/results/` remain optional exports for reproducible batch runs.
+
+The next slices will let the same evaluator consume either versioned datasets
+or monitored answers that were actually returned by `/rag` and `/research`.
