@@ -241,7 +241,7 @@ def test_monitored_answer_candidates_include_feedback_and_latency(
         limit=10,
         run_kind=RunKind.AGENTIC,
         repository_name="repo",
-        request_ids=["request-1"],
+        request_ids=["request-1", "request-2"],
     )
 
     assert source.calls == [
@@ -249,7 +249,7 @@ def test_monitored_answer_candidates_include_feedback_and_latency(
             "limit": 10,
             "run_kind": RunKind.AGENTIC,
             "repository_name": "repo",
-            "request_ids": ["request-1"],
+            "request_ids": ["request-1", "request-2"],
         }
     ]
     assert candidates[0].record.id == "request-1"

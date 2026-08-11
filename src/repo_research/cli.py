@@ -480,11 +480,12 @@ def _run_monitored_answer_evaluation(
             "RDR_POSTGRES_DSN is required for evaluate-answers --source monitored-runs"
         )
 
+    limit = arguments.limit or settings.answer_evaluation_limit
     recording_store = runtime.create_recording_store(settings)
     request_ids = arguments.request_id or None
     candidates = monitored_answer_candidates(
         source=recording_store,
-        limit=arguments.limit or settings.answer_evaluation_limit,
+        limit=limit,
         run_kind=RunKind(arguments.run_kind) if arguments.run_kind else None,
         repository_name=arguments.repository_name,
         request_ids=request_ids,

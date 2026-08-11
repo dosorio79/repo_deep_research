@@ -173,7 +173,8 @@ uv run repo-research evaluate-answers --source monitored-runs \
   --output eval/results/answer-monitored-agentic.json
 ```
 
-Use repeated `--request-id` values to judge exact recorded answers:
+Use repeatable `--request-id` flags to judge specific recorded answers without
+depending on recency or run-kind filters:
 
 ```bash
 RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
