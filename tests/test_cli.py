@@ -4,11 +4,13 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from repo_research import cli, runtime
 from repo_research.cli import build_parser
+from repo_research.config import Settings
 from repo_research.models import (
     ParsedChunk,
     RagMode,
@@ -135,6 +137,10 @@ def test_cli_parses_monitored_answer_evaluation_request() -> None:
             "agentic",
             "--repository-name",
             "repo",
+            "--request-id",
+            "request-1",
+            "--request-id",
+            "request-2",
             "--limit",
             "10",
         ]
@@ -144,6 +150,7 @@ def test_cli_parses_monitored_answer_evaluation_request() -> None:
     assert arguments.source == "monitored-runs"
     assert arguments.run_kind == "agentic"
     assert arguments.repository_name == "repo"
+    assert arguments.request_id == ["request-1", "request-2"]
     assert arguments.limit == 10
 
 
@@ -178,6 +185,39 @@ class FakeSettings:
     research_max_total_tool_calls = 8
     openai_model = "gpt-5-mini"
     openai_judge_model = "gpt-5.1"
+    postgres_dsn: str | None = None
+    telemetry_enabled = True
+
+
+class FakePostgresSettings(FakeSettings):
+    """Settings with PostgreSQL enabled for monitored-evaluation CLI tests."""
+
+    postgres_dsn = "postgresql://example"
+
+
+class EmptyMonitoredStore:
+    """Return no monitored answer snapshots and capture filter arguments."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def list_answer_snapshots_for_evaluation(
+        self,
+        *,
+        limit: int = 50,
+        run_kind: object = None,
+        repository_name: str | None = None,
+        request_ids: list[str] | None = None,
+    ) -> list[object]:
+        self.calls.append(
+            {
+                "limit": limit,
+                "run_kind": run_kind,
+                "repository_name": repository_name,
+                "request_ids": request_ids,
+            }
+        )
+        return []
 
 
 class FakeOpenAIModel:
@@ -340,6 +380,67 @@ def test_cli_ingest_emits_skipped_file_diagnostics(
     assert result["indexed_chunks"] == 1
     assert result["index_updated"] is True
     assert result["skipped_files"][0]["path"] == "invalid.py"
+
+
+def test_cli_monitored_answer_evaluation_requires_postgres_without_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli, "Settings", FakeSettings)
+
+    def fail_create_database(_: object) -> FakeDatabase:
+        raise AssertionError("monitored evaluation should not create Qdrant database")
+
+    def fail_create_answer_model(_: object) -> FakeOpenAIModel:
+        raise AssertionError("missing Postgres DSN should fail before creating a judge")
+
+    monkeypatch.setattr(runtime, "create_database", fail_create_database)
+    monkeypatch.setattr(runtime, "create_answer_model", fail_create_answer_model)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["repo-research", "evaluate-answers", "--source", "monitored-runs"],
+    )
+
+    with pytest.raises(SystemExit, match="RDR_POSTGRES_DSN is required"):
+        cli.main()
+
+
+def test_cli_monitored_answer_evaluation_request_ids_skip_empty_judge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = EmptyMonitoredStore()
+    arguments = build_parser().parse_args(
+        [
+            "evaluate-answers",
+            "--source",
+            "monitored-runs",
+            "--request-id",
+            "request-1",
+            "--request-id",
+            "request-2",
+        ]
+    )
+
+    def fail_create_answer_model(_: object) -> FakeOpenAIModel:
+        raise AssertionError("empty monitored evaluation should not create a judge")
+
+    monkeypatch.setattr(runtime, "create_recording_store", lambda _: store)
+    monkeypatch.setattr(runtime, "create_answer_model", fail_create_answer_model)
+
+    results = cli._run_monitored_answer_evaluation(
+        arguments=arguments,
+        settings=cast(Settings, FakePostgresSettings()),
+    )
+
+    assert results == []
+    assert store.calls == [
+        {
+            "limit": FakePostgresSettings.answer_evaluation_limit,
+            "run_kind": None,
+            "repository_name": None,
+            "request_ids": ["request-1", "request-2"],
+        }
+    ]
 
 
 def test_cli_ingest_skips_existing_git_revision(

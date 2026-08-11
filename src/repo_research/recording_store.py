@@ -82,9 +82,10 @@ class NoOpRecordingStore:
         limit: int = 50,
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
+        request_ids: list[str] | None = None,
     ) -> list[EvaluatableAnswerSnapshot]:
         """Return no answer snapshots when telemetry persistence is disabled."""
-        del limit, run_kind, repository_name
+        del limit, run_kind, repository_name, request_ids
         return []
 
     def evaluation_summary(self) -> EvaluationDashboardSummary:
@@ -281,6 +282,7 @@ class PostgresRecordingStore:
         limit: int = 50,
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
+        request_ids: list[str] | None = None,
     ) -> list[EvaluatableAnswerSnapshot]:
         """Return recent monitored answers with context needed by evaluation."""
         with self._connect() as connection:
@@ -291,6 +293,7 @@ class PostgresRecordingStore:
                         "limit": limit,
                         "run_kind": run_kind.value if run_kind else None,
                         "repository_name": repository_name,
+                        "request_ids": request_ids or None,
                     },
                 ).fetchall()
             )
@@ -1241,10 +1244,16 @@ JOIN monitoring_runs m ON m.request_id = s.request_id
 LEFT JOIN feedback_events f
     ON f.request_id = s.request_id
     OR (f.request_id IS NULL AND f.session_id = s.session_id)
-WHERE (%(run_kind)s IS NULL OR s.run_kind = %(run_kind)s)
+WHERE (%(run_kind)s::text IS NULL OR s.run_kind = %(run_kind)s::text)
   AND (
-      %(repository_name)s IS NULL
-      OR lower(s.repository_name) LIKE ('%%' || lower(%(repository_name)s) || '%%')
+      %(repository_name)s::text IS NULL
+      OR lower(s.repository_name) LIKE (
+          '%%' || lower(%(repository_name)s::text) || '%%'
+      )
+  )
+  AND (
+      %(request_ids)s::text[] IS NULL
+      OR s.request_id = ANY(%(request_ids)s::text[])
   )
 GROUP BY
     s.request_id,

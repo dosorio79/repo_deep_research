@@ -51,6 +51,7 @@ class MonitoredAnswerSource(Protocol):
         limit: int = 50,
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
+        request_ids: list[str] | None = None,
     ) -> list[EvaluatableAnswerSnapshot]:
         """Return recent monitored answer snapshots."""
 
@@ -187,12 +188,14 @@ def monitored_answer_candidates(
     limit: int,
     run_kind: RunKind | None = None,
     repository_name: str | None = None,
+    request_ids: list[str] | None = None,
 ) -> list[AnswerEvaluationCandidate]:
     """Load answer candidates from persisted monitoring snapshots."""
     snapshots = source.list_answer_snapshots_for_evaluation(
         limit=limit,
         run_kind=run_kind,
         repository_name=repository_name,
+        request_ids=request_ids,
     )
     return [
         AnswerEvaluationCandidate(

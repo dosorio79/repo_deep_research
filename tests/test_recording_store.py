@@ -310,10 +310,16 @@ def test_recording_store_lists_answer_snapshots_for_evaluation() -> None:
         limit=10,
         run_kind=RunKind.AGENTIC,
         repository_name="repo",
+        request_ids=["request-1", "request-2"],
     )
 
     _statement, params = connection.executed[0]
-    assert params == {"limit": 10, "run_kind": "agentic", "repository_name": "repo"}
+    assert params == {
+        "limit": 10,
+        "run_kind": "agentic",
+        "repository_name": "repo",
+        "request_ids": ["request-1", "request-2"],
+    }
     assert len(snapshots) == 1
     assert snapshots[0].request_id == "request-1"
     assert snapshots[0].run_kind is RunKind.AGENTIC
