@@ -18,3 +18,5 @@ qdrant_storage/
 .terraform/
 *.tfstate
 *.tfstate.*
+.agents/
+skills-lock.json

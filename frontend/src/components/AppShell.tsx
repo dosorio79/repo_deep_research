@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { Search, Activity, Terminal } from "lucide-react";
+import { Activity, ClipboardCheck, Search, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/", label: "Research", icon: Search },
   { to: "/monitoring", label: "Monitoring", icon: Activity },
+  { to: "/evaluations", label: "Evaluations", icon: ClipboardCheck },
 ] as const;
 
 export function Navigation() {
@@ -17,7 +18,7 @@ export function Navigation() {
           to={item.to}
           activeOptions={{ exact: item.to === "/" }}
           className={cn(
-            "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+            "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
           )}
           activeProps={{ className: "bg-secondary text-foreground font-medium" }}
         >
@@ -38,9 +39,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Terminal className="h-4 w-4 text-primary" aria-hidden />
             <span className="whitespace-nowrap mono text-[13px] font-semibold tracking-tight">
               Repo Deep Research
-            </span>
-            <span className="rounded-sm bg-secondary px-1.5 py-0.5 mono text-[10px] text-muted-foreground">
-              MVP
             </span>
           </div>
           <Navigation />
