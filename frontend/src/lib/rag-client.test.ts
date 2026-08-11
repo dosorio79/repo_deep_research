@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getBackendHealth,
+  getEvaluationResults,
+  getEvaluationRuns,
+  getEvaluationSummary,
   getMonitoringRunDetail,
   getMonitoringRuns,
   getMonitoringSummary,
@@ -10,6 +13,9 @@ import {
   submitFeedback,
 } from "./rag-client";
 import type {
+  EvaluationDashboardSummary,
+  EvaluationResultList,
+  EvaluationRunList,
   IngestSummary,
   MonitoringRunDetail,
   MonitoringRunList,
@@ -151,6 +157,70 @@ const monitoringRunDetail: MonitoringRunDetail = {
       useful: true,
       comment: "Grounded enough.",
       submitted_at: "2026-08-07T12:05:00Z",
+    },
+  ],
+};
+
+const evaluationSummary: EvaluationDashboardSummary = {
+  total_runs: 1,
+  completed_runs: 1,
+  failed_runs: 0,
+  total_results: 2,
+  average_score: 4.4,
+  unsupported_claim_rate: 0.5,
+  average_by_run_kind: [
+    {
+      run_kind: "agentic",
+      average_score: 4.5,
+      result_count: 1,
+      unsupported_claim_count: 1,
+    },
+  ],
+  metric_averages: [{ metric: "groundedness", average_score: 5 }],
+};
+
+const evaluationRuns: EvaluationRunList = {
+  runs: [
+    {
+      evaluation_run_id: "eval-run-1",
+      source_type: "monitored_runs",
+      source_label: "monitored-runs",
+      judge_model: "gpt-5.1",
+      status: "completed",
+      started_at: "2026-08-11T12:00:00Z",
+      completed_at: "2026-08-11T12:01:00Z",
+      error_message: null,
+      result_count: 2,
+      average_score: 4.4,
+      unsupported_claim_count: 1,
+    },
+  ],
+};
+
+const evaluationResults: EvaluationResultList = {
+  results: [
+    {
+      result_id: "result-1",
+      evaluation_run_id: "eval-run-1",
+      source_type: "monitored_runs",
+      source_label: "monitored-runs",
+      record_id: null,
+      request_id: "req-1",
+      run_kind: "agentic",
+      question: "Which modules changed?",
+      correctness: 4,
+      groundedness: 5,
+      citation_accuracy: 5,
+      completeness: 4,
+      usefulness: 4,
+      average_score: 4.4,
+      unsupported_claim_count: 0,
+      feedback_useful: 1,
+      feedback_not_useful: 0,
+      latency_ms_total: 1200,
+      total_estimated_cost_usd: "0.012",
+      notes: "Grounded.",
+      created_at: "2026-08-11T12:02:00Z",
     },
   ],
 };
@@ -389,6 +459,71 @@ describe("runRagQuery", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/monitoring/runs/req-1",
+      expect.objectContaining({ signal: null }),
+    );
+  });
+
+  it("loads evaluation summary from the backend endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(evaluationSummary), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getEvaluationSummary("http://localhost:8000///")).resolves.toEqual(
+      evaluationSummary,
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/evaluations/summary",
+      expect.objectContaining({ signal: null }),
+    );
+  });
+
+  it("loads evaluation runs with filters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(evaluationRuns), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getEvaluationRuns("http://localhost:8000///", {
+        limit: 10,
+        source_type: "monitored_runs",
+        status: "completed",
+      }),
+    ).resolves.toEqual(evaluationRuns);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/evaluations/runs?limit=10&source_type=monitored_runs&status=completed",
+      expect.objectContaining({ signal: null }),
+    );
+  });
+
+  it("loads evaluation results with filters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(evaluationResults), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getEvaluationResults("http://localhost:8000///", {
+        limit: 25,
+        source_type: "monitored_runs",
+        run_kind: "agentic",
+      }),
+    ).resolves.toEqual(evaluationResults);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/evaluations/results?limit=25&run_kind=agentic&source_type=monitored_runs",
       expect.objectContaining({ signal: null }),
     );
   });

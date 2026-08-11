@@ -79,8 +79,9 @@ make stack-up
 ```
 
 Open `http://localhost:3000`, ingest a repository, ask a direct or agentic
-question, submit feedback, and inspect persisted monitoring at
-`http://localhost:3000/monitoring`.
+question, submit feedback, inspect persisted monitoring at
+`http://localhost:3000/monitoring`, and review persisted answer evaluations at
+`http://localhost:3000/evaluations`.
 
 For local development with FastAPI reload and the Vite dev server:
 

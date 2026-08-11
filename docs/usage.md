@@ -176,6 +176,10 @@ Persisted dataset evaluations are keyed by their versioned `record_id`.
 Persisted monitored-run evaluations also keep the original answer `request_id`,
 which links the judge result back to `answer_snapshots`.
 
+After persisting results, open `/evaluations` in the frontend to inspect
+aggregate scores, approach comparisons, run history, and the lowest-scoring
+judged answers.
+
 Generated reports under `eval/results/` are ignored by git. Commit only curated
 summary measurements, not transient local report files.
 

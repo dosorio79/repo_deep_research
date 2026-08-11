@@ -101,7 +101,16 @@ snapshot `request_id`, linking each result back to the original `/rag` or
 Generated answer reports remain under ignored `eval/results/`. Commit only
 curated summary measurements, not transient local report files.
 
-## Evaluation Dashboard Direction
+## Evaluation Dashboard
 
-PostgreSQL is the intended source of truth for the `/evaluations` dashboard.
+PostgreSQL is the source of truth for the `/evaluations` dashboard. The
+dashboard reads:
+
+- `GET /evaluations/summary` for aggregate score cards and chart data.
+- `GET /evaluations/runs` for recent persisted evaluation runs.
+- `GET /evaluations/results` for individual judged answer rows.
+
+Run answer evaluation from the CLI with `--persist` to populate the dashboard.
 Files under `eval/results/` remain optional exports for reproducible batch runs.
+The dashboard is read-only and compares persisted dataset and monitored-run
+evaluations without regenerating answers.

@@ -267,6 +267,90 @@ export interface MonitoringRunListParams {
   feedback?: MonitoringFeedbackFilter;
 }
 
+export type EvaluationSourceType = "dataset" | "monitored_runs";
+export type EvaluationRunStatus = "pending" | "running" | "completed" | "failed";
+
+export interface EvaluationMetricAverage {
+  metric: string;
+  average_score: number;
+}
+
+export interface EvaluationRunKindAverage {
+  run_kind: ResearchKind | null;
+  average_score: number;
+  result_count: number;
+  unsupported_claim_count: number;
+}
+
+export interface EvaluationDashboardSummary {
+  total_runs: number;
+  completed_runs: number;
+  failed_runs: number;
+  total_results: number;
+  average_score: number | null;
+  unsupported_claim_rate: number;
+  average_by_run_kind: EvaluationRunKindAverage[];
+  metric_averages: EvaluationMetricAverage[];
+}
+
+export interface EvaluationRunSummary {
+  evaluation_run_id: string;
+  source_type: EvaluationSourceType;
+  source_label: string;
+  judge_model: string;
+  status: EvaluationRunStatus;
+  started_at: string;
+  completed_at: string | null;
+  error_message: string | null;
+  result_count: number;
+  average_score: number | null;
+  unsupported_claim_count: number;
+}
+
+export interface EvaluationRunList {
+  runs: EvaluationRunSummary[];
+}
+
+export interface EvaluationResultSummary {
+  result_id: string;
+  evaluation_run_id: string;
+  source_type: EvaluationSourceType;
+  source_label: string;
+  record_id: string | null;
+  request_id: string | null;
+  run_kind: ResearchKind | null;
+  question: string;
+  correctness: number;
+  groundedness: number;
+  citation_accuracy: number;
+  completeness: number;
+  usefulness: number;
+  average_score: number;
+  unsupported_claim_count: number;
+  feedback_useful: number;
+  feedback_not_useful: number;
+  latency_ms_total: number | null;
+  total_estimated_cost_usd: number | string | null;
+  notes: string;
+  created_at: string;
+}
+
+export interface EvaluationResultList {
+  results: EvaluationResultSummary[];
+}
+
+export interface EvaluationRunListParams {
+  limit?: number;
+  source_type?: EvaluationSourceType;
+  status?: EvaluationRunStatus;
+}
+
+export interface EvaluationResultListParams {
+  limit?: number;
+  source_type?: EvaluationSourceType;
+  run_kind?: ResearchKind;
+}
+
 export interface ApiErrorShape {
   title: string;
   detail: string;

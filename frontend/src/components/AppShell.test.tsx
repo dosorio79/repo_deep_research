@@ -8,13 +8,17 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 describe("Navigation", () => {
-  it("exposes persisted monitoring as a first-class destination", () => {
+  it("exposes primary app surfaces as first-class destinations", () => {
     render(<Navigation />);
 
     expect(screen.getByRole("link", { name: /research/i })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: /monitoring/i })).toHaveAttribute(
       "href",
       "/monitoring",
+    );
+    expect(screen.getByRole("link", { name: /evaluations/i })).toHaveAttribute(
+      "href",
+      "/evaluations",
     );
   });
 });
