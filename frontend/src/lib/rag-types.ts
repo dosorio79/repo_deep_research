@@ -59,11 +59,12 @@ export interface BackendHealth {
 export interface EvidenceItem {
   evidence_id: string;
   path: string;
-  start_line: number;
-  end_line: number;
+  start_line: number | null;
+  end_line: number | null;
   symbol: string | null;
   score: number;
   reason: string;
+  content?: string | null;
 }
 
 export interface ChangeTarget {
@@ -272,7 +273,9 @@ export type EvaluationRunStatus = "pending" | "running" | "completed" | "failed"
 
 export interface EvaluationMetricAverage {
   metric: string;
+  source_type: EvaluationSourceType | null;
   average_score: number;
+  result_count: number;
 }
 
 export interface EvaluationRunKindAverage {
@@ -320,11 +323,12 @@ export interface EvaluationResultSummary {
   request_id: string | null;
   run_kind: ResearchKind | null;
   question: string;
-  correctness: number;
-  groundedness: number;
-  citation_accuracy: number;
-  completeness: number;
-  usefulness: number;
+  answer_correctness: number | null;
+  faithfulness: number | null;
+  citation_precision: number | null;
+  reference_coverage: number | null;
+  answer_relevance: number | null;
+  presentation_quality: number | null;
   average_score: number;
   unsupported_claim_count: number;
   feedback_useful: number;
@@ -333,6 +337,7 @@ export interface EvaluationResultSummary {
   total_estimated_cost_usd: number | string | null;
   notes: string;
   created_at: string;
+  answer_evidence?: EvidenceItem[];
 }
 
 export interface EvaluationResultList {

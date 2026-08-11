@@ -174,7 +174,15 @@ uv run repo-research evaluate-answers --source monitored-runs \
 ```
 
 Use repeatable `--request-id` flags to judge specific recorded answers without
-depending on recency or run-kind filters.
+depending on recency or run-kind filters:
+
+```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
+uv run repo-research evaluate-answers --source monitored-runs \
+  --request-id 37d5381cf3494db78cbded95946c096a \
+  --request-id 1198b2998eea4049b9f3eb0293821257 \
+  --persist --output eval/results/answer-monitored-selected.json
+```
 
 Persisted dataset evaluations are keyed by their versioned `record_id`.
 Persisted monitored-run evaluations also keep the original answer `request_id`,

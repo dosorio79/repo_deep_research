@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ClipboardCheck, Gauge, MessageSquare, TriangleAlert } from "lucide-react";
 import { ApiError } from "@/components/ApiError";
 import { AppShell } from "@/components/AppShell";
+import { EvidenceReferences } from "@/components/EvidenceReferences";
 import { EmptyLine, Field, Panel } from "@/components/primitives";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { getEvaluationResults, getEvaluationRuns, getEvaluationSummary } from "@/lib/rag-client";
@@ -281,15 +282,21 @@ function EvaluationResultTable({
     return <EmptyLine>No evaluated answers match the current view.</EmptyLine>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[920px] text-left text-[12px]">
+      <table className="w-full min-w-[1280px] text-left text-[12px]">
         <thead className="border-b border-border text-muted-foreground">
           <tr>
             <th className="py-2 pr-3 font-medium">Question</th>
+            <th className="py-2 pr-3 font-medium">Source</th>
             <th className="py-2 pr-3 font-medium">Approach</th>
             <th className="py-2 pr-3 font-medium">Average</th>
-            <th className="py-2 pr-3 font-medium">Grounded</th>
+            <th className="py-2 pr-3 font-medium">Correct</th>
+            <th className="py-2 pr-3 font-medium">Faithful</th>
             <th className="py-2 pr-3 font-medium">Citations</th>
+            <th className="py-2 pr-3 font-medium">Coverage</th>
+            <th className="py-2 pr-3 font-medium">Relevant</th>
+            <th className="py-2 pr-3 font-medium">Presentation</th>
             <th className="py-2 pr-3 font-medium">Unsupported</th>
+            <th className="py-2 pr-3 font-medium">Evidence</th>
             <th className="py-2 pr-3 font-medium">Feedback</th>
             <th className="py-2 pr-3 font-medium">Cost</th>
           </tr>
@@ -298,11 +305,27 @@ function EvaluationResultTable({
           {results.map((result) => (
             <tr key={result.result_id} className="border-b border-border/60">
               <td className="max-w-[360px] break-words py-2 pr-3">{result.question}</td>
+              <td className="py-2 pr-3">{sourceLabel(result.source_type)}</td>
               <td className="py-2 pr-3">{result.run_kind ?? "unknown"}</td>
               <td className="py-2 pr-3 mono">{formatScore(result.average_score)}</td>
-              <td className="py-2 pr-3 mono">{formatScore(result.groundedness)}</td>
-              <td className="py-2 pr-3 mono">{formatScore(result.citation_accuracy)}</td>
+              <td className="py-2 pr-3 mono">{formatScore(result.answer_correctness)}</td>
+              <td className="py-2 pr-3 mono">{formatScore(result.faithfulness)}</td>
+              <td className="py-2 pr-3 mono">{formatScore(result.citation_precision)}</td>
+              <td className="py-2 pr-3 mono">{formatScore(result.reference_coverage)}</td>
+              <td className="py-2 pr-3 mono">{formatScore(result.answer_relevance)}</td>
+              <td className="py-2 pr-3 mono">{formatScore(result.presentation_quality)}</td>
               <td className="py-2 pr-3 mono">{result.unsupported_claim_count}</td>
+              <td className="max-w-[180px] py-2 pr-3">
+                {result.answer_evidence?.length ? (
+                  <EvidenceReferences
+                    evidenceIds={result.answer_evidence.map((item) => item.evidence_id)}
+                    evidence={result.answer_evidence}
+                    prefix=""
+                  />
+                ) : (
+                  <span className="text-muted-foreground">n/a</span>
+                )}
+              </td>
               <td className="py-2 pr-3 mono">
                 {result.feedback_useful}/{result.feedback_not_useful}
               </td>
@@ -323,10 +346,12 @@ function runKindChartData(summary: EvaluationDashboardSummary) {
 }
 
 function metricChartData(summary: EvaluationDashboardSummary) {
-  return summary.metric_averages.map((item) => ({
-    metric: item.metric.replace("_", " "),
-    score: roundScore(item.average_score),
-  }));
+  return summary.metric_averages
+    .filter((item) => typeof item.average_score === "number")
+    .map((item) => ({
+      metric: metricLabel(item.metric),
+      score: roundScore(item.average_score ?? 0),
+    }));
 }
 
 function feedbackChartData(results: EvaluationResultSummary[]) {
@@ -390,5 +415,20 @@ function formatDate(value: string) {
 }
 
 function sourceLabel(value: string) {
-  return value === "monitored_runs" ? "monitored runs" : value;
+  if (value === "dataset") return "Ground Truth";
+  if (value === "monitored_runs") return "Evidence Audit";
+  return value;
+}
+
+function metricLabel(value: string) {
+  const labels: Record<string, string> = {
+    answer_correctness: "correctness",
+    faithfulness: "faithfulness",
+    citation_precision: "citations",
+    reference_coverage: "coverage",
+    answer_relevance: "relevance",
+    presentation_quality: "presentation",
+    unsupported_claim_count: "unsupported",
+  };
+  return labels[value] ?? value.replaceAll("_", " ");
 }

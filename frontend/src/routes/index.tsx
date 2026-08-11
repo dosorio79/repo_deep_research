@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/components/ApiError";
+import { EvidenceReferences } from "@/components/EvidenceReferences";
 import { ResearchStepsPanel } from "@/components/ResearchStepsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ import type {
   ApiErrorShape,
   BackendHealth,
   ChangeTarget,
+  EvidenceItem,
   IngestSummary,
   QuestionMode,
   RagRequest,
@@ -742,9 +744,13 @@ function ReviewerResult({
         </div>
       </div>
 
-      {answer?.research_steps?.length ? <ResearchStepsPanel steps={answer.research_steps} /> : null}
+      {answer?.research_steps?.length ? (
+        <ResearchStepsPanel steps={answer.research_steps} evidence={answer.evidence} />
+      ) : null}
 
-      {changeTargets.length > 0 ? <ChangeTargetCards targets={changeTargets} /> : null}
+      {changeTargets.length > 0 ? (
+        <ChangeTargetCards targets={changeTargets} evidence={answer?.evidence} />
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <EvidenceHighlights evidence={evidence} />
@@ -905,7 +911,13 @@ function formatConfidence(value: unknown) {
   return "unknown";
 }
 
-function ChangeTargetCards({ targets }: { targets: ChangeTarget[] }) {
+function ChangeTargetCards({
+  targets,
+  evidence,
+}: {
+  targets: ChangeTarget[];
+  evidence: EvidenceItem[] | null | undefined;
+}) {
   return (
     <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
       <div className="flex items-center gap-2">
@@ -921,9 +933,13 @@ function ChangeTargetCards({ targets }: { targets: ChangeTarget[] }) {
                 {name}
               </p>
               <p className="mt-2 text-[13px] leading-5 text-muted-foreground">{target.reason}</p>
-              <p className="mt-2 mono text-[11px] text-muted-foreground">
-                evidence {target.evidence_ids.join(", ")}
-              </p>
+              <div className="mt-2">
+                <EvidenceReferences
+                  evidenceIds={target.evidence_ids}
+                  evidence={evidence}
+                  prefix="evidence"
+                />
+              </div>
             </div>
           );
         })}

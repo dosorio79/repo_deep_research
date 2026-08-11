@@ -176,7 +176,9 @@ const evaluationSummary: EvaluationDashboardSummary = {
       unsupported_claim_count: 1,
     },
   ],
-  metric_averages: [{ metric: "groundedness", average_score: 5 }],
+  metric_averages: [
+    { metric: "faithfulness", source_type: null, average_score: 5, result_count: 2 },
+  ],
 };
 
 const evaluationRuns: EvaluationRunList = {
@@ -208,11 +210,12 @@ const evaluationResults: EvaluationResultList = {
       request_id: "req-1",
       run_kind: "agentic",
       question: "Which modules changed?",
-      correctness: 4,
-      groundedness: 5,
-      citation_accuracy: 5,
-      completeness: 4,
-      usefulness: 4,
+      answer_correctness: null,
+      faithfulness: 5,
+      citation_precision: 5,
+      reference_coverage: null,
+      answer_relevance: 4,
+      presentation_quality: 4,
       average_score: 4.4,
       unsupported_claim_count: 0,
       feedback_useful: 1,
@@ -221,6 +224,18 @@ const evaluationResults: EvaluationResultList = {
       total_estimated_cost_usd: "0.012",
       notes: "Grounded.",
       created_at: "2026-08-11T12:02:00Z",
+      answer_evidence: [
+        {
+          evidence_id: "E1",
+          path: "src/repo_research/answer_evaluation.py",
+          start_line: 10,
+          end_line: 20,
+          symbol: "evaluate_answers",
+          score: 0.9,
+          reason: "Shows the evaluator entrypoint.",
+          content: "def evaluate_answers(): ...",
+        },
+      ],
     },
   ],
 };

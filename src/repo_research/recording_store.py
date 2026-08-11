@@ -26,6 +26,7 @@ from repo_research.models import (
     EvaluationRunStatus,
     EvaluationRunSummary,
     EvaluationSourceType,
+    EvidenceItem,
     FeedbackEvent,
     FeedbackUsefulSummary,
     LatencyByRunKind,
@@ -261,11 +262,12 @@ class PostgresRecordingStore:
                     "request_id": result.request_id,
                     "run_kind": result.run_kind.value if result.run_kind else None,
                     "question": result.question,
-                    "correctness": result.correctness,
-                    "groundedness": result.groundedness,
-                    "citation_accuracy": result.citation_accuracy,
-                    "completeness": result.completeness,
-                    "usefulness": result.usefulness,
+                    "answer_correctness": result.answer_correctness,
+                    "faithfulness": result.faithfulness,
+                    "citation_precision": result.citation_precision,
+                    "reference_coverage": result.reference_coverage,
+                    "answer_relevance": result.answer_relevance,
+                    "presentation_quality": result.presentation_quality,
                     "unsupported_claim_count": result.unsupported_claim_count,
                     "feedback_useful": result.feedback_useful,
                     "feedback_not_useful": result.feedback_not_useful,
@@ -511,11 +513,12 @@ def _build_evaluation_summary(
     result_rows: list[dict[str, Any]],
 ) -> EvaluationDashboardSummary:
     metric_names = [
-        "correctness",
-        "groundedness",
-        "citation_accuracy",
-        "completeness",
-        "usefulness",
+        "answer_correctness",
+        "faithfulness",
+        "citation_precision",
+        "reference_coverage",
+        "answer_relevance",
+        "presentation_quality",
     ]
     completed_runs = sum(
         1 for row in run_rows if row["status"] == EvaluationRunStatus.COMPLETED.value
@@ -565,13 +568,17 @@ def _build_evaluation_summary(
         metric_averages=[
             EvaluationMetricAverage(
                 metric=metric,
-                average_score=(
-                    sum(float(row[metric]) for row in result_rows) / total_results
-                    if total_results
-                    else 0
-                ),
+                source_type=None,
+                average_score=sum(float(row[metric]) for row in scored_rows)
+                / len(scored_rows),
+                result_count=len(scored_rows),
             )
             for metric in metric_names
+            if (
+                scored_rows := [
+                    row for row in result_rows if row.get(metric) is not None
+                ]
+            )
         ],
     )
 
@@ -617,11 +624,12 @@ def _evaluation_result_summary_from_row(row: dict[str, Any]) -> EvaluationResult
         request_id=row.get("request_id"),
         run_kind=RunKind(str(run_kind_value)) if run_kind_value else None,
         question=str(row["question"]),
-        correctness=float(row["correctness"]),
-        groundedness=float(row["groundedness"]),
-        citation_accuracy=float(row["citation_accuracy"]),
-        completeness=float(row["completeness"]),
-        usefulness=float(row["usefulness"]),
+        answer_correctness=_float_or_none(row.get("answer_correctness")),
+        faithfulness=float(row["faithfulness"]),
+        citation_precision=float(row["citation_precision"]),
+        reference_coverage=_float_or_none(row.get("reference_coverage")),
+        answer_relevance=float(row["answer_relevance"]),
+        presentation_quality=float(row["presentation_quality"]),
         average_score=_average_result_score(row),
         unsupported_claim_count=int(row["unsupported_claim_count"]),
         feedback_useful=int(row["feedback_useful"]),
@@ -629,18 +637,29 @@ def _evaluation_result_summary_from_row(row: dict[str, Any]) -> EvaluationResult
         latency_ms_total=row.get("latency_ms_total"),
         total_estimated_cost_usd=row.get("total_estimated_cost_usd"),
         notes=str(row.get("notes") or ""),
+        answer_evidence=_evidence_items_from_json(row.get("answer_evidence")),
         created_at=row["created_at"],
     )
 
 
 def _average_result_score(row: dict[str, Any]) -> float:
-    return (
-        float(row["correctness"])
-        + float(row["groundedness"])
-        + float(row["citation_accuracy"])
-        + float(row["completeness"])
-        + float(row["usefulness"])
-    ) / 5
+    scores = [
+        float(row[metric])
+        for metric in (
+            "faithfulness",
+            "citation_precision",
+            "answer_relevance",
+            "presentation_quality",
+        )
+        if row.get(metric) is not None
+    ]
+    return sum(scores) / len(scores) if scores else 0
+
+
+def _evidence_items_from_json(value: Any) -> list[EvidenceItem]:
+    if not value:
+        return []
+    return [EvidenceItem.model_validate(item) for item in value]
 
 
 def _accumulate_model_usage(
@@ -680,6 +699,10 @@ def _accumulate_model_usage(
 
 def _decimal_or_none(value: int | Decimal | None) -> Decimal | None:
     return value if isinstance(value, Decimal) else None
+
+
+def _float_or_none(value: Any) -> float | None:
+    return None if value is None else float(value)
 
 
 def _run_summary_from_row(
@@ -946,11 +969,12 @@ _SCHEMA_STATEMENTS = (
         request_id TEXT REFERENCES answer_snapshots (request_id) ON DELETE SET NULL,
         run_kind TEXT CHECK (run_kind IN ('direct', 'agentic')),
         question TEXT NOT NULL CHECK (length(question) > 0),
-        correctness NUMERIC NOT NULL,
-        groundedness NUMERIC NOT NULL,
-        citation_accuracy NUMERIC NOT NULL,
-        completeness NUMERIC NOT NULL,
-        usefulness NUMERIC NOT NULL,
+        answer_correctness NUMERIC,
+        faithfulness NUMERIC NOT NULL,
+        citation_precision NUMERIC NOT NULL,
+        reference_coverage NUMERIC,
+        answer_relevance NUMERIC NOT NULL,
+        presentation_quality NUMERIC NOT NULL,
         unsupported_claim_count INTEGER NOT NULL,
         feedback_useful INTEGER NOT NULL DEFAULT 0,
         feedback_not_useful INTEGER NOT NULL DEFAULT 0,
@@ -959,6 +983,63 @@ _SCHEMA_STATEMENTS = (
         notes TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMPTZ NOT NULL
     )
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS answer_correctness NUMERIC
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS faithfulness NUMERIC NOT NULL DEFAULT 0
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS citation_precision NUMERIC NOT NULL DEFAULT 0
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS reference_coverage NUMERIC
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS answer_relevance NUMERIC NOT NULL DEFAULT 0
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS presentation_quality NUMERIC NOT NULL DEFAULT 0
+    """,
+    """
+    DO $$
+    BEGIN
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'evaluation_results'
+              AND column_name = 'correctness'
+        ) THEN
+            UPDATE evaluation_results
+            SET answer_correctness = COALESCE(answer_correctness, correctness),
+                faithfulness = groundedness,
+                citation_precision = citation_accuracy,
+                reference_coverage = COALESCE(reference_coverage, completeness),
+                answer_relevance = usefulness,
+                presentation_quality = usefulness;
+        END IF;
+    END $$;
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ALTER COLUMN faithfulness DROP DEFAULT,
+    ALTER COLUMN citation_precision DROP DEFAULT,
+    ALTER COLUMN answer_relevance DROP DEFAULT,
+    ALTER COLUMN presentation_quality DROP DEFAULT
+    """,
+    """
+    ALTER TABLE evaluation_results
+    DROP COLUMN IF EXISTS correctness,
+    DROP COLUMN IF EXISTS groundedness,
+    DROP COLUMN IF EXISTS citation_accuracy,
+    DROP COLUMN IF EXISTS completeness,
+    DROP COLUMN IF EXISTS usefulness
     """,
     """
     CREATE INDEX IF NOT EXISTS evaluation_results_evaluation_run_id_idx
@@ -1145,11 +1226,12 @@ INSERT INTO evaluation_results (
     request_id,
     run_kind,
     question,
-    correctness,
-    groundedness,
-    citation_accuracy,
-    completeness,
-    usefulness,
+    answer_correctness,
+    faithfulness,
+    citation_precision,
+    reference_coverage,
+    answer_relevance,
+    presentation_quality,
     unsupported_claim_count,
     feedback_useful,
     feedback_not_useful,
@@ -1164,11 +1246,12 @@ INSERT INTO evaluation_results (
     %(request_id)s,
     %(run_kind)s,
     %(question)s,
-    %(correctness)s,
-    %(groundedness)s,
-    %(citation_accuracy)s,
-    %(completeness)s,
-    %(usefulness)s,
+    %(answer_correctness)s,
+    %(faithfulness)s,
+    %(citation_precision)s,
+    %(reference_coverage)s,
+    %(answer_relevance)s,
+    %(presentation_quality)s,
     %(unsupported_claim_count)s,
     %(feedback_useful)s,
     %(feedback_not_useful)s,
@@ -1183,11 +1266,12 @@ ON CONFLICT (result_id) DO UPDATE SET
     request_id = EXCLUDED.request_id,
     run_kind = EXCLUDED.run_kind,
     question = EXCLUDED.question,
-    correctness = EXCLUDED.correctness,
-    groundedness = EXCLUDED.groundedness,
-    citation_accuracy = EXCLUDED.citation_accuracy,
-    completeness = EXCLUDED.completeness,
-    usefulness = EXCLUDED.usefulness,
+    answer_correctness = EXCLUDED.answer_correctness,
+    faithfulness = EXCLUDED.faithfulness,
+    citation_precision = EXCLUDED.citation_precision,
+    reference_coverage = EXCLUDED.reference_coverage,
+    answer_relevance = EXCLUDED.answer_relevance,
+    presentation_quality = EXCLUDED.presentation_quality,
     unsupported_claim_count = EXCLUDED.unsupported_claim_count,
     feedback_useful = EXCLUDED.feedback_useful,
     feedback_not_useful = EXCLUDED.feedback_not_useful,
@@ -1299,20 +1383,23 @@ SELECT
     r.request_id,
     r.run_kind,
     r.question,
-    r.correctness,
-    r.groundedness,
-    r.citation_accuracy,
-    r.completeness,
-    r.usefulness,
+    r.answer_correctness,
+    r.faithfulness,
+    r.citation_precision,
+    r.reference_coverage,
+    r.answer_relevance,
+    r.presentation_quality,
     r.unsupported_claim_count,
     r.feedback_useful,
     r.feedback_not_useful,
     r.latency_ms_total,
     r.total_estimated_cost_usd,
     r.notes,
+    s.evidence AS answer_evidence,
     r.created_at
 FROM evaluation_results r
 JOIN evaluation_runs e ON e.evaluation_run_id = r.evaluation_run_id
+LEFT JOIN answer_snapshots s ON s.request_id = r.request_id
 """
 
 _SELECT_MONITORING_RUN_HISTORY = """

@@ -1,3 +1,4 @@
+import { EvidenceReferences } from "@/components/EvidenceReferences";
 import { CopyButton, EmptyLine, Panel } from "@/components/primitives";
 import type { EvidenceItem } from "@/lib/rag-types";
 
@@ -43,7 +44,15 @@ export function EvidencePanel({ evidence }: { evidence: EvidenceItem[] | null })
                   className="border-b border-border/60 align-top last:border-0 hover:bg-secondary/50"
                 >
                   <td className="px-3 py-1.5 mono text-[12px] text-muted-foreground">
-                    {e.evidence_id ?? i + 1}
+                    {e.evidence_id ? (
+                      <EvidenceReferences
+                        evidenceIds={[e.evidence_id]}
+                        evidence={items}
+                        prefix=""
+                      />
+                    ) : (
+                      i + 1
+                    )}
                   </td>
                   <td className="max-w-[320px] px-3 py-1.5">
                     <span className="path-text block text-[12px]" title={e.path ?? undefined}>
