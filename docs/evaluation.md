@@ -1,23 +1,22 @@
 # Evaluation
 
-## Retrieval purpose
+## Retrieval Evaluation
 
-M2 compares dense, sparse, and Qdrant RRF-hybrid retrieval using repository
-evidence that is manually verified and versioned with the project.
+Retrieval evaluation compares dense, sparse, and Qdrant RRF-hybrid retrieval
+using repository evidence that is manually verified and versioned with the
+project.
 
-## Datasets
+Datasets:
 
 - `eval/development.json` contains 15 records for iteration.
 - `eval/held_out.json` contains 15 separate records for final reporting.
 
 Together they contain ten locate, ten flow, and ten change-impact questions.
 Each record names expected files, expected symbols where applicable, and a
-human-verification note. Do not modify the held-out records to improve a
-reported result.
+human-verification note. Do not modify held-out records to improve a reported
+result.
 
-## Run the comparison
-
-After starting Qdrant and ingesting the repository into `repo_chunks_v2`, run:
+After starting services and ingesting the repository into `repo_chunks_v2`, run:
 
 ```bash
 make evaluate-retrieval
@@ -25,13 +24,10 @@ uv run repo-research evaluate-retrieval --dataset eval/held_out.json \
   --output eval/results/retrieval-held-out.json
 ```
 
-The command writes a deterministic JSON report with one entry per retrieval
-mode. Generated reports under `eval/results/` are ignored; copy final measured
-results into review documentation only after the held-out run.
+Generated reports under `eval/results/` are ignored. Copy only curated summary
+measurements into documentation.
 
-## Metrics
-
-At the requested result limit (five by default), each mode reports:
+Metrics at the requested result limit:
 
 - file Hit Rate;
 - file MRR;
@@ -43,7 +39,7 @@ Use the held-out report to choose the production retrieval mode. The baseline
 uses Qdrant Reciprocal Rank Fusion without tuned weights; query rewriting and
 reranking are intentionally not part of this comparison.
 
-## Measured baseline
+## Measured Retrieval Baseline
 
 On 2026-07-24, commit `5e23291`, this repository was re-ingested into a local
 `repo_chunks_v2` collection and evaluated at five results per question. The
@@ -58,14 +54,14 @@ generated reports are intentionally not committed; the audited measurements are:
 | Held-out | sparse | 0.467 | 0.236 | 0.356 | 0.100 | 0.333 |
 | Held-out | hybrid | 0.600 | 0.417 | 0.456 | 0.153 | 0.467 |
 
-Dense retrieval is therefore the production default (`RDR_RETRIEVAL_MODE=dense`)
-for the next milestone. Hybrid remains available for future evaluated changes;
-the measurements do not support making it the default yet.
+Dense retrieval is therefore the production default
+(`RDR_RETRIEVAL_MODE=dense`). Hybrid remains available for future evaluated
+changes; the measurements do not support making it the default yet.
 
-## Answer evaluation
+## Answer Evaluation
 
 Answer evaluation is opt-in because it calls OpenAI for judging. The default
-command remains the direct-RAG dataset baseline:
+command evaluates the direct-RAG dataset baseline:
 
 ```bash
 uv run repo-research evaluate-answers --dataset eval/development.json \
@@ -74,8 +70,7 @@ uv run repo-research evaluate-answers --dataset eval/held_out.json \
   --output eval/results/answer-held-out.json
 ```
 
-`v0.5.7b` extends the same CLI into a unified runner. Dataset evaluation can
-compare direct RAG against bounded agentic research:
+Dataset evaluation can compare direct RAG against bounded agentic research:
 
 ```bash
 uv run repo-research evaluate-answers --source dataset \
@@ -83,7 +78,7 @@ uv run repo-research evaluate-answers --source dataset \
   --output eval/results/answer-held-out-both.json
 ```
 
-Persisted monitored answers can also be judged without regenerating answers:
+Persisted monitored answers can be judged without regenerating answers:
 
 ```bash
 uv run repo-research evaluate-answers --source monitored-runs \
@@ -95,8 +90,7 @@ The judge scores correctness, groundedness, citation accuracy, completeness,
 usefulness, and unsupported-claim count. Dataset runs use manually verified
 ground-truth records. Monitored-run evaluation uses the answer's returned
 citations as the available grounding record, so those scores are best read as
-post-hoc quality checks rather than held-out correctness measurements. Default
-unit tests use fake model adapters and do not call OpenAI.
+post-hoc quality checks rather than held-out correctness measurements.
 
 When `--persist` is supplied, dataset evaluations write `evaluation_results`
 with the dataset `record_id` and no `request_id`, because generated dataset
@@ -105,10 +99,9 @@ snapshot `request_id`, linking each result back to the original `/rag` or
 `/research` answer returned by the UI or API.
 
 Generated answer reports remain under ignored `eval/results/`. Commit only
-audited summary measurements, not transient local report files.
+curated summary measurements, not transient local report files.
 
-## Evaluation workbench direction
+## Evaluation Dashboard Direction
 
-The intended source of truth for the future `/evaluations` dashboard is
-PostgreSQL. Files under `eval/results/` remain optional exports for reproducible
-batch runs.
+PostgreSQL is the intended source of truth for the `/evaluations` dashboard.
+Files under `eval/results/` remain optional exports for reproducible batch runs.
