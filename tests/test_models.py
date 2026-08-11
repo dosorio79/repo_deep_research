@@ -77,15 +77,16 @@ def test_create_chunk_rejects_reversed_line_ranges() -> None:
 
 
 def test_answer_evaluation_scores_are_bounded() -> None:
-    with pytest.raises(ValidationError, match="citation_accuracy"):
+    with pytest.raises(ValidationError, match="citation_precision"):
         AnswerEvaluationResult(
             record_id="locate_001",
             question="Where is configuration validated?",
-            correctness=4,
-            groundedness=4,
-            citation_accuracy=6,
-            completeness=4,
-            usefulness=4,
+            answer_correctness=4,
+            faithfulness=4,
+            citation_precision=6,
+            reference_coverage=4,
+            answer_relevance=4,
+            presentation_quality=4,
             unsupported_claim_count=0,
         )
 

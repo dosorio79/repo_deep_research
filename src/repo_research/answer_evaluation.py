@@ -17,6 +17,7 @@ from repo_research.models import (
     EvaluationRecord,
     EvaluationRunRecord,
     EvaluationRunStatus,
+    EvaluationSourceType,
     PersistedEvaluationResult,
     RagAnswer,
     RagMode,
@@ -51,6 +52,7 @@ class MonitoredAnswerSource(Protocol):
         limit: int = 50,
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
+        request_ids: list[str] | None = None,
     ) -> list[EvaluatableAnswerSnapshot]:
         """Return recent monitored answer snapshots."""
 
@@ -86,6 +88,7 @@ class AnswerEvaluationCandidate:
     record: EvaluationRecord
     answer: RagAnswer | ResearchAnswer
     run_kind: RunKind
+    source_type: EvaluationSourceType = EvaluationSourceType.DATASET
     request_id: str | None = None
     feedback_useful: int = 0
     feedback_not_useful: int = 0
@@ -149,6 +152,7 @@ def dataset_candidates(
                         record=record,
                         answer=direct_run.answer,
                         run_kind=RunKind.DIRECT,
+                        source_type=EvaluationSourceType.DATASET,
                         latency_ms_total=direct_run.trace.latency_ms_total,
                         total_estimated_cost_usd=(
                             direct_run.trace.total_estimated_cost_usd
@@ -172,6 +176,7 @@ def dataset_candidates(
                     record=record,
                     answer=research_run.answer,
                     run_kind=RunKind.AGENTIC,
+                    source_type=EvaluationSourceType.DATASET,
                     latency_ms_total=research_run.trace.latency_ms_total,
                     total_estimated_cost_usd=(
                         research_run.trace.total_estimated_cost_usd
@@ -187,18 +192,21 @@ def monitored_answer_candidates(
     limit: int,
     run_kind: RunKind | None = None,
     repository_name: str | None = None,
+    request_ids: list[str] | None = None,
 ) -> list[AnswerEvaluationCandidate]:
     """Load answer candidates from persisted monitoring snapshots."""
     snapshots = source.list_answer_snapshots_for_evaluation(
         limit=limit,
         run_kind=run_kind,
         repository_name=repository_name,
+        request_ids=request_ids,
     )
     return [
         AnswerEvaluationCandidate(
             record=_record_from_snapshot(snapshot),
             answer=snapshot.answer,
             run_kind=snapshot.run_kind,
+            source_type=EvaluationSourceType.MONITORED_RUNS,
             request_id=snapshot.request_id,
             feedback_useful=snapshot.feedback_useful,
             feedback_not_useful=snapshot.feedback_not_useful,
@@ -219,7 +227,11 @@ def judge_answer_candidates(
     created_at = datetime.now(UTC)
     results: list[PersistedEvaluationResult] = []
     for candidate in candidates:
-        judged = judge.judge_answer(record=candidate.record, answer=candidate.answer)
+        judged = judge.judge_answer(
+            record=candidate.record,
+            answer=candidate.answer,
+            source_type=candidate.source_type,
+        )
         results.append(
             _persisted_result_from_judgement(
                 candidate=candidate,
@@ -320,11 +332,20 @@ def _persisted_result_from_judgement(
         request_id=candidate.request_id,
         run_kind=candidate.run_kind,
         question=judgement.question,
-        correctness=judgement.correctness,
-        groundedness=judgement.groundedness,
-        citation_accuracy=judgement.citation_accuracy,
-        completeness=judgement.completeness,
-        usefulness=judgement.usefulness,
+        answer_correctness=(
+            None
+            if candidate.source_type is EvaluationSourceType.MONITORED_RUNS
+            else judgement.answer_correctness
+        ),
+        faithfulness=judgement.faithfulness,
+        citation_precision=judgement.citation_precision,
+        reference_coverage=(
+            None
+            if candidate.source_type is EvaluationSourceType.MONITORED_RUNS
+            else judgement.reference_coverage
+        ),
+        answer_relevance=judgement.answer_relevance,
+        presentation_quality=judgement.presentation_quality,
         unsupported_claim_count=judgement.unsupported_claim_count,
         feedback_useful=candidate.feedback_useful,
         feedback_not_useful=candidate.feedback_not_useful,

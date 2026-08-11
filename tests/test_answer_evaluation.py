@@ -94,15 +94,23 @@ class FakeJudge:
         *,
         record: EvaluationRecord,
         answer: RagAnswer | ResearchAnswer,
+        source_type: EvaluationSourceType = EvaluationSourceType.DATASET,
     ) -> AnswerEvaluationResult:
+        answer_correctness = (
+            None if source_type is EvaluationSourceType.MONITORED_RUNS else 4
+        )
+        reference_coverage = (
+            None if source_type is EvaluationSourceType.MONITORED_RUNS else 4
+        )
         return AnswerEvaluationResult(
             record_id=record.id,
             question=answer.question,
-            correctness=4,
-            groundedness=5,
-            citation_accuracy=5,
-            completeness=4,
-            usefulness=4,
+            answer_correctness=answer_correctness,
+            faithfulness=5,
+            citation_precision=5,
+            reference_coverage=reference_coverage,
+            answer_relevance=4,
+            presentation_quality=4,
             unsupported_claim_count=0,
             notes=f"judged {type(answer).__name__}",
         )
@@ -121,12 +129,14 @@ class FakeMonitoredSource:
         limit: int = 50,
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
+        request_ids: list[str] | None = None,
     ) -> list[EvaluatableAnswerSnapshot]:
         self.calls.append(
             {
                 "limit": limit,
                 "run_kind": run_kind,
                 "repository_name": repository_name,
+                "request_ids": request_ids,
             }
         )
         return self.snapshots[:limit]
@@ -231,10 +241,16 @@ def test_monitored_answer_candidates_include_feedback_and_latency(
         limit=10,
         run_kind=RunKind.AGENTIC,
         repository_name="repo",
+        request_ids=["request-1"],
     )
 
     assert source.calls == [
-        {"limit": 10, "run_kind": RunKind.AGENTIC, "repository_name": "repo"}
+        {
+            "limit": 10,
+            "run_kind": RunKind.AGENTIC,
+            "repository_name": "repo",
+            "request_ids": ["request-1"],
+        }
     ]
     assert candidates[0].record.id == "request-1"
     assert candidates[0].feedback_useful == 1
@@ -265,7 +281,49 @@ def test_judge_candidates_maps_scores_to_persisted_results(tmp_path: Path) -> No
     assert results[0].record_id == "locate_001"
     assert results[0].request_id is None
     assert results[0].run_kind is RunKind.DIRECT
+    assert results[0].answer_correctness == 4
+    assert results[0].reference_coverage == 4
     assert results[0].notes == "judged RagAnswer"
+
+
+def test_judge_candidates_nulls_ground_truth_metrics_for_monitored_answers() -> None:
+    snapshot = EvaluatableAnswerSnapshot(
+        request_id="request-1",
+        session_id="session-1",
+        run_kind=RunKind.AGENTIC,
+        question="Which modules change?",
+        answer=ResearchAnswer(
+            question="Which modules change?",
+            mode=RagMode.CHANGE,
+            summary="Change src/example.py.",
+            evidence=[_evidence()],
+            confidence=0.8,
+        ),
+        evidence=[_evidence()],
+        repository_id="repo-id",
+        repository_name="repo",
+        branch="main",
+        commit_hash="abc123",
+        question_mode=RagMode.CHANGE,
+        retrieval_mode=RetrievalMode.DENSE,
+        retrieval_limit=5,
+        created_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
+    )
+    candidate = monitored_answer_candidates(
+        source=FakeMonitoredSource([snapshot]),
+        limit=1,
+    )[0]
+
+    results = judge_answer_candidates(
+        candidates=[candidate],
+        judge=FakeJudge(),
+        evaluation_run_id="eval-run-1",
+    )
+
+    assert results[0].request_id == "request-1"
+    assert results[0].answer_correctness is None
+    assert results[0].reference_coverage is None
+    assert results[0].faithfulness == 5
 
 
 def test_persist_evaluation_batch_records_running_results_and_completed() -> None:
@@ -283,11 +341,12 @@ def test_persist_evaluation_batch_records_running_results_and_completed() -> Non
         request_id="request-1",
         run_kind=RunKind.DIRECT,
         question="Where is target?",
-        correctness=4,
-        groundedness=5,
-        citation_accuracy=5,
-        completeness=4,
-        usefulness=4,
+        answer_correctness=4,
+        faithfulness=5,
+        citation_precision=5,
+        reference_coverage=4,
+        answer_relevance=4,
+        presentation_quality=4,
         unsupported_claim_count=0,
         created_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
     )
@@ -322,11 +381,12 @@ def test_persist_evaluation_batch_marks_failed_when_result_write_fails() -> None
         request_id="request-1",
         run_kind=RunKind.DIRECT,
         question="Where is target?",
-        correctness=4,
-        groundedness=5,
-        citation_accuracy=5,
-        completeness=4,
-        usefulness=4,
+        answer_correctness=4,
+        faithfulness=5,
+        citation_precision=5,
+        reference_coverage=4,
+        answer_relevance=4,
+        presentation_quality=4,
         unsupported_claim_count=0,
         created_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
     )

@@ -81,16 +81,36 @@ uv run repo-research evaluate-answers --source dataset \
 Persisted monitored answers can be judged without regenerating answers:
 
 ```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
 uv run repo-research evaluate-answers --source monitored-runs \
   --run-kind agentic --limit 10 --persist \
   --output eval/results/answer-monitored-agentic.json
 ```
 
-The judge scores correctness, groundedness, citation accuracy, completeness,
-usefulness, and unsupported-claim count. Dataset runs use manually verified
-ground-truth records. Monitored-run evaluation uses the answer's returned
-citations as the available grounding record, so those scores are best read as
-post-hoc quality checks rather than held-out correctness measurements.
+Use `--request-id` when evaluating specific recorded answers:
+
+```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
+uv run repo-research evaluate-answers --source monitored-runs \
+  --request-id 37d5381cf3494db78cbded95946c096a \
+  --request-id 1198b2998eea4049b9f3eb0293821257 \
+  --persist --output eval/results/answer-monitored-selected.json
+```
+
+Answer evaluation uses two related rubrics:
+
+- Ground Truth evaluation applies to versioned datasets with manually verified
+  expected files, expected symbols, and human notes.
+- Evidence Audit evaluation applies to persisted monitored answers. It judges
+  the recorded answer against its returned evidence only; it is not a held-out
+  correctness measurement.
+
+The judge scores answer correctness, faithfulness, citation precision,
+reference coverage, answer relevance, presentation quality, and unsupported
+claim count. For monitored Evidence Audit runs, answer correctness and
+reference coverage are unavailable because there is no independent ground-truth
+record. The dashboard omits unavailable values from metric averages and shows
+persisted answer evidence so evidence IDs can be inspected.
 
 When `--persist` is supplied, dataset evaluations write `evaluation_results`
 with the dataset `record_id` and no `request_id`, because generated dataset

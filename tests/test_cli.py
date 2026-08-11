@@ -135,6 +135,10 @@ def test_cli_parses_monitored_answer_evaluation_request() -> None:
             "agentic",
             "--repository-name",
             "repo",
+            "--request-id",
+            "request-1",
+            "--request-id",
+            "request-2",
             "--limit",
             "10",
         ]
@@ -144,6 +148,7 @@ def test_cli_parses_monitored_answer_evaluation_request() -> None:
     assert arguments.source == "monitored-runs"
     assert arguments.run_kind == "agentic"
     assert arguments.repository_name == "repo"
+    assert arguments.request_id == ["request-1", "request-2"]
     assert arguments.limit == 10
 
 

@@ -229,11 +229,12 @@ def test_recording_store_persists_evaluation_run_and_result() -> None:
         request_id="request-1",
         run_kind=RunKind.DIRECT,
         question="Where is target?",
-        correctness=4,
-        groundedness=5,
-        citation_accuracy=5,
-        completeness=4,
-        usefulness=4,
+        answer_correctness=None,
+        faithfulness=5,
+        citation_precision=5,
+        reference_coverage=None,
+        answer_relevance=4,
+        presentation_quality=4,
         unsupported_claim_count=0,
         feedback_useful=1,
         feedback_not_useful=0,
@@ -256,7 +257,8 @@ def test_recording_store_persists_evaluation_run_and_result() -> None:
     assert result_params["result_id"] == "result-1"
     assert result_params["request_id"] == "request-1"
     assert result_params["run_kind"] == "direct"
-    assert result_params["groundedness"] == 5
+    assert result_params["answer_correctness"] is None
+    assert result_params["faithfulness"] == 5
     assert result_params["feedback_useful"] == 1
 
 
@@ -313,7 +315,12 @@ def test_recording_store_lists_answer_snapshots_for_evaluation() -> None:
     )
 
     _statement, params = connection.executed[0]
-    assert params == {"limit": 10, "run_kind": "agentic", "repository_name": "repo"}
+    assert params == {
+        "limit": 10,
+        "run_kind": "agentic",
+        "repository_name": "repo",
+        "request_ids": None,
+    }
     assert len(snapshots) == 1
     assert snapshots[0].request_id == "request-1"
     assert snapshots[0].run_kind is RunKind.AGENTIC
@@ -359,11 +366,12 @@ def test_recording_store_returns_evaluation_dashboard_data() -> None:
                 source_type="monitored_runs",
                 source_label="monitored-runs",
                 run_kind="direct",
-                correctness=3,
-                groundedness=4,
-                citation_accuracy=4,
-                completeness=3,
-                usefulness=3,
+                answer_correctness=None,
+                faithfulness=4,
+                citation_precision=4,
+                reference_coverage=None,
+                answer_relevance=3,
+                presentation_quality=3,
                 unsupported_claim_count=1,
                 feedback_not_useful=1,
                 latency_ms_total=800,
@@ -383,7 +391,9 @@ def test_recording_store_returns_evaluation_dashboard_data() -> None:
     assert summary.failed_runs == 1
     assert summary.total_results == 2
     assert summary.unsupported_claim_rate == 0.5
-    assert summary.metric_averages[0].metric == "correctness"
+    metric_counts = {item.metric: item.result_count for item in summary.metric_averages}
+    assert metric_counts["faithfulness"] == 2
+    assert "answer_correctness" not in metric_counts
     assert [
         (item.run_kind, item.result_count) for item in summary.average_by_run_kind
     ] == [
@@ -397,8 +407,9 @@ def test_recording_store_returns_evaluation_dashboard_data() -> None:
     assert runs.runs[0].result_count == 2
     assert runs.runs[0].unsupported_claim_count == 1
     assert [result.result_id for result in results.results] == ["result-1"]
-    assert results.results[0].average_score == 4.8
+    assert results.results[0].average_score == 5
     assert results.results[0].feedback_useful == 1
+    assert results.results[0].answer_evidence[0].evidence_id == "E1"
 
 
 def test_recording_store_returns_monitoring_summary() -> None:
@@ -722,11 +733,12 @@ def _evaluation_result_row(
     source_type: str,
     source_label: str,
     run_kind: str | None,
-    correctness: int = 5,
-    groundedness: int = 5,
-    citation_accuracy: int = 5,
-    completeness: int = 4,
-    usefulness: int = 5,
+    answer_correctness: int | None = None,
+    faithfulness: int = 5,
+    citation_precision: int = 5,
+    reference_coverage: int | None = None,
+    answer_relevance: int = 5,
+    presentation_quality: int = 5,
     unsupported_claim_count: int = 0,
     feedback_useful: int = 0,
     feedback_not_useful: int = 0,
@@ -741,16 +753,29 @@ def _evaluation_result_row(
         "request_id": "request-1",
         "run_kind": run_kind,
         "question": "Where is target?",
-        "correctness": correctness,
-        "groundedness": groundedness,
-        "citation_accuracy": citation_accuracy,
-        "completeness": completeness,
-        "usefulness": usefulness,
+        "answer_correctness": answer_correctness,
+        "faithfulness": faithfulness,
+        "citation_precision": citation_precision,
+        "reference_coverage": reference_coverage,
+        "answer_relevance": answer_relevance,
+        "presentation_quality": presentation_quality,
         "unsupported_claim_count": unsupported_claim_count,
         "feedback_useful": feedback_useful,
         "feedback_not_useful": feedback_not_useful,
         "latency_ms_total": latency_ms_total,
         "total_estimated_cost_usd": Decimal("0.012"),
         "notes": "Grounded.",
+        "answer_evidence": [
+            {
+                "evidence_id": "E1",
+                "path": "src/example.py",
+                "start_line": 1,
+                "end_line": 2,
+                "symbol": "target",
+                "score": 0.9,
+                "reason": "Relevant implementation.",
+                "content": "def target(): ...",
+            }
+        ],
         "created_at": datetime(2026, 8, 11, 12, tzinfo=UTC),
     }

@@ -5,8 +5,9 @@ import {
   HelpCircle,
   ListOrdered,
 } from "lucide-react";
+import { EvidenceReferences } from "@/components/EvidenceReferences";
 import { CopyButton, EmptyLine, Panel } from "@/components/primitives";
-import type { ChangeTarget, RagAnswer } from "@/lib/rag-types";
+import type { ChangeTarget, EvidenceItem, RagAnswer } from "@/lib/rag-types";
 
 function List({ items }: { items: string[] }) {
   return (
@@ -39,7 +40,13 @@ function Chips({ items, copyable }: { items: string[]; copyable?: boolean }) {
   );
 }
 
-function ChangeTargetList({ items }: { items: ChangeTarget[] }) {
+function ChangeTargetList({
+  items,
+  evidence,
+}: {
+  items: ChangeTarget[];
+  evidence: EvidenceItem[] | null | undefined;
+}) {
   return (
     <ul className="space-y-2">
       {items.map((item, i) => {
@@ -59,9 +66,9 @@ function ChangeTargetList({ items }: { items: ChangeTarget[] }) {
               <CopyButton value={target} label="" className="shrink-0" />
             </div>
             {item.evidence_ids.length > 0 ? (
-              <p className="mt-1 mono text-[11px] text-muted-foreground">
-                evidence: {item.evidence_ids.join(", ")}
-              </p>
+              <div className="mt-1">
+                <EvidenceReferences evidenceIds={item.evidence_ids} evidence={evidence} />
+              </div>
             ) : null}
           </li>
         );
@@ -150,7 +157,7 @@ export function AnswerPanel({ answer }: { answer: RagAnswer | null }) {
           title="Change targets"
           right={<GitPullRequestArrow className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />}
         >
-          <ChangeTargetList items={answer.change_targets!} />
+          <ChangeTargetList items={answer.change_targets!} evidence={answer.evidence} />
         </Panel>
       ) : null}
 

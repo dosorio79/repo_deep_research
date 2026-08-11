@@ -21,6 +21,7 @@ from repo_research.grounding import canonical_change_targets
 from repo_research.models import (
     AnswerEvaluationResult,
     EvaluationRecord,
+    EvaluationSourceType,
     EvidenceItem,
     ModelUsage,
     RagAnswer,
@@ -75,6 +76,7 @@ class AnswerJudge(Protocol):
         *,
         record: EvaluationRecord,
         answer: RagAnswer | ResearchAnswer,
+        source_type: EvaluationSourceType = EvaluationSourceType.DATASET,
     ) -> AnswerEvaluationResult:
         """Return judge scores for one direct or agentic answer."""
 
@@ -279,9 +281,10 @@ class OpenAIResponsesModel:
         *,
         record: EvaluationRecord,
         answer: RagAnswer | ResearchAnswer,
+        source_type: EvaluationSourceType = EvaluationSourceType.DATASET,
     ) -> AnswerEvaluationResult:
         """Judge one answer using the configured judge model."""
-        prompt = _judge_prompt(record=record, answer=answer)
+        prompt = _judge_prompt(record=record, answer=answer, source_type=source_type)
         result = _create_structured_response(
             client=self._client,
             model=self._judge_model,
@@ -314,7 +317,13 @@ def evaluate_answers(
                 limit=limit,
             ),
         )
-        results.append(judge.judge_answer(record=record, answer=answer))
+        results.append(
+            judge.judge_answer(
+                record=record,
+                answer=answer,
+                source_type=EvaluationSourceType.DATASET,
+            )
+        )
     return results
 
 
@@ -521,6 +530,7 @@ def _evidence_by_id(results: list[SearchResult]) -> dict[str, EvidenceItem]:
             symbol=chunk.symbol,
             score=result.score,
             reason="Retrieved repository evidence.",
+            content=chunk.content,
         )
     return evidence
 
@@ -600,13 +610,46 @@ def _filtered_unresolved_questions(questions: list[str]) -> list[str]:
 
 
 def _judge_prompt(
-    *, record: EvaluationRecord, answer: RagAnswer | ResearchAnswer
+    *,
+    record: EvaluationRecord,
+    answer: RagAnswer | ResearchAnswer,
+    source_type: EvaluationSourceType,
 ) -> str:
+    shared_rubric = (
+        "Score each available metric from 0 to 5 using these anchors: "
+        "5 = strong with no material defects; 3 = partially useful with material "
+        "gaps; 1 = mostly failing; 0 = absent or not assessable. "
+        "Count unsupported claims. In notes, identify the main score-limiting issue."
+    )
+    metric_definitions = (
+        "Metrics: answer_correctness = correctness against independent ground truth; "
+        "faithfulness = answer claims are supported by available evidence/context; "
+        "citation_precision = cited evidence supports the claims it is attached to; "
+        "reference_coverage = coverage of expected files, symbols, and human notes; "
+        "answer_relevance = answer addresses the question without drifting; "
+        "presentation_quality = structure, readability, separated steps, and operator "
+        "usefulness."
+    )
+    if source_type is EvaluationSourceType.MONITORED_RUNS:
+        assessment_context = (
+            "Evidence Audit. This is not a held-out correctness measurement. "
+            "The expected files and symbols were derived from the recorded answer's "
+            "returned evidence, so set answer_correctness and reference_coverage to "
+            "null. Judge faithfulness, citation_precision, answer_relevance, "
+            "presentation_quality, and unsupported_claim_count only against the "
+            "answer JSON evidence. Penalize collapsed or unreadable step structure "
+            "under presentation_quality."
+        )
+    else:
+        assessment_context = (
+            "Ground Truth Evaluation. Judge against the manually verified record, "
+            "including expected files, expected symbols, and human notes."
+        )
     return "\n\n".join(
         [
-            "Judge this repository answer against the manually verified record. "
-            "Score correctness, groundedness, citation_accuracy, completeness, "
-            "and usefulness from 0 to 5. Count unsupported claims.",
+            assessment_context,
+            shared_rubric,
+            metric_definitions,
             f"Record ID: {record.id}",
             f"Question: {record.question}",
             f"Expected files: {record.relevant_files}",
