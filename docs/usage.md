@@ -167,10 +167,14 @@ Judge recent monitored answers that were already returned by the UI or API and
 persist the judge results to PostgreSQL:
 
 ```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
 uv run repo-research evaluate-answers --source monitored-runs \
   --run-kind agentic --limit 10 --persist \
   --output eval/results/answer-monitored-agentic.json
 ```
+
+Use repeatable `--request-id` flags to judge specific recorded answers without
+depending on recency or run-kind filters.
 
 Persisted dataset evaluations are keyed by their versioned `record_id`.
 Persisted monitored-run evaluations also keep the original answer `request_id`,
