@@ -16,7 +16,16 @@ from repo_research.models import (
     AnswerSnapshot,
     ErrorCountSummary,
     EvaluatableAnswerSnapshot,
+    EvaluationDashboardSummary,
+    EvaluationMetricAverage,
+    EvaluationResultList,
+    EvaluationResultSummary,
+    EvaluationRunKindAverage,
+    EvaluationRunList,
     EvaluationRunRecord,
+    EvaluationRunStatus,
+    EvaluationRunSummary,
+    EvaluationSourceType,
     FeedbackEvent,
     FeedbackUsefulSummary,
     LatencyByRunKind,
@@ -77,6 +86,38 @@ class NoOpRecordingStore:
         """Return no answer snapshots when telemetry persistence is disabled."""
         del limit, run_kind, repository_name
         return []
+
+    def evaluation_summary(self) -> EvaluationDashboardSummary:
+        """Return an empty evaluation dashboard summary."""
+        return EvaluationDashboardSummary(
+            total_runs=0,
+            completed_runs=0,
+            failed_runs=0,
+            total_results=0,
+            unsupported_claim_rate=0,
+        )
+
+    def list_evaluation_runs(
+        self,
+        *,
+        limit: int = 50,
+        source_type: EvaluationSourceType | None = None,
+        status: EvaluationRunStatus | None = None,
+    ) -> EvaluationRunList:
+        """Return no evaluation runs when persistence is disabled."""
+        del limit, source_type, status
+        return EvaluationRunList()
+
+    def list_evaluation_results(
+        self,
+        *,
+        limit: int = 50,
+        source_type: EvaluationSourceType | None = None,
+        run_kind: RunKind | None = None,
+    ) -> EvaluationResultList:
+        """Return no evaluation results when persistence is disabled."""
+        del limit, source_type, run_kind
+        return EvaluationResultList()
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return an empty dashboard summary."""
@@ -255,6 +296,70 @@ class PostgresRecordingStore:
             )
         return [_evaluatable_answer_snapshot_from_row(row) for row in rows]
 
+    def evaluation_summary(self) -> EvaluationDashboardSummary:
+        """Return aggregate answer-evaluation dashboard data."""
+        with self._connect() as connection:
+            run_rows = list(connection.execute(_SELECT_EVALUATION_RUN_ROWS).fetchall())
+            result_rows = list(
+                connection.execute(_SELECT_EVALUATION_RESULT_ROWS).fetchall()
+            )
+        return _build_evaluation_summary(run_rows=run_rows, result_rows=result_rows)
+
+    def list_evaluation_runs(
+        self,
+        *,
+        limit: int = 50,
+        source_type: EvaluationSourceType | None = None,
+        status: EvaluationRunStatus | None = None,
+    ) -> EvaluationRunList:
+        """Return recent persisted answer-evaluation batches."""
+        with self._connect() as connection:
+            run_rows = list(connection.execute(_SELECT_EVALUATION_RUN_ROWS).fetchall())
+            result_rows = list(
+                connection.execute(_SELECT_EVALUATION_RESULT_ROWS).fetchall()
+            )
+        runs = [
+            _evaluation_run_summary_from_row(row, result_rows)
+            for row in sorted(
+                run_rows,
+                key=lambda item: item["started_at"],
+                reverse=True,
+            )
+        ]
+        filtered = [
+            run
+            for run in runs
+            if (source_type is None or run.source_type is source_type)
+            and (status is None or run.status is status)
+        ]
+        return EvaluationRunList(runs=filtered[:limit])
+
+    def list_evaluation_results(
+        self,
+        *,
+        limit: int = 50,
+        source_type: EvaluationSourceType | None = None,
+        run_kind: RunKind | None = None,
+    ) -> EvaluationResultList:
+        """Return recent persisted judged answer results."""
+        with self._connect() as connection:
+            rows = list(connection.execute(_SELECT_EVALUATION_RESULT_ROWS).fetchall())
+        results = [
+            _evaluation_result_summary_from_row(row)
+            for row in sorted(
+                rows,
+                key=lambda item: item["created_at"],
+                reverse=True,
+            )
+        ]
+        filtered = [
+            result
+            for result in results
+            if (source_type is None or result.source_type is source_type)
+            and (run_kind is None or result.run_kind is run_kind)
+        ]
+        return EvaluationResultList(results=filtered[:limit])
+
     def monitoring_summary(self) -> MonitoringSummary:
         """Return dashboard aggregates from persisted monitoring and feedback."""
         with self._connect() as connection:
@@ -395,6 +500,144 @@ def _build_summary(
             for error_type, count in sorted(errors_by_type.items())
         ],
     )
+
+
+def _build_evaluation_summary(
+    *,
+    run_rows: list[dict[str, Any]],
+    result_rows: list[dict[str, Any]],
+) -> EvaluationDashboardSummary:
+    metric_names = [
+        "correctness",
+        "groundedness",
+        "citation_accuracy",
+        "completeness",
+        "usefulness",
+    ]
+    completed_runs = sum(
+        1 for row in run_rows if row["status"] == EvaluationRunStatus.COMPLETED.value
+    )
+    failed_runs = sum(
+        1 for row in run_rows if row["status"] == EvaluationRunStatus.FAILED.value
+    )
+    total_results = len(result_rows)
+    results_with_unsupported_claims = sum(
+        1 for row in result_rows if int(row["unsupported_claim_count"]) > 0
+    )
+    average_score = (
+        sum(_average_result_score(row) for row in result_rows) / total_results
+        if total_results
+        else None
+    )
+    by_run_kind: dict[RunKind | None, list[dict[str, Any]]] = {}
+    for row in result_rows:
+        run_kind_value = row.get("run_kind")
+        run_kind = RunKind(str(run_kind_value)) if run_kind_value else None
+        by_run_kind.setdefault(run_kind, []).append(row)
+
+    return EvaluationDashboardSummary(
+        total_runs=len(run_rows),
+        completed_runs=completed_runs,
+        failed_runs=failed_runs,
+        total_results=total_results,
+        average_score=average_score,
+        unsupported_claim_rate=(
+            results_with_unsupported_claims / total_results if total_results else 0
+        ),
+        average_by_run_kind=[
+            EvaluationRunKindAverage(
+                run_kind=run_kind,
+                average_score=sum(_average_result_score(row) for row in rows)
+                / len(rows),
+                result_count=len(rows),
+                unsupported_claim_count=sum(
+                    int(row["unsupported_claim_count"]) for row in rows
+                ),
+            )
+            for run_kind, rows in sorted(
+                by_run_kind.items(),
+                key=lambda item: item[0].value if item[0] else "",
+            )
+        ],
+        metric_averages=[
+            EvaluationMetricAverage(
+                metric=metric,
+                average_score=(
+                    sum(float(row[metric]) for row in result_rows) / total_results
+                    if total_results
+                    else 0
+                ),
+            )
+            for metric in metric_names
+        ],
+    )
+
+
+def _evaluation_run_summary_from_row(
+    row: dict[str, Any], result_rows: list[dict[str, Any]]
+) -> EvaluationRunSummary:
+    run_results = [
+        result
+        for result in result_rows
+        if result["evaluation_run_id"] == row["evaluation_run_id"]
+    ]
+    return EvaluationRunSummary(
+        evaluation_run_id=str(row["evaluation_run_id"]),
+        source_type=EvaluationSourceType(str(row["source_type"])),
+        source_label=str(row["source_label"]),
+        judge_model=str(row["judge_model"]),
+        status=EvaluationRunStatus(str(row["status"])),
+        started_at=row["started_at"],
+        completed_at=row.get("completed_at"),
+        error_message=row.get("error_message"),
+        result_count=len(run_results),
+        average_score=(
+            sum(_average_result_score(result) for result in run_results)
+            / len(run_results)
+            if run_results
+            else None
+        ),
+        unsupported_claim_count=sum(
+            int(result["unsupported_claim_count"]) for result in run_results
+        ),
+    )
+
+
+def _evaluation_result_summary_from_row(row: dict[str, Any]) -> EvaluationResultSummary:
+    run_kind_value = row.get("run_kind")
+    return EvaluationResultSummary(
+        result_id=str(row["result_id"]),
+        evaluation_run_id=str(row["evaluation_run_id"]),
+        source_type=EvaluationSourceType(str(row["source_type"])),
+        source_label=str(row["source_label"]),
+        record_id=row.get("record_id"),
+        request_id=row.get("request_id"),
+        run_kind=RunKind(str(run_kind_value)) if run_kind_value else None,
+        question=str(row["question"]),
+        correctness=float(row["correctness"]),
+        groundedness=float(row["groundedness"]),
+        citation_accuracy=float(row["citation_accuracy"]),
+        completeness=float(row["completeness"]),
+        usefulness=float(row["usefulness"]),
+        average_score=_average_result_score(row),
+        unsupported_claim_count=int(row["unsupported_claim_count"]),
+        feedback_useful=int(row["feedback_useful"]),
+        feedback_not_useful=int(row["feedback_not_useful"]),
+        latency_ms_total=row.get("latency_ms_total"),
+        total_estimated_cost_usd=row.get("total_estimated_cost_usd"),
+        notes=str(row.get("notes") or ""),
+        created_at=row["created_at"],
+    )
+
+
+def _average_result_score(row: dict[str, Any]) -> float:
+    return (
+        float(row["correctness"])
+        + float(row["groundedness"])
+        + float(row["citation_accuracy"])
+        + float(row["completeness"])
+        + float(row["usefulness"])
+    ) / 5
 
 
 def _accumulate_model_usage(
@@ -1022,6 +1265,45 @@ GROUP BY
     m.total_estimated_cost_usd
 ORDER BY s.created_at DESC
 LIMIT %(limit)s
+"""
+
+_SELECT_EVALUATION_RUN_ROWS = """
+SELECT
+    evaluation_run_id,
+    source_type,
+    source_label,
+    judge_model,
+    status,
+    started_at,
+    completed_at,
+    error_message
+FROM evaluation_runs
+"""
+
+_SELECT_EVALUATION_RESULT_ROWS = """
+SELECT
+    r.result_id,
+    r.evaluation_run_id,
+    e.source_type,
+    e.source_label,
+    r.record_id,
+    r.request_id,
+    r.run_kind,
+    r.question,
+    r.correctness,
+    r.groundedness,
+    r.citation_accuracy,
+    r.completeness,
+    r.usefulness,
+    r.unsupported_claim_count,
+    r.feedback_useful,
+    r.feedback_not_useful,
+    r.latency_ms_total,
+    r.total_estimated_cost_usd,
+    r.notes,
+    r.created_at
+FROM evaluation_results r
+JOIN evaluation_runs e ON e.evaluation_run_id = r.evaluation_run_id
 """
 
 _SELECT_MONITORING_RUN_HISTORY = """

@@ -17,6 +17,14 @@ from repo_research.api import create_app
 from repo_research.config import Settings
 from repo_research.models import (
     AnswerSnapshot,
+    EvaluationDashboardSummary,
+    EvaluationResultList,
+    EvaluationResultSummary,
+    EvaluationRunKindAverage,
+    EvaluationRunList,
+    EvaluationRunStatus,
+    EvaluationRunSummary,
+    EvaluationSourceType,
     EvidenceItem,
     FeedbackEvent,
     MonitoringRunDetail,
@@ -143,6 +151,15 @@ class FakeRecordingStore:
         self.summary = MonitoringSummary(total_runs=0)
         self.run_list = MonitoringRunList()
         self.run_detail: MonitoringRunDetail | None = None
+        self.evaluation_dashboard_summary = EvaluationDashboardSummary(
+            total_runs=0,
+            completed_runs=0,
+            failed_runs=0,
+            total_results=0,
+            unsupported_claim_rate=0,
+        )
+        self.evaluation_run_list = EvaluationRunList()
+        self.evaluation_result_list = EvaluationResultList()
 
     def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
         self.runs.append((run_kind, trace))
@@ -163,6 +180,15 @@ class FakeRecordingStore:
         if self.run_detail and self.run_detail.request_id == request_id:
             return self.run_detail
         return None
+
+    def evaluation_summary(self) -> EvaluationDashboardSummary:
+        return self.evaluation_dashboard_summary
+
+    def list_evaluation_runs(self, **_kwargs: object) -> EvaluationRunList:
+        return self.evaluation_run_list
+
+    def list_evaluation_results(self, **_kwargs: object) -> EvaluationResultList:
+        return self.evaluation_result_list
 
 
 def test_record_completed_answer_persists_agentic_snapshot() -> None:
@@ -765,6 +791,134 @@ async def test_monitoring_run_detail_returns_404_for_missing_run() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "monitoring run not found"}
+
+
+@pytest.mark.anyio
+async def test_evaluation_summary_returns_recorder_aggregates() -> None:
+    recording_store = FakeRecordingStore()
+    recording_store.evaluation_dashboard_summary = EvaluationDashboardSummary(
+        total_runs=2,
+        completed_runs=1,
+        failed_runs=1,
+        total_results=3,
+        average_score=4.2,
+        unsupported_claim_rate=0.33,
+        average_by_run_kind=[
+            EvaluationRunKindAverage(
+                run_kind=RunKind.AGENTIC,
+                average_score=4.5,
+                result_count=2,
+                unsupported_claim_count=1,
+            )
+        ],
+    )
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get("/evaluations/summary")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_runs"] == 2
+    assert body["average_by_run_kind"][0]["run_kind"] == "agentic"
+
+
+@pytest.mark.anyio
+async def test_evaluation_runs_returns_recorder_history() -> None:
+    recording_store = FakeRecordingStore()
+    recording_store.evaluation_run_list = EvaluationRunList(
+        runs=[
+            EvaluationRunSummary(
+                evaluation_run_id="eval-run-1",
+                source_type=EvaluationSourceType.MONITORED_RUNS,
+                source_label="monitored-runs",
+                judge_model="gpt-5.1",
+                status=EvaluationRunStatus.COMPLETED,
+                started_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
+                completed_at=datetime(2026, 8, 11, 12, 1, tzinfo=UTC),
+                result_count=2,
+                average_score=4.5,
+                unsupported_claim_count=1,
+            )
+        ]
+    )
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get(
+            "/evaluations/runs",
+            params={"limit": 10, "source_type": "monitored_runs"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["runs"][0]["evaluation_run_id"] == "eval-run-1"
+
+
+@pytest.mark.anyio
+async def test_evaluation_results_returns_recorder_rows() -> None:
+    recording_store = FakeRecordingStore()
+    recording_store.evaluation_result_list = EvaluationResultList(
+        results=[
+            EvaluationResultSummary(
+                result_id="result-1",
+                evaluation_run_id="eval-run-1",
+                source_type=EvaluationSourceType.MONITORED_RUNS,
+                source_label="monitored-runs",
+                request_id="request-1",
+                run_kind=RunKind.DIRECT,
+                question="Where is target?",
+                correctness=4,
+                groundedness=5,
+                citation_accuracy=5,
+                completeness=4,
+                usefulness=4,
+                average_score=4.4,
+                unsupported_claim_count=0,
+                feedback_useful=1,
+                feedback_not_useful=0,
+                latency_ms_total=1000,
+                total_estimated_cost_usd=None,
+                created_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
+            )
+        ]
+    )
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get(
+            "/evaluations/results",
+            params={"limit": 10, "run_kind": "direct"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["results"][0]["result_id"] == "result-1"
 
 
 @pytest.mark.anyio

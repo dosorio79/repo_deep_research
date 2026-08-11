@@ -1,6 +1,11 @@
 import type {
   ApiErrorShape,
   BackendHealth,
+  EvaluationDashboardSummary,
+  EvaluationResultList,
+  EvaluationResultListParams,
+  EvaluationRunList,
+  EvaluationRunListParams,
   FeedbackEvent,
   FeedbackRequest,
   IngestSummary,
@@ -196,6 +201,33 @@ export async function getMonitoringRunDetail(
   );
 }
 
+export async function getEvaluationSummary(
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<EvaluationDashboardSummary> {
+  return getJson<EvaluationDashboardSummary>(baseUrl, "/evaluations/summary", signal);
+}
+
+export async function getEvaluationRuns(
+  baseUrl: string,
+  params: EvaluationRunListParams = {},
+  signal?: AbortSignal,
+): Promise<EvaluationRunList> {
+  return getJson<EvaluationRunList>(baseUrl, `/evaluations/runs${queryString(params)}`, signal);
+}
+
+export async function getEvaluationResults(
+  baseUrl: string,
+  params: EvaluationResultListParams = {},
+  signal?: AbortSignal,
+): Promise<EvaluationResultList> {
+  return getJson<EvaluationResultList>(
+    baseUrl,
+    `/evaluations/results${queryString(params)}`,
+    signal,
+  );
+}
+
 export async function ingestRepository(
   baseUrl: string,
   payload: RepositoryIngestRequest,
@@ -209,13 +241,17 @@ export async function ingestRepository(
   );
 }
 
-function queryString(params: MonitoringRunListParams) {
+function queryString(
+  params: MonitoringRunListParams & EvaluationRunListParams & EvaluationResultListParams,
+) {
   const search = new URLSearchParams();
   if (params.limit) search.set("limit", String(params.limit));
   if (params.run_kind) search.set("run_kind", params.run_kind);
   if (params.repository_name) search.set("repository_name", params.repository_name);
   if (typeof params.has_error === "boolean") search.set("has_error", String(params.has_error));
   if (params.feedback && params.feedback !== "all") search.set("feedback", params.feedback);
+  if (params.source_type) search.set("source_type", params.source_type);
+  if (params.status) search.set("status", params.status);
   const value = search.toString();
   return value ? `?${value}` : "";
 }

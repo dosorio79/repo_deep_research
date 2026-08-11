@@ -561,6 +561,89 @@ class PersistedEvaluationResult(BaseModel):
     created_at: datetime
 
 
+class EvaluationMetricAverage(BaseModel):
+    """Average judge score for one answer-quality metric."""
+
+    metric: str = Field(min_length=1)
+    average_score: float = Field(ge=0, le=5)
+
+
+class EvaluationRunKindAverage(BaseModel):
+    """Average answer-quality score for one answer approach."""
+
+    run_kind: RunKind | None = None
+    average_score: float = Field(ge=0, le=5)
+    result_count: int = Field(ge=0)
+    unsupported_claim_count: int = Field(ge=0)
+
+
+class EvaluationDashboardSummary(BaseModel):
+    """Aggregate answer-evaluation data for the browser dashboard."""
+
+    total_runs: int = Field(ge=0)
+    completed_runs: int = Field(ge=0)
+    failed_runs: int = Field(ge=0)
+    total_results: int = Field(ge=0)
+    average_score: float | None = Field(default=None, ge=0, le=5)
+    unsupported_claim_rate: float = Field(ge=0, le=1)
+    average_by_run_kind: list[EvaluationRunKindAverage] = Field(default_factory=list)
+    metric_averages: list[EvaluationMetricAverage] = Field(default_factory=list)
+
+
+class EvaluationRunSummary(BaseModel):
+    """One persisted answer-evaluation batch for the dashboard."""
+
+    evaluation_run_id: str = Field(min_length=1)
+    source_type: EvaluationSourceType
+    source_label: str = Field(min_length=1)
+    judge_model: str = Field(min_length=1)
+    status: EvaluationRunStatus
+    started_at: datetime
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    result_count: int = Field(ge=0)
+    average_score: float | None = Field(default=None, ge=0, le=5)
+    unsupported_claim_count: int = Field(ge=0)
+
+
+class EvaluationRunList(BaseModel):
+    """Recent persisted answer-evaluation runs."""
+
+    runs: list[EvaluationRunSummary] = Field(default_factory=list)
+
+
+class EvaluationResultSummary(BaseModel):
+    """One persisted judged answer result for dashboard inspection."""
+
+    result_id: str = Field(min_length=1)
+    evaluation_run_id: str = Field(min_length=1)
+    source_type: EvaluationSourceType
+    source_label: str = Field(min_length=1)
+    record_id: str | None = Field(default=None, min_length=1)
+    request_id: str | None = Field(default=None, min_length=1)
+    run_kind: RunKind | None = None
+    question: str = Field(min_length=1)
+    correctness: float = Field(ge=0, le=5)
+    groundedness: float = Field(ge=0, le=5)
+    citation_accuracy: float = Field(ge=0, le=5)
+    completeness: float = Field(ge=0, le=5)
+    usefulness: float = Field(ge=0, le=5)
+    average_score: float = Field(ge=0, le=5)
+    unsupported_claim_count: int = Field(ge=0)
+    feedback_useful: int = Field(ge=0)
+    feedback_not_useful: int = Field(ge=0)
+    latency_ms_total: int | None = Field(default=None, ge=0)
+    total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+    notes: str = ""
+    created_at: datetime
+
+
+class EvaluationResultList(BaseModel):
+    """Recent persisted judged answer results."""
+
+    results: list[EvaluationResultSummary] = Field(default_factory=list)
+
+
 class IngestionIssue(BaseModel):
     """A path-scoped reason an otherwise eligible file was not indexed."""
 

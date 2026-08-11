@@ -20,6 +20,11 @@ from repo_research.ingestion import (
 )
 from repo_research.models import (
     AnswerSnapshot,
+    EvaluationDashboardSummary,
+    EvaluationResultList,
+    EvaluationRunList,
+    EvaluationRunStatus,
+    EvaluationSourceType,
     FeedbackEvent,
     FeedbackRequest,
     IngestSummary,
@@ -97,6 +102,27 @@ class RecordingStore(Protocol):
 
     def get_monitoring_run(self, request_id: str) -> MonitoringRunDetail | None:
         """Return one persisted monitoring run detail when available."""
+
+    def evaluation_summary(self) -> EvaluationDashboardSummary:
+        """Return aggregate answer-evaluation panels."""
+
+    def list_evaluation_runs(
+        self,
+        *,
+        limit: int = 50,
+        source_type: EvaluationSourceType | None = None,
+        status: EvaluationRunStatus | None = None,
+    ) -> EvaluationRunList:
+        """Return recent persisted evaluation batches."""
+
+    def list_evaluation_results(
+        self,
+        *,
+        limit: int = 50,
+        source_type: EvaluationSourceType | None = None,
+        run_kind: RunKind | None = None,
+    ) -> EvaluationResultList:
+        """Return recent persisted evaluation results."""
 
 
 def package_version() -> str:
@@ -314,6 +340,34 @@ def create_app(
         if detail is None:
             raise HTTPException(status_code=404, detail="monitoring run not found")
         return detail
+
+    @app.get("/evaluations/summary", response_model=EvaluationDashboardSummary)
+    async def evaluation_summary() -> EvaluationDashboardSummary:
+        return get_recording_store().evaluation_summary()
+
+    @app.get("/evaluations/runs", response_model=EvaluationRunList)
+    async def evaluation_runs(
+        limit: int = Query(default=50, ge=1, le=100),
+        source_type: EvaluationSourceType | None = None,
+        status: EvaluationRunStatus | None = None,
+    ) -> EvaluationRunList:
+        return get_recording_store().list_evaluation_runs(
+            limit=limit,
+            source_type=source_type,
+            status=status,
+        )
+
+    @app.get("/evaluations/results", response_model=EvaluationResultList)
+    async def evaluation_results(
+        limit: int = Query(default=50, ge=1, le=100),
+        source_type: EvaluationSourceType | None = None,
+        run_kind: RunKind | None = None,
+    ) -> EvaluationResultList:
+        return get_recording_store().list_evaluation_results(
+            limit=limit,
+            source_type=source_type,
+            run_kind=run_kind,
+        )
 
     return app
 

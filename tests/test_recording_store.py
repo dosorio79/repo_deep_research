@@ -47,10 +47,14 @@ class FakeConnection:
         run_rows: list[dict[str, Any]] | None = None,
         feedback_rows: list[dict[str, Any]] | None = None,
         answer_snapshot_rows: list[dict[str, Any]] | None = None,
+        evaluation_run_rows: list[dict[str, Any]] | None = None,
+        evaluation_result_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self.run_rows = run_rows or []
         self.feedback_rows = feedback_rows or []
         self.answer_snapshot_rows = answer_snapshot_rows or []
+        self.evaluation_run_rows = evaluation_run_rows or []
+        self.evaluation_result_rows = evaluation_result_rows or []
         self.executed: list[tuple[str, dict[str, Any] | None]] = []
 
     def __enter__(self) -> FakeConnection:
@@ -65,6 +69,10 @@ class FakeConnection:
         self.executed.append((statement, params))
         if "FROM answer_snapshots" in statement:
             return FakeCursor(self.answer_snapshot_rows)
+        if "FROM evaluation_results" in statement:
+            return FakeCursor(self.evaluation_result_rows)
+        if "FROM evaluation_runs" in statement:
+            return FakeCursor(self.evaluation_run_rows)
         if "FROM monitoring_runs" in statement:
             return FakeCursor(self.run_rows)
         if "FROM feedback_events" in statement:
@@ -314,6 +322,83 @@ def test_recording_store_lists_answer_snapshots_for_evaluation() -> None:
     assert snapshots[0].feedback_not_useful == 2
     assert snapshots[0].latency_ms_total == 1000
     assert snapshots[0].total_estimated_cost_usd == Decimal("0.012")
+
+
+def test_recording_store_returns_evaluation_dashboard_data() -> None:
+    started_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    connection = FakeConnection(
+        evaluation_run_rows=[
+            _evaluation_run_row(
+                evaluation_run_id="eval-run-1",
+                source_type="monitored_runs",
+                status="completed",
+                started_at=started_at,
+            ),
+            _evaluation_run_row(
+                evaluation_run_id="eval-run-2",
+                source_type="dataset",
+                status="failed",
+                started_at=datetime(2026, 8, 11, 11, tzinfo=UTC),
+                error_message="judge failed",
+            ),
+        ],
+        evaluation_result_rows=[
+            _evaluation_result_row(
+                result_id="result-1",
+                evaluation_run_id="eval-run-1",
+                source_type="monitored_runs",
+                source_label="monitored-runs",
+                run_kind="agentic",
+                unsupported_claim_count=0,
+                feedback_useful=1,
+                latency_ms_total=1500,
+            ),
+            _evaluation_result_row(
+                result_id="result-2",
+                evaluation_run_id="eval-run-1",
+                source_type="monitored_runs",
+                source_label="monitored-runs",
+                run_kind="direct",
+                correctness=3,
+                groundedness=4,
+                citation_accuracy=4,
+                completeness=3,
+                usefulness=3,
+                unsupported_claim_count=1,
+                feedback_not_useful=1,
+                latency_ms_total=800,
+            ),
+        ],
+    )
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    summary = store.evaluation_summary()
+    runs = store.list_evaluation_runs(limit=10)
+    results = store.list_evaluation_results(limit=10, run_kind=RunKind.AGENTIC)
+
+    assert summary.total_runs == 2
+    assert summary.completed_runs == 1
+    assert summary.failed_runs == 1
+    assert summary.total_results == 2
+    assert summary.unsupported_claim_rate == 0.5
+    assert summary.metric_averages[0].metric == "correctness"
+    assert [
+        (item.run_kind, item.result_count) for item in summary.average_by_run_kind
+    ] == [
+        (RunKind.AGENTIC, 1),
+        (RunKind.DIRECT, 1),
+    ]
+    assert [run.evaluation_run_id for run in runs.runs] == [
+        "eval-run-1",
+        "eval-run-2",
+    ]
+    assert runs.runs[0].result_count == 2
+    assert runs.runs[0].unsupported_claim_count == 1
+    assert [result.result_id for result in results.results] == ["result-1"]
+    assert results.results[0].average_score == 4.8
+    assert results.results[0].feedback_useful == 1
 
 
 def test_recording_store_returns_monitoring_summary() -> None:
@@ -605,4 +690,67 @@ def _feedback_row(
         "useful": useful,
         "comment": "Needs clearer targets.",
         "submitted_at": datetime(2026, 8, 7, 12, 5, tzinfo=UTC),
+    }
+
+
+def _evaluation_run_row(
+    *,
+    evaluation_run_id: str,
+    source_type: str,
+    status: str,
+    started_at: datetime,
+    error_message: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "evaluation_run_id": evaluation_run_id,
+        "source_type": source_type,
+        "source_label": "monitored-runs"
+        if source_type == "monitored_runs"
+        else "eval/held_out.json",
+        "judge_model": "gpt-5.1",
+        "status": status,
+        "started_at": started_at,
+        "completed_at": started_at,
+        "error_message": error_message,
+    }
+
+
+def _evaluation_result_row(
+    *,
+    result_id: str,
+    evaluation_run_id: str,
+    source_type: str,
+    source_label: str,
+    run_kind: str | None,
+    correctness: int = 5,
+    groundedness: int = 5,
+    citation_accuracy: int = 5,
+    completeness: int = 4,
+    usefulness: int = 5,
+    unsupported_claim_count: int = 0,
+    feedback_useful: int = 0,
+    feedback_not_useful: int = 0,
+    latency_ms_total: int | None = None,
+) -> dict[str, Any]:
+    return {
+        "result_id": result_id,
+        "evaluation_run_id": evaluation_run_id,
+        "source_type": source_type,
+        "source_label": source_label,
+        "record_id": "record-1",
+        "request_id": "request-1",
+        "run_kind": run_kind,
+        "question": "Where is target?",
+        "correctness": correctness,
+        "groundedness": groundedness,
+        "citation_accuracy": citation_accuracy,
+        "completeness": completeness,
+        "usefulness": usefulness,
+        "unsupported_claim_count": unsupported_claim_count,
+        "feedback_useful": feedback_useful,
+        "feedback_not_useful": feedback_not_useful,
+        "latency_ms_total": latency_ms_total,
+        "total_estimated_cost_usd": Decimal("0.012"),
+        "notes": "Grounded.",
+        "created_at": datetime(2026, 8, 11, 12, tzinfo=UTC),
     }
