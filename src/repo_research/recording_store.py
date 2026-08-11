@@ -1241,10 +1241,12 @@ JOIN monitoring_runs m ON m.request_id = s.request_id
 LEFT JOIN feedback_events f
     ON f.request_id = s.request_id
     OR (f.request_id IS NULL AND f.session_id = s.session_id)
-WHERE (%(run_kind)s IS NULL OR s.run_kind = %(run_kind)s)
+WHERE (%(run_kind)s::text IS NULL OR s.run_kind = %(run_kind)s::text)
   AND (
-      %(repository_name)s IS NULL
-      OR lower(s.repository_name) LIKE ('%%' || lower(%(repository_name)s) || '%%')
+      %(repository_name)s::text IS NULL
+      OR lower(s.repository_name) LIKE (
+          '%%' || lower(%(repository_name)s::text) || '%%'
+      )
   )
 GROUP BY
     s.request_id,
