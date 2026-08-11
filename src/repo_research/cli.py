@@ -11,6 +11,7 @@ from pathlib import Path
 
 from repo_research import runtime
 from repo_research.answer_evaluation import (
+    AnswerEvaluationCandidate,
     audit_evaluation_records,
     dataset_candidates,
     judge_answer_candidates,
@@ -141,6 +142,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional monitored-runs repository-name filter",
     )
     answer_eval.add_argument(
+        "--request-id",
+        action="append",
+        default=[],
+        help="optional monitored-runs request_id filter; repeat for multiple runs",
+    )
+    answer_eval.add_argument(
         "--persist",
         action="store_true",
         help="persist evaluation run and result rows to PostgreSQL",
@@ -153,6 +160,20 @@ def main() -> None:
     arguments = build_parser().parse_args()
     settings = Settings()
     root_path = (arguments.path or settings.repository_root).resolve()
+    if arguments.command == "evaluate-answers" and arguments.source == "monitored-runs":
+        answer_results = _run_monitored_answer_evaluation(
+            arguments=arguments,
+            settings=settings,
+        )
+        write_persisted_answer_evaluation_report(answer_results, arguments.output)
+        print(
+            json.dumps(
+                [result.model_dump(mode="json") for result in answer_results],
+                indent=2,
+            )
+        )
+        return
+
     database = runtime.create_database(settings)
     if arguments.command in {"ask", "ingest"}:
         if arguments.command == "ask":
@@ -434,6 +455,96 @@ def _run_unified_answer_evaluation(
                     }
                 )
             )
+    except Exception as error:
+        if evaluation_store is not None:
+            evaluation_store.record_evaluation_run(
+                evaluation_run.model_copy(
+                    update={
+                        "status": EvaluationRunStatus.FAILED,
+                        "completed_at": datetime.now(UTC),
+                        "error_message": str(error),
+                    }
+                )
+            )
+        raise
+    return results
+
+
+def _run_monitored_answer_evaluation(
+    *,
+    arguments: argparse.Namespace,
+    settings: Settings,
+) -> list[PersistedEvaluationResult]:
+    if not settings.telemetry_enabled or settings.postgres_dsn is None:
+        raise SystemExit(
+            "RDR_POSTGRES_DSN is required for evaluate-answers --source monitored-runs"
+        )
+
+    limit = arguments.limit or settings.answer_evaluation_limit
+    recording_store = runtime.create_recording_store(settings)
+    request_ids = arguments.request_id or None
+    candidates = monitored_answer_candidates(
+        source=recording_store,
+        limit=limit,
+        run_kind=RunKind(arguments.run_kind) if arguments.run_kind else None,
+        repository_name=arguments.repository_name,
+        request_ids=request_ids,
+    )
+    _report_step(f"loaded {len(candidates)} monitored answer snapshots")
+    if not candidates:
+        return []
+    return _judge_and_optionally_persist_answer_candidates(
+        candidates=candidates,
+        judge=runtime.create_answer_model(settings),
+        settings=settings,
+        source_type=EvaluationSourceType.MONITORED_RUNS,
+        source_label="monitored-runs",
+        persist=arguments.persist,
+    )
+
+
+def _judge_and_optionally_persist_answer_candidates(
+    *,
+    candidates: list[AnswerEvaluationCandidate],
+    judge: AnswerJudge,
+    settings: Settings,
+    source_type: EvaluationSourceType,
+    source_label: str,
+    persist: bool,
+) -> list[PersistedEvaluationResult]:
+    evaluation_run = EvaluationRunRecord(
+        source_type=source_type,
+        source_label=source_label,
+        judge_model=settings.openai_judge_model,
+        started_at=datetime.now(UTC),
+    )
+    evaluation_store = runtime.create_recording_store(settings) if persist else None
+    if evaluation_store is not None:
+        evaluation_store.record_evaluation_run(
+            evaluation_run.model_copy(update={"status": EvaluationRunStatus.RUNNING})
+        )
+    try:
+        _report_step(
+            f"judging {len(candidates)} answers with {settings.openai_judge_model}"
+        )
+        results = judge_answer_candidates(
+            candidates=candidates,
+            judge=judge,
+            evaluation_run_id=evaluation_run.evaluation_run_id,
+        )
+        if evaluation_store is not None:
+            for result in results:
+                evaluation_store.record_evaluation_result(result)
+            evaluation_store.record_evaluation_run(
+                evaluation_run.model_copy(
+                    update={
+                        "status": EvaluationRunStatus.COMPLETED,
+                        "completed_at": datetime.now(UTC),
+                        "error_message": None,
+                    }
+                )
+            )
+            _report_step(f"persisted {len(results)} evaluation results")
     except Exception as error:
         if evaluation_store is not None:
             evaluation_store.record_evaluation_run(

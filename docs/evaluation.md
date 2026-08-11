@@ -81,9 +81,20 @@ uv run repo-research evaluate-answers --source dataset \
 Persisted monitored answers can be judged without regenerating answers:
 
 ```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
 uv run repo-research evaluate-answers --source monitored-runs \
   --run-kind agentic --limit 10 --persist \
   --output eval/results/answer-monitored-agentic.json
+```
+
+Use `--request-id` when evaluating specific recorded answers:
+
+```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
+uv run repo-research evaluate-answers --source monitored-runs \
+  --request-id 37d5381cf3494db78cbded95946c096a \
+  --request-id 1198b2998eea4049b9f3eb0293821257 \
+  --persist --output eval/results/answer-monitored-selected.json
 ```
 
 The judge scores correctness, groundedness, citation accuracy, completeness,

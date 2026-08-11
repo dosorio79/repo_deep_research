@@ -82,9 +82,10 @@ class NoOpRecordingStore:
         limit: int = 50,
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
+        request_ids: list[str] | None = None,
     ) -> list[EvaluatableAnswerSnapshot]:
         """Return no answer snapshots when telemetry persistence is disabled."""
-        del limit, run_kind, repository_name
+        del limit, run_kind, repository_name, request_ids
         return []
 
     def evaluation_summary(self) -> EvaluationDashboardSummary:
@@ -281,6 +282,7 @@ class PostgresRecordingStore:
         limit: int = 50,
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
+        request_ids: list[str] | None = None,
     ) -> list[EvaluatableAnswerSnapshot]:
         """Return recent monitored answers with context needed by evaluation."""
         with self._connect() as connection:
@@ -291,6 +293,7 @@ class PostgresRecordingStore:
                         "limit": limit,
                         "run_kind": run_kind.value if run_kind else None,
                         "repository_name": repository_name,
+                        "request_ids": request_ids or None,
                     },
                 ).fetchall()
             )
@@ -1247,6 +1250,10 @@ WHERE (%(run_kind)s::text IS NULL OR s.run_kind = %(run_kind)s::text)
       OR lower(s.repository_name) LIKE (
           '%%' || lower(%(repository_name)s::text) || '%%'
       )
+  )
+  AND (
+      %(request_ids)s::text[] IS NULL
+      OR s.request_id = ANY(%(request_ids)s::text[])
   )
 GROUP BY
     s.request_id,
