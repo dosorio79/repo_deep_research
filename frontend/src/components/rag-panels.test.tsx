@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { AnswerPanel } from "./AnswerPanel";
 import { ResearchStepsPanel } from "./ResearchStepsPanel";
@@ -6,13 +7,25 @@ import { TracePanel } from "./TracePanel";
 import type { RagAnswer, RagTrace } from "@/lib/rag-types";
 
 describe("RAG result panels", () => {
-  it("renders backend-shaped change targets", () => {
+  it("renders backend-shaped change targets with clickable evidence", async () => {
+    const user = userEvent.setup();
     const answer: RagAnswer = {
       question: "What should change?",
       mode: "change",
       summary: "Update the API contract.",
       implementation_flow: ["Inspect the API route."],
-      evidence: [],
+      evidence: [
+        {
+          evidence_id: "E1",
+          path: "src/repo_research/api.py",
+          start_line: 10,
+          end_line: 18,
+          symbol: "create_app",
+          score: 0.9,
+          reason: "The route wires browser requests to the API.",
+          content: "def create_app(): ...",
+        },
+      ],
       relevant_files: ["src/repo_research/api.py"],
       relevant_symbols: ["create_app"],
       change_targets: [
@@ -36,7 +49,10 @@ describe("RAG result panels", () => {
     expect(
       screen.getByText("The API route is the browser integration boundary."),
     ).toBeInTheDocument();
-    expect(screen.getByText("evidence: E1")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open evidence E1" }));
+
+    expect(screen.getByRole("dialog", { name: "Evidence detail" })).toBeInTheDocument();
+    expect(screen.getByText("def create_app(): ...")).toBeInTheDocument();
   });
 
   it("renders multiple model usage entries and string decimal costs", () => {
@@ -93,7 +109,8 @@ describe("RAG result panels", () => {
     expect(screen.getByText("Unavailable")).toBeInTheDocument();
   });
 
-  it("renders agentic research steps", () => {
+  it("renders agentic research steps with clickable evidence ids", async () => {
+    const user = userEvent.setup();
     render(
       <ResearchStepsPanel
         steps={[
@@ -104,11 +121,29 @@ describe("RAG result panels", () => {
             evidence_ids: ["E1", "E2"],
           },
         ]}
+        evidence={[
+          {
+            evidence_id: "E1",
+            path: "src/repo_research/monitoring.py",
+            start_line: 20,
+            end_line: 30,
+            symbol: null,
+            score: 0.8,
+            reason: "Shows feedback persistence fields.",
+            content: "feedback_useful = 1",
+          },
+        ]}
       />,
     );
 
     expect(screen.getByText("Search repository evidence.")).toBeInTheDocument();
     expect(screen.getByText("Find modules related to feedback persistence.")).toBeInTheDocument();
-    expect(screen.getByText("evidence: E1, E2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open evidence E1" })).toBeInTheDocument();
+    expect(screen.getByText("E2")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open evidence E1" }));
+
+    expect(screen.getByRole("dialog", { name: "Evidence detail" })).toBeInTheDocument();
+    expect(screen.getByText("feedback_useful = 1")).toBeInTheDocument();
   });
 });

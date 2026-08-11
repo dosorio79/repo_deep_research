@@ -83,6 +83,7 @@ class ToolEvidence(BaseModel):
             symbol=self.symbol,
             score=self.score,
             reason=self.reason,
+            content=self.content,
         )
 
 

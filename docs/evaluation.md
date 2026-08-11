@@ -97,11 +97,20 @@ uv run repo-research evaluate-answers --source monitored-runs \
   --persist --output eval/results/answer-monitored-selected.json
 ```
 
-The judge scores correctness, groundedness, citation accuracy, completeness,
-usefulness, and unsupported-claim count. Dataset runs use manually verified
-ground-truth records. Monitored-run evaluation uses the answer's returned
-citations as the available grounding record, so those scores are best read as
-post-hoc quality checks rather than held-out correctness measurements.
+Answer evaluation uses two related rubrics:
+
+- Ground Truth evaluation applies to versioned datasets with manually verified
+  expected files, expected symbols, and human notes.
+- Evidence Audit evaluation applies to persisted monitored answers. It judges
+  the recorded answer against its returned evidence only; it is not a held-out
+  correctness measurement.
+
+The judge scores answer correctness, faithfulness, citation precision,
+reference coverage, answer relevance, presentation quality, and unsupported
+claim count. For monitored Evidence Audit runs, answer correctness and
+reference coverage are unavailable because there is no independent ground-truth
+record. The dashboard omits unavailable values from metric averages and shows
+persisted answer evidence so evidence IDs can be inspected.
 
 When `--persist` is supplied, dataset evaluations write `evaluation_results`
 with the dataset `record_id` and no `request_id`, because generated dataset

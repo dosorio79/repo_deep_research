@@ -168,6 +168,7 @@ class EvidenceItem(BaseModel):
     symbol: str | None = None
     score: float
     reason: str = Field(min_length=1)
+    content: str | None = None
 
 
 class ChangeTarget(BaseModel):
@@ -516,11 +517,12 @@ class AnswerEvaluationResult(BaseModel):
 
     record_id: str = Field(min_length=1)
     question: str = Field(min_length=1)
-    correctness: float = Field(ge=0, le=5)
-    groundedness: float = Field(ge=0, le=5)
-    citation_accuracy: float = Field(ge=0, le=5)
-    completeness: float = Field(ge=0, le=5)
-    usefulness: float = Field(ge=0, le=5)
+    answer_correctness: float | None = Field(default=None, ge=0, le=5)
+    faithfulness: float = Field(ge=0, le=5)
+    citation_precision: float = Field(ge=0, le=5)
+    reference_coverage: float | None = Field(default=None, ge=0, le=5)
+    answer_relevance: float = Field(ge=0, le=5)
+    presentation_quality: float = Field(ge=0, le=5)
     unsupported_claim_count: int = Field(ge=0)
     notes: str = ""
 
@@ -547,11 +549,12 @@ class PersistedEvaluationResult(BaseModel):
     request_id: str | None = Field(default=None, min_length=1)
     run_kind: RunKind | None = None
     question: str = Field(min_length=1)
-    correctness: float = Field(ge=0, le=5)
-    groundedness: float = Field(ge=0, le=5)
-    citation_accuracy: float = Field(ge=0, le=5)
-    completeness: float = Field(ge=0, le=5)
-    usefulness: float = Field(ge=0, le=5)
+    answer_correctness: float | None = Field(default=None, ge=0, le=5)
+    faithfulness: float = Field(ge=0, le=5)
+    citation_precision: float = Field(ge=0, le=5)
+    reference_coverage: float | None = Field(default=None, ge=0, le=5)
+    answer_relevance: float = Field(ge=0, le=5)
+    presentation_quality: float = Field(ge=0, le=5)
     unsupported_claim_count: int = Field(ge=0)
     feedback_useful: int = Field(default=0, ge=0)
     feedback_not_useful: int = Field(default=0, ge=0)
@@ -565,7 +568,9 @@ class EvaluationMetricAverage(BaseModel):
     """Average judge score for one answer-quality metric."""
 
     metric: str = Field(min_length=1)
+    source_type: EvaluationSourceType | None = None
     average_score: float = Field(ge=0, le=5)
+    result_count: int = Field(ge=0)
 
 
 class EvaluationRunKindAverage(BaseModel):
@@ -623,11 +628,12 @@ class EvaluationResultSummary(BaseModel):
     request_id: str | None = Field(default=None, min_length=1)
     run_kind: RunKind | None = None
     question: str = Field(min_length=1)
-    correctness: float = Field(ge=0, le=5)
-    groundedness: float = Field(ge=0, le=5)
-    citation_accuracy: float = Field(ge=0, le=5)
-    completeness: float = Field(ge=0, le=5)
-    usefulness: float = Field(ge=0, le=5)
+    answer_correctness: float | None = Field(default=None, ge=0, le=5)
+    faithfulness: float = Field(ge=0, le=5)
+    citation_precision: float = Field(ge=0, le=5)
+    reference_coverage: float | None = Field(default=None, ge=0, le=5)
+    answer_relevance: float = Field(ge=0, le=5)
+    presentation_quality: float = Field(ge=0, le=5)
     average_score: float = Field(ge=0, le=5)
     unsupported_claim_count: int = Field(ge=0)
     feedback_useful: int = Field(ge=0)
@@ -635,6 +641,7 @@ class EvaluationResultSummary(BaseModel):
     latency_ms_total: int | None = Field(default=None, ge=0)
     total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
     notes: str = ""
+    answer_evidence: list[EvidenceItem] = Field(default_factory=list)
     created_at: datetime
 
 

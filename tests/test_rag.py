@@ -6,6 +6,7 @@ from pathlib import Path
 from repo_research.models import (
     AnswerEvaluationResult,
     EvaluationRecord,
+    EvaluationSourceType,
     ModelUsage,
     ParsedChunk,
     RagMode,
@@ -65,15 +66,18 @@ class FakeJudge:
         *,
         record: EvaluationRecord,
         answer: object,
+        source_type: EvaluationSourceType = EvaluationSourceType.DATASET,
     ) -> AnswerEvaluationResult:
+        del answer, source_type
         return AnswerEvaluationResult(
             record_id=record.id,
             question=record.question,
-            correctness=4,
-            groundedness=5,
-            citation_accuracy=5,
-            completeness=4,
-            usefulness=4,
+            answer_correctness=4,
+            faithfulness=5,
+            citation_precision=5,
+            reference_coverage=4,
+            answer_relevance=4,
+            presentation_quality=4,
             unsupported_claim_count=0,
         )
 
@@ -518,7 +522,7 @@ def test_answer_evaluation_writes_stable_report(tmp_path: Path) -> None:
     write_answer_evaluation_report(results, report)
 
     assert results[0].record_id == "locate_001"
-    assert '"citation_accuracy": 5.0' in report.read_text(encoding="utf-8")
+    assert '"citation_precision": 5.0' in report.read_text(encoding="utf-8")
 
 
 def _repository(root: Path) -> RepositoryIdentity:

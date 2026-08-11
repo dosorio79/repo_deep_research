@@ -197,7 +197,10 @@ export function TechnicalResearchConsole() {
               </TabsList>
               <TabsContent value="answer" className="mt-3 space-y-3">
                 <AnswerPanel answer={result.answer} />
-                <ResearchStepsPanel steps={result.answer?.research_steps} />
+                <ResearchStepsPanel
+                  steps={result.answer?.research_steps}
+                  evidence={result.answer?.evidence}
+                />
                 <EvidencePanel evidence={result.answer?.evidence ?? null} />
               </TabsContent>
               <TabsContent value="evidence" className="mt-3">

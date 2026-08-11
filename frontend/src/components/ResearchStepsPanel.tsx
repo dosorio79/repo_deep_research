@@ -1,8 +1,15 @@
 import { Route } from "lucide-react";
+import { EvidenceReferences } from "@/components/EvidenceReferences";
 import { EmptyLine, Panel } from "@/components/primitives";
-import type { ResearchStep } from "@/lib/rag-types";
+import type { EvidenceItem, ResearchStep } from "@/lib/rag-types";
 
-export function ResearchStepsPanel({ steps }: { steps: ResearchStep[] | null | undefined }) {
+export function ResearchStepsPanel({
+  steps,
+  evidence,
+}: {
+  steps: ResearchStep[] | null | undefined;
+  evidence?: EvidenceItem[] | null | undefined;
+}) {
   if (!Array.isArray(steps) || steps.length === 0) {
     return null;
   }
@@ -26,9 +33,9 @@ export function ResearchStepsPanel({ steps }: { steps: ResearchStep[] | null | u
                 <p className="text-[13px] font-medium">{step.action}</p>
                 <p className="mt-1 text-[12px] text-muted-foreground">{step.rationale}</p>
                 {step.evidence_ids.length > 0 ? (
-                  <p className="mt-1 mono text-[11px] text-muted-foreground">
-                    evidence: {step.evidence_ids.join(", ")}
-                  </p>
+                  <div className="mt-1">
+                    <EvidenceReferences evidenceIds={step.evidence_ids} evidence={evidence} />
+                  </div>
                 ) : (
                   <EmptyLine>No cited evidence for this step.</EmptyLine>
                 )}
