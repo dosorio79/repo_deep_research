@@ -37,7 +37,18 @@ const okResult: RagRunResult = {
     mode: "locate",
     summary: "Settings validates runtime config.",
     implementation_flow: [],
-    evidence: [],
+    evidence: [
+      {
+        evidence_id: "E1",
+        path: "src/repo_research/config.py",
+        start_line: 20,
+        end_line: 36,
+        symbol: "Settings",
+        score: 0.92,
+        reason: "Defines runtime configuration validation.",
+        content: "class Settings(BaseSettings): ...",
+      },
+    ],
     relevant_files: ["src/repo_research/config.py"],
     relevant_symbols: ["Settings"],
     change_targets: [],
@@ -315,6 +326,24 @@ describe("Research route", () => {
       expect.any(AbortSignal),
     );
     expect(runAgenticResearch).not.toHaveBeenCalled();
+  });
+
+  it("opens evidence details from a research evidence highlight", async () => {
+    vi.mocked(runRagQuery).mockResolvedValue(okResult);
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await ingestSampleRepository(user);
+    await user.type(screen.getByLabelText("Question"), "Where is config validated?");
+    await user.click(screen.getByRole("button", { name: "Run query" }));
+
+    await user.click(await screen.findByRole("button", { name: "Open evidence E1" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Evidence detail" });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText("src/repo_research/config.py")).toBeInTheDocument();
+    expect(within(dialog).getByText("class Settings(BaseSettings): ...")).toBeInTheDocument();
   });
 
   it("submits agentic research to /research with a retrieval_limit field", async () => {

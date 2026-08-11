@@ -112,6 +112,11 @@ reference coverage are unavailable because there is no independent ground-truth
 record. The dashboard omits unavailable values from metric averages and shows
 persisted answer evidence so evidence IDs can be inspected.
 
+Older monitored answer snapshots can be metadata-only if they were recorded
+before evidence snippets were captured. The dashboard still opens those
+evidence details with path, symbol, line range, and reason, but it does not
+live-read repository files to backfill missing snippet content.
+
 When `--persist` is supplied, dataset evaluations write `evaluation_results`
 with the dataset `record_id` and no `request_id`, because generated dataset
 answers are not stored in `answer_snapshots`. Monitored-run evaluations keep the

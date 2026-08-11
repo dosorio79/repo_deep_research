@@ -71,6 +71,10 @@ The command emits a `RagRunResult` JSON document with:
   settings, chunk counts, latency, model usage, estimated cost, and tool-call
   count.
 
+In the web app, evidence IDs are inspectable from answer references, research
+steps, change targets, and evidence highlights. New answers include the
+retrieved content snippet used for each evidence item.
+
 If retrieval or citation validation is insufficient, the command returns an
 explicit `insufficient_evidence` answer instead of an unsupported claim.
 

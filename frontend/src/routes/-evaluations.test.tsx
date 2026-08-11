@@ -139,7 +139,17 @@ const resultList: EvaluationResultList = {
       total_estimated_cost_usd: "0.006",
       notes: "Missed one caveat.",
       created_at: "2026-08-11T12:03:00Z",
-      answer_evidence: [],
+      answer_evidence: [
+        {
+          evidence_id: "E7",
+          path: "src/repo_research/recording_store.py",
+          start_line: 620,
+          end_line: 648,
+          symbol: null,
+          score: 0.84,
+          reason: "Defines persisted answer snapshot storage.",
+        },
+      ],
     },
   ],
 };
@@ -210,6 +220,8 @@ describe("Evaluations route", () => {
     expect(screen.getByText("Which modules changed for answer evaluation?")).toBeInTheDocument();
     expect(screen.getAllByText("n/a").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Open evidence E29" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open evidence E7" })).toBeInTheDocument();
+    expect(screen.getByText("metadata only")).toBeInTheDocument();
   });
 
   it("opens evidence details from an evaluation result evidence id", async () => {
@@ -226,5 +238,22 @@ describe("Evaluations route", () => {
     expect(screen.getByText("app/services/file_reader.py")).toBeInTheDocument();
     expect(screen.getByText("_file_type_from_filename")).toBeInTheDocument();
     expect(screen.getByText("def _file_type_from_filename(filename): ...")).toBeInTheDocument();
+  });
+
+  it("opens metadata-only evidence details for older monitored snapshots", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getEvaluationSummary).mockResolvedValue(populatedSummary);
+    vi.mocked(getEvaluationRuns).mockResolvedValue(runList);
+    vi.mocked(getEvaluationResults).mockResolvedValue(resultList);
+
+    renderEvaluationsRoute();
+
+    await user.click(await screen.findByRole("button", { name: "Open evidence E7" }));
+
+    expect(screen.getByRole("dialog", { name: "Evidence detail" })).toBeInTheDocument();
+    expect(screen.getByText("src/repo_research/recording_store.py")).toBeInTheDocument();
+    expect(
+      screen.getByText("No content snippet captured for this older recorded answer."),
+    ).toBeInTheDocument();
   });
 });
