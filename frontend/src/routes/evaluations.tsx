@@ -7,11 +7,7 @@ import { ApiError } from "@/components/ApiError";
 import { AppShell } from "@/components/AppShell";
 import { EmptyLine, Field, Panel } from "@/components/primitives";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import {
-  getEvaluationResults,
-  getEvaluationRuns,
-  getEvaluationSummary,
-} from "@/lib/rag-client";
+import { getEvaluationResults, getEvaluationRuns, getEvaluationSummary } from "@/lib/rag-client";
 import type {
   ApiErrorShape,
   EvaluationDashboardSummary,
@@ -240,13 +236,7 @@ function ChartPanel({ title, children }: { title: string; children: ReactNode })
   return <Panel title={title}>{children}</Panel>;
 }
 
-function EvaluationRunTable({
-  runs,
-  loading,
-}: {
-  runs: EvaluationRunSummary[];
-  loading: boolean;
-}) {
+function EvaluationRunTable({ runs, loading }: { runs: EvaluationRunSummary[]; loading: boolean }) {
   if (loading) return <EmptyLine>Loading evaluation runs.</EmptyLine>;
   if (runs.length === 0) return <EmptyLine>No persisted evaluation runs.</EmptyLine>;
   return (
@@ -287,7 +277,8 @@ function EvaluationResultTable({
   loading: boolean;
 }) {
   if (loading) return <EmptyLine>Loading evaluated answers.</EmptyLine>;
-  if (results.length === 0) return <EmptyLine>No evaluated answers match the current view.</EmptyLine>;
+  if (results.length === 0)
+    return <EmptyLine>No evaluated answers match the current view.</EmptyLine>;
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[920px] text-left text-[12px]">
@@ -349,7 +340,9 @@ function feedbackChartData(results: EvaluationResultSummary[]) {
 
 function averageResultScore(results: EvaluationResultSummary[]) {
   if (results.length === 0) return 0;
-  return roundScore(results.reduce((total, result) => total + result.average_score, 0) / results.length);
+  return roundScore(
+    results.reduce((total, result) => total + result.average_score, 0) / results.length,
+  );
 }
 
 function countFeedbackLinked(results: EvaluationResultSummary[]) {

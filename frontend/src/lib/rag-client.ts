@@ -213,11 +213,7 @@ export async function getEvaluationRuns(
   params: EvaluationRunListParams = {},
   signal?: AbortSignal,
 ): Promise<EvaluationRunList> {
-  return getJson<EvaluationRunList>(
-    baseUrl,
-    `/evaluations/runs${queryString(params)}`,
-    signal,
-  );
+  return getJson<EvaluationRunList>(baseUrl, `/evaluations/runs${queryString(params)}`, signal);
 }
 
 export async function getEvaluationResults(

@@ -3,11 +3,7 @@ import { render, screen } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route } from "./evaluations";
-import {
-  getEvaluationResults,
-  getEvaluationRuns,
-  getEvaluationSummary,
-} from "@/lib/rag-client";
+import { getEvaluationResults, getEvaluationRuns, getEvaluationSummary } from "@/lib/rag-client";
 import type {
   EvaluationDashboardSummary,
   EvaluationResultList,
@@ -155,7 +151,9 @@ describe("Evaluations route", () => {
 
     renderEvaluationsRoute();
 
-    expect(await screen.findByText(/No persisted evaluation results are available/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/No persisted evaluation results are available/),
+    ).toBeInTheDocument();
   });
 
   it("shows an API error without also claiming there are no results", async () => {
@@ -167,7 +165,9 @@ describe("Evaluations route", () => {
     renderEvaluationsRoute();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Network error");
-    expect(screen.queryByText(/No persisted evaluation results are available/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/No persisted evaluation results are available/),
+    ).not.toBeInTheDocument();
   });
 
   it("renders persisted evaluation summary, charts, runs, and result rows", async () => {
