@@ -91,6 +91,7 @@ make stack-up
 Then open `http://localhost:3000`, ingest a local repository, run at least one
 direct and one agentic question, submit feedback, and inspect:
 
+- `http://localhost:8000` redirects to Swagger UI
 - `http://localhost:8000/docs`
 - `http://localhost:3000/monitoring`
 - `http://localhost:3000/evaluations`
@@ -112,9 +113,9 @@ make test-all
 ```
 
 After the RAG and research runs, confirm the browser can load the home page,
-`/monitoring`, `/evaluations`, and the API Swagger UI at
-`http://localhost:8000/docs`. The generated OpenAPI contract is committed at
-`docs/api/openapi.json`.
+`/monitoring`, `/evaluations`, and the API Swagger UI. The API root
+`http://localhost:8000` redirects to `http://localhost:8000/docs`; the generated
+OpenAPI contract is committed at `docs/api/openapi.json`.
 
 ## Full Stack
 

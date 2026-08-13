@@ -14,6 +14,28 @@ The app provides a CLI, FastAPI backend, React frontend, local Qdrant vector
 search, PostgreSQL-backed monitoring and feedback, direct RAG, bounded agentic
 research, and opt-in answer evaluation.
 
+## Stack At A Glance
+
+![React](https://img.shields.io/badge/React-Frontend-61DAFB?logo=react&logoColor=111)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-Vector_Search-DC244C)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Monitoring_Storage-4169E1?logo=postgresql&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-BYOK_Model_Calls-412991?logo=openai&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker_Compose-Local_Stack-2496ED?logo=docker&logoColor=white)
+
+```mermaid
+flowchart LR
+  user[User browser / CLI] --> frontend[React UI]
+  user --> cli[repo-research CLI]
+  frontend --> api[FastAPI API<br/>Swagger at /docs]
+  cli --> services[Repo research services]
+  api --> services
+  services --> qdrant[Qdrant<br/>dense sparse hybrid search]
+  services --> postgres[PostgreSQL<br/>monitoring feedback evaluations]
+  services --> openai[OpenAI API<br/>BYOK]
+  services --> repo[Local Python repository]
+```
+
 ## Release Status
 
 The latest release is `v0.5.7`. The next planned delivery is
@@ -54,8 +76,9 @@ make stack-up
 
 Then open `http://localhost:3000`, ingest a repository, ask a direct or agentic
 question, submit feedback, and inspect monitoring and evaluation dashboards.
-The FastAPI Swagger UI is available at `http://localhost:8000/docs`; the
-versioned OpenAPI contract is stored at [docs/api/openapi.json](docs/api/openapi.json).
+Opening `http://localhost:8000` redirects to the FastAPI Swagger UI at
+`http://localhost:8000/docs`; the versioned OpenAPI contract is stored at
+[docs/api/openapi.json](docs/api/openapi.json).
 
 ## Main Commands
 

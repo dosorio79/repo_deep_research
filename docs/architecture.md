@@ -7,7 +7,7 @@ flowchart LR
   User[User Browser / CLI] --> Frontend[React Frontend]
   User --> CLI[repo-research CLI]
 
-  Frontend --> API[FastAPI Backend]
+  Frontend --> API[FastAPI Backend / Swagger UI]
   CLI --> Core[Repo Research Services]
   API --> Core
 
@@ -82,7 +82,9 @@ reads, and total calls.
 ## API Surface
 
 ```text
-GET  /            API index with endpoint listing
+GET  /            Redirect to Swagger UI at /docs
+GET  /docs        Swagger UI for the FastAPI contract
+GET  /openapi.json  Runtime OpenAPI JSON
 GET  /health      Qdrant dependency health
 POST /repositories/ingest   Parse and index a repository
 POST /rag         Direct RAG answer with trace metadata
