@@ -25,6 +25,12 @@ research, and opt-in answer evaluation.
 
 ![Local Alpha stack diagram](docs/assets/local-alpha-stack.svg)
 
+![Local Alpha research workflow snapshot](docs/assets/main-alpha-snapshot.png)
+
+The alpha app snapshot shows the primary repository research workflow from the
+local Docker stack, with repository ingestion, direct or agentic question modes,
+search settings, and backend health visible on the first screen.
+
 ```mermaid
 flowchart LR
   user[User browser / CLI] --> frontend[React UI]
