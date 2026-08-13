@@ -57,18 +57,18 @@ datasets and `make evaluate-retrieval`.
 
 ## Measured Retrieval Baseline
 
-On 2026-07-24, commit `5e23291`, this repository was re-ingested into a local
+On 2026-08-13, the local alpha branch was re-ingested into a local
 `repo_chunks_v2` collection and evaluated at five results per question. The
 generated reports are intentionally not committed; the audited measurements are:
 
 | Dataset | Mode | File Hit Rate | File MRR | File Recall | File Precision | Symbol Hit Rate |
 |---|---:|---:|---:|---:|---:|---:|
-| Development | dense | 0.667 | 0.491 | 0.461 | 0.190 | 0.429 |
-| Development | sparse | 0.267 | 0.139 | 0.222 | 0.066 | 0.071 |
-| Development | hybrid | 0.467 | 0.347 | 0.294 | 0.112 | 0.286 |
-| Held-out | dense | 0.733 | 0.539 | 0.589 | 0.247 | 0.600 |
-| Held-out | sparse | 0.467 | 0.236 | 0.356 | 0.100 | 0.333 |
-| Held-out | hybrid | 0.600 | 0.417 | 0.456 | 0.153 | 0.467 |
+| Development | dense | 0.400 | 0.236 | 0.272 | 0.090 | 0.357 |
+| Development | sparse | 0.067 | 0.033 | 0.067 | 0.013 | 0.071 |
+| Development | hybrid | 0.333 | 0.163 | 0.250 | 0.077 | 0.357 |
+| Held-out | dense | 0.467 | 0.313 | 0.311 | 0.200 | 0.400 |
+| Held-out | sparse | 0.133 | 0.080 | 0.100 | 0.030 | 0.267 |
+| Held-out | hybrid | 0.400 | 0.261 | 0.278 | 0.103 | 0.333 |
 
 Dense retrieval is therefore the production default
 (`RDR_RETRIEVAL_MODE=dense`). Hybrid remains available for future evaluated

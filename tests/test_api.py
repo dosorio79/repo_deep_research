@@ -1008,16 +1008,16 @@ async def test_retrieval_evaluation_results_returns_recorder_rows() -> None:
             RetrievalEvaluationSummary(
                 dataset="Held-out",
                 mode=RetrievalMode.DENSE,
-                source_label="eval/held_out.json at commit 5e23291",
+                source_label="eval/held_out.json local alpha smoke",
                 limit=5,
                 record_count=15,
-                file_hit_rate=0.733,
-                file_mrr=0.539,
-                file_recall=0.589,
-                file_precision=0.247,
-                symbol_hit_rate=0.6,
+                file_hit_rate=0.467,
+                file_mrr=0.313,
+                file_recall=0.311,
+                file_precision=0.2,
+                symbol_hit_rate=0.4,
                 selected=True,
-                measured_at=datetime(2026, 7, 24, tzinfo=UTC),
+                measured_at=datetime(2026, 8, 13, tzinfo=UTC),
             )
         ]
     )
@@ -1040,7 +1040,7 @@ async def test_retrieval_evaluation_results_returns_recorder_rows() -> None:
     assert result["dataset"] == "Held-out"
     assert result["mode"] == "dense"
     assert result["selected"] is True
-    assert result["file_hit_rate"] == 0.733
+    assert result["file_hit_rate"] == 0.467
 
 
 @pytest.mark.anyio

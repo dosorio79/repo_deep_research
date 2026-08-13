@@ -1163,36 +1163,46 @@ _SCHEMA_STATEMENTS = (
         measured_at
     ) VALUES
         (
-            'Development', 'dense', 'eval/development.json at commit 5e23291',
-            5, 15, 0.667, 0.491, 0.461, 0.190, 0.429, false,
-            '2026-07-24T00:00:00Z'
+            'Development', 'dense', 'eval/development.json local alpha smoke',
+            5, 15, 0.400, 0.236, 0.272, 0.090, 0.357, false,
+            '2026-08-13T00:00:00Z'
         ),
         (
-            'Development', 'sparse', 'eval/development.json at commit 5e23291',
-            5, 15, 0.267, 0.139, 0.222, 0.066, 0.071, false,
-            '2026-07-24T00:00:00Z'
+            'Development', 'sparse', 'eval/development.json local alpha smoke',
+            5, 15, 0.067, 0.033, 0.067, 0.013, 0.071, false,
+            '2026-08-13T00:00:00Z'
         ),
         (
-            'Development', 'hybrid', 'eval/development.json at commit 5e23291',
-            5, 15, 0.467, 0.347, 0.294, 0.112, 0.286, false,
-            '2026-07-24T00:00:00Z'
+            'Development', 'hybrid', 'eval/development.json local alpha smoke',
+            5, 15, 0.333, 0.163, 0.250, 0.077, 0.357, false,
+            '2026-08-13T00:00:00Z'
         ),
         (
-            'Held-out', 'dense', 'eval/held_out.json at commit 5e23291',
-            5, 15, 0.733, 0.539, 0.589, 0.247, 0.600, true,
-            '2026-07-24T00:00:00Z'
+            'Held-out', 'dense', 'eval/held_out.json local alpha smoke',
+            5, 15, 0.467, 0.313, 0.311, 0.200, 0.400, true,
+            '2026-08-13T00:00:00Z'
         ),
         (
-            'Held-out', 'sparse', 'eval/held_out.json at commit 5e23291',
-            5, 15, 0.467, 0.236, 0.356, 0.100, 0.333, false,
-            '2026-07-24T00:00:00Z'
+            'Held-out', 'sparse', 'eval/held_out.json local alpha smoke',
+            5, 15, 0.133, 0.080, 0.100, 0.030, 0.267, false,
+            '2026-08-13T00:00:00Z'
         ),
         (
-            'Held-out', 'hybrid', 'eval/held_out.json at commit 5e23291',
-            5, 15, 0.600, 0.417, 0.456, 0.153, 0.467, false,
-            '2026-07-24T00:00:00Z'
+            'Held-out', 'hybrid', 'eval/held_out.json local alpha smoke',
+            5, 15, 0.400, 0.261, 0.278, 0.103, 0.333, false,
+            '2026-08-13T00:00:00Z'
         )
-    ON CONFLICT (dataset, mode) DO NOTHING
+    ON CONFLICT (dataset, mode) DO UPDATE SET
+        source_label = EXCLUDED.source_label,
+        limit_value = EXCLUDED.limit_value,
+        record_count = EXCLUDED.record_count,
+        file_hit_rate = EXCLUDED.file_hit_rate,
+        file_mrr = EXCLUDED.file_mrr,
+        file_recall = EXCLUDED.file_recall,
+        file_precision = EXCLUDED.file_precision,
+        symbol_hit_rate = EXCLUDED.symbol_hit_rate,
+        selected = EXCLUDED.selected,
+        measured_at = EXCLUDED.measured_at
     """,
 )
 

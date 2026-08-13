@@ -123,9 +123,7 @@ def test_recording_store_initializes_postgres_schema() -> None:
         "CREATE TABLE IF NOT EXISTS retrieval_evaluation_results" in sql
         for sql in statements
     )
-    assert any(
-        "INSERT INTO retrieval_evaluation_results" in sql for sql in statements
-    )
+    assert any("INSERT INTO retrieval_evaluation_results" in sql for sql in statements)
     assert any("monitoring_runs_session_id_idx" in sql for sql in statements)
     assert any("monitoring_runs_completed_at_idx" in sql for sql in statements)
     assert any("feedback_events_session_id_idx" in sql for sql in statements)
@@ -444,7 +442,7 @@ def test_recording_store_returns_retrieval_evaluation_results() -> None:
         ("Development", RetrievalMode.DENSE),
     ]
     assert results.results[0].selected is True
-    assert results.results[0].file_hit_rate == 0.733
+    assert results.results[0].file_hit_rate == 0.467
 
 
 def test_recording_store_returns_monitoring_summary() -> None:
@@ -827,17 +825,18 @@ def _retrieval_evaluation_row(
     mode: str,
     selected: bool = False,
 ) -> dict[str, Any]:
+    dataset_path = dataset.lower().replace("-", "_")
     return {
         "dataset": dataset,
         "mode": mode,
-        "source_label": f"eval/{dataset.lower().replace('-', '_')}.json at commit 5e23291",
+        "source_label": f"eval/{dataset_path}.json local alpha smoke",
         "limit_value": 5,
         "record_count": 15,
-        "file_hit_rate": Decimal("0.733") if selected else Decimal("0.600"),
-        "file_mrr": Decimal("0.539") if selected else Decimal("0.417"),
-        "file_recall": Decimal("0.589") if selected else Decimal("0.456"),
-        "file_precision": Decimal("0.247") if selected else Decimal("0.153"),
-        "symbol_hit_rate": Decimal("0.600") if selected else Decimal("0.467"),
+        "file_hit_rate": Decimal("0.467") if selected else Decimal("0.400"),
+        "file_mrr": Decimal("0.313") if selected else Decimal("0.261"),
+        "file_recall": Decimal("0.311") if selected else Decimal("0.278"),
+        "file_precision": Decimal("0.200") if selected else Decimal("0.103"),
+        "symbol_hit_rate": Decimal("0.400") if selected else Decimal("0.333"),
         "selected": selected,
-        "measured_at": datetime(2026, 7, 24, tzinfo=UTC),
+        "measured_at": datetime(2026, 8, 13, tzinfo=UTC),
     }
