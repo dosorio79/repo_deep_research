@@ -176,9 +176,11 @@ describe("Evaluations route", () => {
 
     renderEvaluationsRoute();
 
-    expect(
-      await screen.findByText(/No persisted evaluation results are available/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Search evaluation highlights")).toBeInTheDocument();
+    expect(screen.getByText("Selected retrieval mode")).toBeInTheDocument();
+    expect(screen.getByText("Held-out file hit rate")).toBeInTheDocument();
+    expect(screen.getAllByText("73%").length).toBeGreaterThan(0);
+    expect(screen.getByText(/No persisted evaluation results are available/)).toBeInTheDocument();
   });
 
   it("shows an API error without also claiming there are no results", async () => {
@@ -202,7 +204,9 @@ describe("Evaluations route", () => {
 
     renderEvaluationsRoute();
 
-    expect(await screen.findByText("Evaluated answers")).toBeInTheDocument();
+    expect(await screen.findByText("Search evaluation highlights")).toBeInTheDocument();
+    expect(screen.getByText("Selected retrieval mode")).toBeInTheDocument();
+    expect(screen.getByText("Evaluated answers")).toBeInTheDocument();
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Average score").length).toBeGreaterThan(0);
     expect(screen.getAllByText("4.2").length).toBeGreaterThan(0);
