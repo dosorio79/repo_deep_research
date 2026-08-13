@@ -1,12 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { Activity, ClipboardCheck, Search, Terminal } from "lucide-react";
+import { Activity, ClipboardCheck, Lock, Search, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/", label: "Research", icon: Search },
-  { to: "/monitoring", label: "Monitoring", icon: Activity },
-  { to: "/evaluations", label: "Evaluations", icon: ClipboardCheck },
+  { to: "/monitoring", label: "Admin Monitoring", icon: Activity, admin: true },
+  { to: "/evaluations", label: "Admin Evaluations", icon: ClipboardCheck, admin: true },
 ] as const;
 
 export function Navigation() {
@@ -24,6 +24,7 @@ export function Navigation() {
         >
           <item.icon className="h-3.5 w-3.5" aria-hidden />
           <span>{item.label}</span>
+          {"admin" in item ? <Lock className="h-3 w-3" aria-hidden /> : null}
         </Link>
       ))}
     </nav>

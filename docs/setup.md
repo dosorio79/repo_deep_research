@@ -77,7 +77,7 @@ adapters and do not require paid model calls.
 
 ## Local Alpha BYOK Mode
 
-`v0.5.8 Local Alpha` is planned as a local-only BYOK release. The expected user
+`v0.5.8 Local Alpha` is a local-only BYOK release. The expected user
 path is:
 
 ```bash
@@ -89,15 +89,19 @@ make stack-up
 ```
 
 Then open `http://localhost:3000`, ingest a local repository, run at least one
-direct and one agentic question, submit feedback, and inspect:
+direct and one agentic question, submit feedback, and inspect the admin
+evidence surfaces:
 
+- `http://localhost:8000` redirects to Swagger UI
 - `http://localhost:8000/docs`
 - `http://localhost:3000/monitoring`
 - `http://localhost:3000/evaluations`
 
 This alpha does not target free hosted deployment. Running the full product
 requires a browser frontend, FastAPI backend, Qdrant, PostgreSQL, local
-repository access, and user-provided model credentials.
+repository access, and user-provided model credentials. The admin labels and
+lock icons identify operator evidence views; they are not production
+authentication in this local alpha.
 
 Local Alpha validation checklist:
 
@@ -112,9 +116,9 @@ make test-all
 ```
 
 After the RAG and research runs, confirm the browser can load the home page,
-`/monitoring`, `/evaluations`, and the API Swagger UI at
-`http://localhost:8000/docs`. The generated OpenAPI contract is committed at
-`docs/api/openapi.json`.
+the admin `/monitoring` and `/evaluations` routes, and the API Swagger UI. The
+API root `http://localhost:8000` redirects to `http://localhost:8000/docs`; the
+generated OpenAPI contract is committed at `docs/api/openapi.json`.
 
 ## Full Stack
 
@@ -126,6 +130,11 @@ make stack-up
 
 The frontend is available at `http://localhost:3000`; the API is available at
 `http://localhost:8000`. The frontend proxies API requests to the backend.
+
+Use `make stack-rebuild` after Dockerfile, dependency, or frontend build
+changes. Day-to-day alpha testing should use `make stack-up` so Docker can
+reuse existing images. `make stack-stop` stops existing containers without
+removing them; `make stack-start` starts those stopped containers again.
 
 Stop the stack:
 
@@ -169,4 +178,4 @@ The project uses two long-lived branches:
 
 Feature branches start from `dev`. Promote to production with a pull request
 from `dev` to `main`, then tag `main` with the release version. The current
-release is `v0.5.7`.
+release is `v0.5.8`.

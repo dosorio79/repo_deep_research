@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode, ComponentType } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Route } from "./index";
+import { RESEARCH_HEAD, Route } from "./index";
 import { loadLatestRagRun, saveLatestRagRun } from "@/lib/latest-rag-run";
 import {
   getBackendHealth,
@@ -164,6 +164,15 @@ describe("Research route", () => {
     vi.mocked(saveLatestRagRun).mockReset();
     window.localStorage.clear();
     window.localStorage.setItem("repo-deep-research-session-id", "browser-session");
+  });
+
+  it("uses product-focused browser metadata", () => {
+    expect(RESEARCH_HEAD.meta).toContainEqual({ title: "Repo Deep Research" });
+    expect(RESEARCH_HEAD.meta).toContainEqual({
+      property: "og:title",
+      content: "Repo Deep Research",
+    });
+    expect(JSON.stringify(RESEARCH_HEAD)).not.toMatch(/capstone/i);
   });
 
   it("restores the latest successful result when returning to research", () => {

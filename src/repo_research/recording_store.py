@@ -42,6 +42,8 @@ from repo_research.models import (
     RagMode,
     RagRunTrace,
     ResearchAnswer,
+    RetrievalEvaluationList,
+    RetrievalEvaluationSummary,
     RetrievalMode,
     RetrievalVolumeSummary,
     RunKind,
@@ -116,10 +118,15 @@ class NoOpRecordingStore:
         limit: int = 50,
         source_type: EvaluationSourceType | None = None,
         run_kind: RunKind | None = None,
+        context_label: str | None = None,
     ) -> EvaluationResultList:
         """Return no evaluation results when persistence is disabled."""
-        del limit, source_type, run_kind
+        del limit, source_type, run_kind, context_label
         return EvaluationResultList()
+
+    def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
+        """Return no retrieval-evaluation rows when persistence is disabled."""
+        return RetrievalEvaluationList()
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return an empty dashboard summary."""
@@ -345,6 +352,7 @@ class PostgresRecordingStore:
         limit: int = 50,
         source_type: EvaluationSourceType | None = None,
         run_kind: RunKind | None = None,
+        context_label: str | None = None,
     ) -> EvaluationResultList:
         """Return recent persisted judged answer results."""
         with self._connect() as connection:
@@ -362,8 +370,31 @@ class PostgresRecordingStore:
             for result in results
             if (source_type is None or result.source_type is source_type)
             and (run_kind is None or result.run_kind is run_kind)
+            and (
+                context_label is None
+                or result.context_label.lower() == context_label.lower()
+            )
         ]
         return EvaluationResultList(results=filtered[:limit])
+
+    def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
+        """Return persisted retrieval-evaluation metrics for dashboard highlights."""
+        with self._connect() as connection:
+            rows = list(
+                connection.execute(_SELECT_RETRIEVAL_EVALUATION_RESULT_ROWS).fetchall()
+            )
+        results = [
+            _retrieval_evaluation_summary_from_row(row)
+            for row in sorted(
+                rows,
+                key=lambda item: (
+                    str(item["dataset"]).lower() != "held-out",
+                    not bool(item["selected"]),
+                    str(item["mode"]),
+                ),
+            )
+        ]
+        return RetrievalEvaluationList(results=results)
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return dashboard aggregates from persisted monitoring and feedback."""
@@ -595,6 +626,10 @@ def _evaluation_run_summary_from_row(
         evaluation_run_id=str(row["evaluation_run_id"]),
         source_type=EvaluationSourceType(str(row["source_type"])),
         source_label=str(row["source_label"]),
+        context_labels=_evaluation_context_labels(
+            source_label=str(row["source_label"]),
+            result_rows=run_results,
+        ),
         judge_model=str(row["judge_model"]),
         status=EvaluationRunStatus(str(row["status"])),
         started_at=row["started_at"],
@@ -620,6 +655,10 @@ def _evaluation_result_summary_from_row(row: dict[str, Any]) -> EvaluationResult
         evaluation_run_id=str(row["evaluation_run_id"]),
         source_type=EvaluationSourceType(str(row["source_type"])),
         source_label=str(row["source_label"]),
+        context_label=_evaluation_context_label(row),
+        repository_name=row.get("repository_name"),
+        branch=row.get("branch"),
+        commit_hash=row.get("commit_hash"),
         record_id=row.get("record_id"),
         request_id=row.get("request_id"),
         run_kind=RunKind(str(run_kind_value)) if run_kind_value else None,
@@ -642,6 +681,25 @@ def _evaluation_result_summary_from_row(row: dict[str, Any]) -> EvaluationResult
     )
 
 
+def _retrieval_evaluation_summary_from_row(
+    row: dict[str, Any],
+) -> RetrievalEvaluationSummary:
+    return RetrievalEvaluationSummary(
+        dataset=str(row["dataset"]),
+        mode=RetrievalMode(str(row["mode"])),
+        source_label=str(row["source_label"]),
+        limit=int(row["limit_value"]),
+        record_count=int(row["record_count"]),
+        file_hit_rate=float(row["file_hit_rate"]),
+        file_mrr=float(row["file_mrr"]),
+        file_recall=float(row["file_recall"]),
+        file_precision=float(row["file_precision"]),
+        symbol_hit_rate=float(row["symbol_hit_rate"]),
+        selected=bool(row["selected"]),
+        measured_at=row["measured_at"],
+    )
+
+
 def _average_result_score(row: dict[str, Any]) -> float:
     scores = [
         float(row[metric])
@@ -654,6 +712,20 @@ def _average_result_score(row: dict[str, Any]) -> float:
         if row.get(metric) is not None
     ]
     return sum(scores) / len(scores) if scores else 0
+
+
+def _evaluation_context_label(row: dict[str, Any]) -> str:
+    repository_name = row.get("repository_name")
+    if repository_name:
+        return str(repository_name)
+    return str(row["source_label"])
+
+
+def _evaluation_context_labels(
+    *, source_label: str, result_rows: list[dict[str, Any]]
+) -> list[str]:
+    labels = sorted({_evaluation_context_label(row) for row in result_rows})
+    return labels or [source_label]
 
 
 def _evidence_items_from_json(value: Any) -> list[EvidenceItem]:
@@ -1049,6 +1121,89 @@ _SCHEMA_STATEMENTS = (
     CREATE INDEX IF NOT EXISTS evaluation_results_request_id_idx
     ON evaluation_results (request_id)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS retrieval_evaluation_results (
+        dataset TEXT NOT NULL CHECK (length(dataset) > 0),
+        mode TEXT NOT NULL CHECK (mode IN ('dense', 'sparse', 'hybrid')),
+        source_label TEXT NOT NULL CHECK (length(source_label) > 0),
+        limit_value INTEGER NOT NULL CHECK (limit_value > 0),
+        record_count INTEGER NOT NULL CHECK (record_count >= 0),
+        file_hit_rate NUMERIC NOT NULL CHECK (
+            file_hit_rate >= 0 AND file_hit_rate <= 1
+        ),
+        file_mrr NUMERIC NOT NULL CHECK (file_mrr >= 0 AND file_mrr <= 1),
+        file_recall NUMERIC NOT NULL CHECK (
+            file_recall >= 0 AND file_recall <= 1
+        ),
+        file_precision NUMERIC NOT NULL CHECK (
+            file_precision >= 0 AND file_precision <= 1
+        ),
+        symbol_hit_rate NUMERIC NOT NULL CHECK (
+            symbol_hit_rate >= 0 AND symbol_hit_rate <= 1
+        ),
+        selected BOOLEAN NOT NULL DEFAULT false,
+        measured_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (dataset, mode)
+    )
+    """,
+    """
+    INSERT INTO retrieval_evaluation_results (
+        dataset,
+        mode,
+        source_label,
+        limit_value,
+        record_count,
+        file_hit_rate,
+        file_mrr,
+        file_recall,
+        file_precision,
+        symbol_hit_rate,
+        selected,
+        measured_at
+    ) VALUES
+        (
+            'Development', 'dense', 'eval/development.json local alpha smoke',
+            5, 15, 0.400, 0.236, 0.272, 0.090, 0.357, false,
+            '2026-08-13T00:00:00Z'
+        ),
+        (
+            'Development', 'sparse', 'eval/development.json local alpha smoke',
+            5, 15, 0.067, 0.033, 0.067, 0.013, 0.071, false,
+            '2026-08-13T00:00:00Z'
+        ),
+        (
+            'Development', 'hybrid', 'eval/development.json local alpha smoke',
+            5, 15, 0.333, 0.163, 0.250, 0.077, 0.357, false,
+            '2026-08-13T00:00:00Z'
+        ),
+        (
+            'Held-out', 'dense', 'eval/held_out.json local alpha smoke',
+            5, 15, 0.467, 0.313, 0.311, 0.200, 0.400, true,
+            '2026-08-13T00:00:00Z'
+        ),
+        (
+            'Held-out', 'sparse', 'eval/held_out.json local alpha smoke',
+            5, 15, 0.133, 0.080, 0.100, 0.030, 0.267, false,
+            '2026-08-13T00:00:00Z'
+        ),
+        (
+            'Held-out', 'hybrid', 'eval/held_out.json local alpha smoke',
+            5, 15, 0.400, 0.261, 0.278, 0.103, 0.333, false,
+            '2026-08-13T00:00:00Z'
+        )
+    ON CONFLICT (dataset, mode) DO UPDATE SET
+        source_label = EXCLUDED.source_label,
+        limit_value = EXCLUDED.limit_value,
+        record_count = EXCLUDED.record_count,
+        file_hit_rate = EXCLUDED.file_hit_rate,
+        file_mrr = EXCLUDED.file_mrr,
+        file_recall = EXCLUDED.file_recall,
+        file_precision = EXCLUDED.file_precision,
+        symbol_hit_rate = EXCLUDED.symbol_hit_rate,
+        selected = EXCLUDED.selected,
+        measured_at = EXCLUDED.measured_at
+    """,
 )
 
 _UPSERT_MONITORING_RUN = """
@@ -1379,6 +1534,9 @@ SELECT
     r.evaluation_run_id,
     e.source_type,
     e.source_label,
+    s.repository_name,
+    s.branch,
+    s.commit_hash,
     r.record_id,
     r.request_id,
     r.run_kind,
@@ -1400,6 +1558,23 @@ SELECT
 FROM evaluation_results r
 JOIN evaluation_runs e ON e.evaluation_run_id = r.evaluation_run_id
 LEFT JOIN answer_snapshots s ON s.request_id = r.request_id
+"""
+
+_SELECT_RETRIEVAL_EVALUATION_RESULT_ROWS = """
+SELECT
+    dataset,
+    mode,
+    source_label,
+    limit_value,
+    record_count,
+    file_hit_rate,
+    file_mrr,
+    file_recall,
+    file_precision,
+    symbol_hit_rate,
+    selected,
+    measured_at
+FROM retrieval_evaluation_results
 """
 
 _SELECT_MONITORING_RUN_HISTORY = """

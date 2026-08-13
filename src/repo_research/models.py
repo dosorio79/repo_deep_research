@@ -512,6 +512,20 @@ class EvaluationResult(BaseModel):
     symbol_hit_rate: float = Field(ge=0, le=1)
 
 
+class RetrievalEvaluationSummary(EvaluationResult):
+    """Persisted retrieval-evaluation metric row for dashboard highlights."""
+
+    source_label: str = Field(min_length=1)
+    selected: bool = False
+    measured_at: datetime
+
+
+class RetrievalEvaluationList(BaseModel):
+    """Persisted retrieval-evaluation metrics for the dashboard."""
+
+    results: list[RetrievalEvaluationSummary] = Field(default_factory=list)
+
+
 class AnswerEvaluationResult(BaseModel):
     """LLM-judge scores for one grounded repository answer."""
 
@@ -601,6 +615,7 @@ class EvaluationRunSummary(BaseModel):
     evaluation_run_id: str = Field(min_length=1)
     source_type: EvaluationSourceType
     source_label: str = Field(min_length=1)
+    context_labels: list[str] = Field(default_factory=list)
     judge_model: str = Field(min_length=1)
     status: EvaluationRunStatus
     started_at: datetime
@@ -624,6 +639,10 @@ class EvaluationResultSummary(BaseModel):
     evaluation_run_id: str = Field(min_length=1)
     source_type: EvaluationSourceType
     source_label: str = Field(min_length=1)
+    context_label: str = Field(min_length=1)
+    repository_name: str | None = Field(default=None, min_length=1)
+    branch: str | None = Field(default=None, min_length=1)
+    commit_hash: str | None = Field(default=None, min_length=1)
     record_id: str | None = Field(default=None, min_length=1)
     request_id: str | None = Field(default=None, min_length=1)
     run_kind: RunKind | None = None

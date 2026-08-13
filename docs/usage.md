@@ -112,7 +112,12 @@ make stack-up
 ```
 
 Open `http://localhost:3000`, ingest a repository, run direct or agentic
-research, submit feedback, and inspect monitoring at `/monitoring`.
+research, and submit feedback. Monitoring at `/monitoring` and persisted answer
+quality at `/evaluations` are admin/operator evidence views for local alpha
+validation.
+
+Use `make stack-rebuild` when Docker images need to be rebuilt after dependency,
+Dockerfile, or frontend build changes.
 
 For local development:
 

@@ -14,11 +14,43 @@ The app provides a CLI, FastAPI backend, React frontend, local Qdrant vector
 search, PostgreSQL-backed monitoring and feedback, direct RAG, bounded agentic
 research, and opt-in answer evaluation.
 
+## Stack At A Glance
+
+![React](https://img.shields.io/badge/React-Frontend-61DAFB?logo=react&logoColor=111)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-Vector_Search-DC244C)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Monitoring_Storage-4169E1?logo=postgresql&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-BYOK_Model_Calls-412991?logo=openai&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker_Compose-Local_Stack-2496ED?logo=docker&logoColor=white)
+
+![Local Alpha stack diagram](docs/assets/local-alpha-stack.svg)
+
+![Local Alpha research workflow snapshot](docs/assets/main-alpha-snapshot.png)
+
+The alpha app snapshot shows the primary repository research workflow from the
+local Docker stack, with repository ingestion, direct or agentic question modes,
+search settings, and backend health visible on the first screen.
+
+```mermaid
+flowchart LR
+  user[User browser / CLI] --> frontend[React UI]
+  user --> cli[repo-research CLI]
+  frontend --> api[FastAPI API<br/>Swagger at /docs]
+  cli --> services[Repo research services]
+  api --> services
+  services --> qdrant[Qdrant<br/>dense sparse hybrid search]
+  services --> postgres[PostgreSQL<br/>monitoring feedback evaluations]
+  services --> openai[OpenAI API<br/>BYOK]
+  services --> repo[Local Python repository]
+```
+
 ## Release Status
 
-The latest release is `v0.5.7`. The next planned delivery is
-`v0.5.8 Local Alpha`: a local-first, bring-your-own-key release for technical
+The current release is `v0.5.8 Local Alpha`: a local-first,
+bring-your-own-key release for technical
 users who can run Docker Compose and provide their own OpenAI API key.
+The alpha release handoff is documented in
+[docs/releases/v0.5.8-local-alpha.md](docs/releases/v0.5.8-local-alpha.md).
 
 Cloud deployment is intentionally out of scope for the Local Alpha. The stack
 includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
@@ -53,9 +85,11 @@ make stack-up
 ```
 
 Then open `http://localhost:3000`, ingest a repository, ask a direct or agentic
-question, submit feedback, and inspect monitoring and evaluation dashboards.
-The FastAPI Swagger UI is available at `http://localhost:8000/docs`; the
-versioned OpenAPI contract is stored at [docs/api/openapi.json](docs/api/openapi.json).
+question, submit feedback, and inspect the admin monitoring and evaluation
+dashboards.
+Opening `http://localhost:8000` redirects to the FastAPI Swagger UI at
+`http://localhost:8000/docs`; the versioned OpenAPI contract is stored at
+[docs/api/openapi.json](docs/api/openapi.json).
 
 ## Main Commands
 
@@ -70,8 +104,11 @@ versioned OpenAPI contract is stored at [docs/api/openapi.json](docs/api/openapi
 | `make test-all` | Run backend checks plus frontend tests, typecheck, and build. |
 | `make services-up` | Start Qdrant and PostgreSQL. |
 | `make services-down` | Stop local services. |
-| `make stack-up` | Build and start API, frontend, Qdrant, and PostgreSQL. |
-| `make stack-down` | Stop the full stack. |
+| `make stack-up` | Create and start API, frontend, Qdrant, and PostgreSQL without rebuilding images. |
+| `make stack-down` | Stop and remove the full stack. |
+| `make stack-start` | Start existing full-stack containers. |
+| `make stack-stop` | Stop existing full-stack containers without removing them. |
+| `make stack-rebuild` | Rebuild images and start the full stack. |
 | `make ingest` | Index this repository. |
 | `make rag QUESTION="..."` | Run direct RAG against the indexed repository. |
 | `make research QUESTION="..."` | Run bounded agentic repository research. |
@@ -102,9 +139,9 @@ make stack-up
 ```
 
 Open `http://localhost:3000`, ingest a repository, ask a direct or agentic
-question, submit feedback, inspect persisted monitoring at
-`http://localhost:3000/monitoring`, and review persisted answer evaluations at
-`http://localhost:3000/evaluations`.
+question, and submit feedback. The `/monitoring` and `/evaluations` routes are
+local admin/operator evidence surfaces for the person running the stack, not
+the primary user research workflow.
 
 For local development with FastAPI reload and the Vite dev server:
 
@@ -154,6 +191,8 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Usage](docs/usage.md)
 - [Architecture](docs/architecture.md) including the Local Alpha stack diagram
 - [Evaluation](docs/evaluation.md)
+- [Monitoring KPIs](docs/monitoring.md)
+- [v0.5.8 Local Alpha release notes](docs/releases/v0.5.8-local-alpha.md)
 - [OpenAPI contract](docs/api/openapi.json)
 - [Implementation history](docs/plans/)
 
@@ -163,11 +202,11 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
 Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current user-ready
-MVP stack is released as `v0.5.7`.
+local alpha stack is released as `v0.5.8`.
 
 ## Local Alpha Scope
 
-`v0.5.8 Local Alpha` is planned as the first user-ready alpha. It should prove
+`v0.5.8 Local Alpha` is the first user-ready alpha. It proves
 that a user can run the product locally, bring their own model key, ingest a
 repository, ask grounded repository questions, and inspect monitoring and
 evaluation evidence.
@@ -178,7 +217,8 @@ Included:
 - BYOK OpenAI configuration through `.env.local`.
 - Direct RAG and bounded agentic research paths.
 - Swagger UI and a versioned OpenAPI contract for the local API.
-- Persisted monitoring, feedback, answer snapshots, and evaluation dashboards.
+- Persisted monitoring, feedback, answer snapshots, and admin evaluation
+  dashboards split by repository or dataset context.
 - User-facing screenshots, examples, runbook, and known limitations.
 
 Not included:
@@ -186,5 +226,6 @@ Not included:
 - Hosted public demo.
 - Free Render deployment.
 - Multi-tenant authentication.
+- Production admin authentication or route gating for the local evidence views.
 - Managed cloud persistence.
 - Automatic code changes or pull requests.

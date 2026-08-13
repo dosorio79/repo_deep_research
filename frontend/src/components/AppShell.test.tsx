@@ -8,15 +8,15 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 describe("Navigation", () => {
-  it("exposes primary app surfaces as first-class destinations", () => {
+  it("separates user research from admin evidence destinations", () => {
     render(<Navigation />);
 
     expect(screen.getByRole("link", { name: /research/i })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: /monitoring/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /admin monitoring/i })).toHaveAttribute(
       "href",
       "/monitoring",
     );
-    expect(screen.getByRole("link", { name: /evaluations/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /admin evaluations/i })).toHaveAttribute(
       "href",
       "/evaluations",
     );

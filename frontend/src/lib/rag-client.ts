@@ -18,6 +18,7 @@ import type {
   RepositoryIngestRequest,
   ResearchRequest,
   ResearchRunResult,
+  RetrievalEvaluationList,
 } from "./rag-types";
 
 const ERROR_BODY_PREVIEW_LIMIT = 1200;
@@ -228,6 +229,13 @@ export async function getEvaluationResults(
   );
 }
 
+export async function getRetrievalEvaluationResults(
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<RetrievalEvaluationList> {
+  return getJson<RetrievalEvaluationList>(baseUrl, "/evaluations/retrieval", signal);
+}
+
 export async function ingestRepository(
   baseUrl: string,
   payload: RepositoryIngestRequest,
@@ -252,6 +260,7 @@ function queryString(
   if (params.feedback && params.feedback !== "all") search.set("feedback", params.feedback);
   if (params.source_type) search.set("source_type", params.source_type);
   if (params.status) search.set("status", params.status);
+  if (params.context_label) search.set("context_label", params.context_label);
   const value = search.toString();
   return value ? `?${value}` : "";
 }

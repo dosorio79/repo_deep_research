@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from openai import OpenAIError
 from qdrant_client.http.exceptions import ResponseHandlingException
 
@@ -41,6 +41,7 @@ from repo_research.models import (
     ResearchAnswer,
     ResearchRequest,
     ResearchRunResult,
+    RetrievalEvaluationList,
     RunKind,
     SearchQuery,
     SearchResult,
@@ -148,8 +149,12 @@ class RecordingStore(Protocol):
         limit: int = 50,
         source_type: EvaluationSourceType | None = None,
         run_kind: RunKind | None = None,
+        context_label: str | None = None,
     ) -> EvaluationResultList:
         """Return recent persisted evaluation results."""
+
+    def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
+        """Return persisted retrieval-evaluation metrics."""
 
 
 def package_version() -> str:
@@ -212,18 +217,10 @@ def create_app(
 
     @app.get(
         "/",
-        tags=["system"],
-        summary="List API entry points",
-        operation_id="get_api_index",
+        include_in_schema=False,
     )
-    async def root() -> dict[str, str]:
-        return {
-            "name": "Repo Deep Research API",
-            "health": "/health",
-            "ingest": "POST /repositories/ingest",
-            "direct_rag": "POST /rag",
-            "agentic_rag": "POST /research",
-        }
+    async def root() -> RedirectResponse:
+        return RedirectResponse(url="/docs")
 
     @app.get(
         "/health",
@@ -471,12 +468,24 @@ def create_app(
         limit: int = Query(default=50, ge=1, le=100),
         source_type: EvaluationSourceType | None = None,
         run_kind: RunKind | None = None,
+        context_label: str | None = Query(default=None, min_length=1),
     ) -> EvaluationResultList:
         return get_recording_store().list_evaluation_results(
             limit=limit,
             source_type=source_type,
             run_kind=run_kind,
+            context_label=context_label,
         )
+
+    @app.get(
+        "/evaluations/retrieval",
+        response_model=RetrievalEvaluationList,
+        tags=["evaluations"],
+        summary="List retrieval evaluation metrics",
+        operation_id="list_retrieval_evaluation_results",
+    )
+    async def retrieval_evaluation_results() -> RetrievalEvaluationList:
+        return get_recording_store().list_retrieval_evaluation_results()
 
     return app
 

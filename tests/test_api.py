@@ -39,6 +39,8 @@ from repo_research.models import (
     RepositoryIdentity,
     ResearchAnswer,
     ResearchRequest,
+    RetrievalEvaluationList,
+    RetrievalEvaluationSummary,
     RetrievalMode,
     RunKind,
     SearchResult,
@@ -161,6 +163,7 @@ class FakeRecordingStore:
         )
         self.evaluation_run_list = EvaluationRunList()
         self.evaluation_result_list = EvaluationResultList()
+        self.retrieval_evaluation_list = RetrievalEvaluationList()
 
     def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
         self.runs.append((run_kind, trace))
@@ -190,6 +193,9 @@ class FakeRecordingStore:
 
     def list_evaluation_results(self, **_kwargs: object) -> EvaluationResultList:
         return self.evaluation_result_list
+
+    def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
+        return self.retrieval_evaluation_list
 
 
 def test_record_completed_answer_persists_agentic_snapshot() -> None:
@@ -335,6 +341,9 @@ def test_openapi_schema_has_user_facing_metadata() -> None:
     assert schema["paths"]["/rag"]["post"]["operationId"] == "run_direct_rag"
     assert schema["paths"]["/research"]["post"]["tags"] == ["answers"]
     assert schema["paths"]["/evaluations/results"]["get"]["tags"] == ["evaluations"]
+    assert schema["paths"]["/evaluations/retrieval"]["get"]["operationId"] == (
+        "list_retrieval_evaluation_results"
+    )
 
 
 def test_versioned_openapi_contract_matches_app_schema() -> None:
@@ -391,7 +400,7 @@ async def test_health_reports_qdrant_status() -> None:
 
 
 @pytest.mark.anyio
-async def test_root_identifies_api_routes() -> None:
+async def test_root_redirects_to_swagger_docs() -> None:
     app = create_app(
         settings=Settings(repository_root=Path(".")),
         database=FakeDatabase(healthy=True),
@@ -403,16 +412,10 @@ async def test_root_identifies_api_routes() -> None:
     async with httpx.AsyncClient(
         transport=transport, base_url="http://testserver"
     ) as client:
-        response = await client.get("/")
+        response = await client.get("/", follow_redirects=False)
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "name": "Repo Deep Research API",
-        "health": "/health",
-        "ingest": "POST /repositories/ingest",
-        "direct_rag": "POST /rag",
-        "agentic_rag": "POST /research",
-    }
+    assert response.status_code == 307
+    assert response.headers["location"] == "/docs"
 
 
 @pytest.mark.anyio
@@ -906,6 +909,7 @@ async def test_evaluation_runs_returns_recorder_history() -> None:
                 evaluation_run_id="eval-run-1",
                 source_type=EvaluationSourceType.MONITORED_RUNS,
                 source_label="monitored-runs",
+                context_labels=["repo_deep_research"],
                 judge_model="gpt-5.1",
                 status=EvaluationRunStatus.COMPLETED,
                 started_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
@@ -934,7 +938,9 @@ async def test_evaluation_runs_returns_recorder_history() -> None:
         )
 
     assert response.status_code == 200
-    assert response.json()["runs"][0]["evaluation_run_id"] == "eval-run-1"
+    run = response.json()["runs"][0]
+    assert run["evaluation_run_id"] == "eval-run-1"
+    assert run["context_labels"] == ["repo_deep_research"]
 
 
 @pytest.mark.anyio
@@ -947,6 +953,10 @@ async def test_evaluation_results_returns_recorder_rows() -> None:
                 evaluation_run_id="eval-run-1",
                 source_type=EvaluationSourceType.MONITORED_RUNS,
                 source_label="monitored-runs",
+                context_label="repo_deep_research",
+                repository_name="repo_deep_research",
+                branch="dev",
+                commit_hash="abc123",
                 request_id="request-1",
                 run_kind=RunKind.DIRECT,
                 question="Where is target?",
@@ -984,7 +994,53 @@ async def test_evaluation_results_returns_recorder_rows() -> None:
         )
 
     assert response.status_code == 200
-    assert response.json()["results"][0]["result_id"] == "result-1"
+    result = response.json()["results"][0]
+    assert result["result_id"] == "result-1"
+    assert result["context_label"] == "repo_deep_research"
+    assert result["repository_name"] == "repo_deep_research"
+
+
+@pytest.mark.anyio
+async def test_retrieval_evaluation_results_returns_recorder_rows() -> None:
+    recording_store = FakeRecordingStore()
+    recording_store.retrieval_evaluation_list = RetrievalEvaluationList(
+        results=[
+            RetrievalEvaluationSummary(
+                dataset="Held-out",
+                mode=RetrievalMode.DENSE,
+                source_label="eval/held_out.json local alpha smoke",
+                limit=5,
+                record_count=15,
+                file_hit_rate=0.467,
+                file_mrr=0.313,
+                file_recall=0.311,
+                file_precision=0.2,
+                symbol_hit_rate=0.4,
+                selected=True,
+                measured_at=datetime(2026, 8, 13, tzinfo=UTC),
+            )
+        ]
+    )
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get("/evaluations/retrieval")
+
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert result["dataset"] == "Held-out"
+    assert result["mode"] == "dense"
+    assert result["selected"] is True
+    assert result["file_hit_rate"] == 0.467
 
 
 @pytest.mark.anyio

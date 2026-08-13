@@ -296,10 +296,30 @@ export interface EvaluationDashboardSummary {
   metric_averages: EvaluationMetricAverage[];
 }
 
+export interface RetrievalEvaluationSummary {
+  dataset: string;
+  mode: RetrievalMode;
+  source_label: string;
+  limit: number;
+  record_count: number;
+  file_hit_rate: number;
+  file_mrr: number;
+  file_recall: number;
+  file_precision: number;
+  symbol_hit_rate: number;
+  selected: boolean;
+  measured_at: string;
+}
+
+export interface RetrievalEvaluationList {
+  results: RetrievalEvaluationSummary[];
+}
+
 export interface EvaluationRunSummary {
   evaluation_run_id: string;
   source_type: EvaluationSourceType;
   source_label: string;
+  context_labels: string[];
   judge_model: string;
   status: EvaluationRunStatus;
   started_at: string;
@@ -319,6 +339,10 @@ export interface EvaluationResultSummary {
   evaluation_run_id: string;
   source_type: EvaluationSourceType;
   source_label: string;
+  context_label: string;
+  repository_name: string | null;
+  branch: string | null;
+  commit_hash: string | null;
   record_id: string | null;
   request_id: string | null;
   run_kind: ResearchKind | null;
@@ -354,6 +378,7 @@ export interface EvaluationResultListParams {
   limit?: number;
   source_type?: EvaluationSourceType;
   run_kind?: ResearchKind;
+  context_label?: string;
 }
 
 export interface ApiErrorShape {
