@@ -2,24 +2,23 @@
 
 ## Summary
 
-`v0.5.5` makes monitoring visible and inspectable. The `dev` branch now also
-contains the monitoring chart and run-first dashboard follow-ups, but the final
-capstone evidence work is not finished. The next releases should focus on
+`v0.5.6` makes monitoring visible and inspectable with a charted, run-first
+dashboard. The final capstone evidence work is not finished. The next releases
+should focus on
 reviewer scoring evidence, not new product surface area.
 
 Highest priorities:
 
 1. Final retrieval and answer-evaluation evidence.
 2. Reviewer packaging: screenshots, examples, README rubric map, and runbook.
-3. Optional release promotion for the current monitoring dashboard work.
+3. Reviewer packaging after evaluation evidence is final.
 
 ## v0.5.6: Monitoring charts
 
 Goal: turn the PostgreSQL-backed monitoring page from cards and tables into a
 dashboard with at least five useful charts.
 
-Status: complete on `dev` through PR #11 and PR #12; not yet promoted to
-`main` as a tagged release.
+Status: released to `main` as `v0.5.6`.
 
 Requirements from the PRD:
 

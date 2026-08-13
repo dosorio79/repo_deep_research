@@ -180,4 +180,4 @@ terraform -chdir=infra/github plan \
   -var repository_name=repo_deep_research
 ```
 
-Review the plan before applying it. The current release is `v0.5.5`.
+Review the plan before applying it. The current release is `v0.5.6`.

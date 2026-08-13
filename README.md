@@ -11,9 +11,9 @@ repository paths, symbols, and line ranges.
 
 ## Current status
 
-The `v0.5.5` release is the first reviewable MVP stack. The `dev` branch now
-extends it with a PostgreSQL-backed monitoring dashboard that includes real
-charts, scoped run aggregation, and run-level drill-down. The stack supports
+The `v0.5.6` release extends the first reviewable MVP stack with a
+PostgreSQL-backed monitoring dashboard that includes real charts, scoped run
+aggregation, and run-level drill-down. The stack supports
 dense, sparse, and Qdrant RRF-hybrid retrieval, direct RAG, bounded agentic
 research, a React TypeScript frontend, local Qdrant/PostgreSQL services,
 persisted run monitoring, and useful/not-useful feedback. CLI, API, and browser
@@ -157,7 +157,7 @@ promote to `main` by pull request when ready for production.
 
 Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`; pushing a version tag
 creates a GitHub Release. The current reviewable MVP stack is released as
-`v0.5.5`.
+`v0.5.6`.
 
 GitHub branch protection and repository environments are managed with Terraform
 under [infra/github](infra/github/). The workflow details are recorded in
