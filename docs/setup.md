@@ -89,7 +89,8 @@ make stack-up
 ```
 
 Then open `http://localhost:3000`, ingest a local repository, run at least one
-direct and one agentic question, submit feedback, and inspect:
+direct and one agentic question, submit feedback, and inspect the admin
+evidence surfaces:
 
 - `http://localhost:8000` redirects to Swagger UI
 - `http://localhost:8000/docs`
@@ -98,7 +99,9 @@ direct and one agentic question, submit feedback, and inspect:
 
 This alpha does not target free hosted deployment. Running the full product
 requires a browser frontend, FastAPI backend, Qdrant, PostgreSQL, local
-repository access, and user-provided model credentials.
+repository access, and user-provided model credentials. The admin labels and
+lock icons identify operator evidence views; they are not production
+authentication in this local alpha.
 
 Local Alpha validation checklist:
 
@@ -113,9 +116,9 @@ make test-all
 ```
 
 After the RAG and research runs, confirm the browser can load the home page,
-`/monitoring`, `/evaluations`, and the API Swagger UI. The API root
-`http://localhost:8000` redirects to `http://localhost:8000/docs`; the generated
-OpenAPI contract is committed at `docs/api/openapi.json`.
+the admin `/monitoring` and `/evaluations` routes, and the API Swagger UI. The
+API root `http://localhost:8000` redirects to `http://localhost:8000/docs`; the
+generated OpenAPI contract is committed at `docs/api/openapi.json`.
 
 ## Full Stack
 

@@ -28,8 +28,8 @@ flowchart LR
   API --> Postgres[PostgreSQL]
   Core --> Postgres
 
-  Postgres --> Monitoring[Monitoring Dashboard]
-  Postgres --> EvalDash[Evaluation Dashboard]
+  Postgres --> Monitoring[Admin Monitoring Dashboard]
+  Postgres --> EvalDash[Admin Evaluation Dashboard]
   Frontend --> Monitoring
   Frontend --> EvalDash
 ```
@@ -90,7 +90,7 @@ POST /repositories/ingest   Parse and index a repository
 POST /rag         Direct RAG answer with trace metadata
 POST /research    Bounded agentic research with trace metadata
 POST /feedback    Persist useful/not-useful feedback linked by session_id
-GET  /monitoring/summary    Aggregate dashboard data from PostgreSQL
+GET  /monitoring/summary    Aggregate admin dashboard data from PostgreSQL
 GET  /monitoring/runs       Recent persisted run rows
 GET  /monitoring/runs/{request_id}  One persisted run detail
 ```
@@ -116,7 +116,7 @@ recording_store.py -- persist run data, feedback, snapshots, evaluations
 repo-research CLI / FastAPI -- JSON evidence and grounded answers
         |
         v
-frontend/ -- browser research UI, feedback, and monitoring dashboard
+frontend/ -- browser research UI, feedback, and admin monitoring dashboard
 ```
 
 `ParsedChunk` is the boundary between parsing and storage. It carries repository
@@ -167,8 +167,9 @@ persisted application data.
 client of the FastAPI contract: it submits question mode, retrieval mode, limit,
 research kind, and session ID, then renders answers, evidence, trace metadata,
 model usage, cost telemetry, research steps, and change targets. The monitoring
-route renders PostgreSQL-backed run history, scoped summary cards, chart panels,
-an all-time summary, and selected run detail in a sheet.
+and evaluations routes are local admin/operator surfaces: they render
+PostgreSQL-backed run history, scoped summary cards, chart panels, evaluation
+results, and selected run detail for the person running the stack.
 
 `pricing.py` keeps OpenAI cost estimation separate from answer generation.
 Unknown model prices, explicit empty pricing overrides, and inconsistent

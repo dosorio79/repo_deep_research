@@ -75,7 +75,8 @@ make stack-up
 ```
 
 Then open `http://localhost:3000`, ingest a repository, ask a direct or agentic
-question, submit feedback, and inspect monitoring and evaluation dashboards.
+question, submit feedback, and inspect the admin monitoring and evaluation
+dashboards.
 Opening `http://localhost:8000` redirects to the FastAPI Swagger UI at
 `http://localhost:8000/docs`; the versioned OpenAPI contract is stored at
 [docs/api/openapi.json](docs/api/openapi.json).
@@ -128,9 +129,9 @@ make stack-up
 ```
 
 Open `http://localhost:3000`, ingest a repository, ask a direct or agentic
-question, submit feedback, inspect persisted monitoring at
-`http://localhost:3000/monitoring`, and review persisted answer evaluations at
-`http://localhost:3000/evaluations`.
+question, and submit feedback. The `/monitoring` and `/evaluations` routes are
+local admin/operator evidence surfaces for the person running the stack, not
+the primary user research workflow.
 
 For local development with FastAPI reload and the Vite dev server:
 
@@ -204,7 +205,8 @@ Included:
 - BYOK OpenAI configuration through `.env.local`.
 - Direct RAG and bounded agentic research paths.
 - Swagger UI and a versioned OpenAPI contract for the local API.
-- Persisted monitoring, feedback, answer snapshots, and evaluation dashboards.
+- Persisted monitoring, feedback, answer snapshots, and admin evaluation
+  dashboards.
 - User-facing screenshots, examples, runbook, and known limitations.
 
 Not included:
@@ -212,5 +214,6 @@ Not included:
 - Hosted public demo.
 - Free Render deployment.
 - Multi-tenant authentication.
+- Production admin authentication or route gating for the local evidence views.
 - Managed cloud persistence.
 - Automatic code changes or pull requests.
