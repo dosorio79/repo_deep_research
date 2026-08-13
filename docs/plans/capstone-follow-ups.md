@@ -2,16 +2,15 @@
 
 ## Summary
 
-`v0.5.5` makes monitoring visible and inspectable. The `dev` branch now also
-contains the monitoring chart and run-first dashboard follow-ups, but the final
-capstone evidence work is not finished. The next releases should focus on
-reviewer scoring evidence, not new product surface area.
+`v0.5.7` makes monitoring and evaluation visible and inspectable with
+PostgreSQL-backed dashboards. The next release should be the first user-ready
+Local Alpha, not a new product-feature release.
 
 Highest priorities:
 
-1. Final retrieval and answer-evaluation evidence.
-2. Reviewer packaging: screenshots, examples, README rubric map, and runbook.
-3. Optional release promotion for the current monitoring dashboard work.
+1. Local Alpha runbook for a technical user.
+2. User-facing screenshots and examples.
+3. Known limitations and a concise local BYOK validation path.
 
 ## v0.5.6: Monitoring charts
 
@@ -33,7 +32,7 @@ Requirements from the PRD:
 
 Implementation approach:
 
-- Keep PostgreSQL as the reviewer-visible monitoring source of truth.
+- Keep PostgreSQL as the user-visible monitoring source of truth.
 - Use existing `GET /monitoring/runs` and `GET /monitoring/runs/{request_id}`
   data where possible.
 - Use the existing Recharts dependency for line/bar charts.
@@ -94,7 +93,7 @@ runner and UI behavior:
 - `v0.5.7a`: PostgreSQL persistence foundation for answer snapshots,
   evaluation runs, and evaluation results.
 - `v0.5.7b`: unified evaluation runner for dataset and monitored-run sources.
-- `v0.5.7c`: reviewer-visible `/evaluations` dashboard backed by persisted
+- `v0.5.7c`: user-visible `/evaluations` dashboard backed by persisted
   evaluation results.
 
 ### v0.5.7a: Evaluation persistence foundation
@@ -149,7 +148,7 @@ Answer evaluation:
 - Report correctness, groundedness, citation accuracy, completeness,
   usefulness, and unsupported-claim rate.
 - Keep live OpenAI judging opt-in.
-- Persist summarized results in docs for reviewers; avoid committing raw
+- Persist summarized results in docs for users; avoid committing raw
   generated noise unless intentionally curated.
 
 Acceptance checks:
@@ -176,7 +175,7 @@ Planned dashboard panels:
 - Unsupported-claim rate by approach.
 - Feedback useful/not-useful compared with judge scores.
 - Quality compared with latency and estimated cost.
-- Worst-scoring evaluated answers for reviewer inspection.
+- Worst-scoring evaluated answers for user inspection.
 
 Acceptance checks:
 
@@ -185,37 +184,49 @@ Acceptance checks:
   inspectable result table.
 - Frontend tests cover empty and populated states.
 
-## v0.5.8: Reviewer packaging
+## v0.5.8: Local Alpha
 
-Goal: make the project easy to score without requiring the reviewer to infer
-where evidence lives.
+Goal: make the project usable and understandable as a local-first alpha for
+technical users who bring their own OpenAI API key.
 
-Required packaging:
+Positioning:
 
-- README rubric map.
+- Local-only deployment.
+- BYOK through `.env.local`.
+- Docker Compose for frontend, API, Qdrant, and PostgreSQL.
+- Local Python repository ingestion.
+- No free hosted deployment target for this alpha.
+
+Required deliverables:
+
+- README Local Alpha section.
+- Stack diagram linked from README.
 - Monitoring dashboard screenshot.
+- Evaluation dashboard screenshot.
 - Research UI screenshot.
 - Example direct RAG output.
 - Example agentic research output.
 - Dataset/corpus description.
 - Final retrieval and answer-evaluation summaries.
 - Known limitations.
-- Complete local runbook using Docker Compose.
+- Complete local user runbook using Docker Compose.
 - Optional short preview video notes or script.
 
 Acceptance checks:
 
-- A reviewer can clone, configure, start, ingest, query, inspect monitoring, and
+- A user can clone, configure, start, ingest, query, inspect monitoring, and
   find evaluation evidence using only README and linked docs.
-- README maps every major scoring criterion to concrete files, commands, or
-  screenshots.
+- README maps major product capabilities to concrete files, commands,
+  screenshots, or examples.
+- The release explicitly states that hosted deployment, multi-tenant auth, and
+  managed cloud persistence are out of scope for the Local Alpha.
 
 ## Logfire Position
 
 Logfire is useful optional APM/tracing for FastAPI and PydanticAI. It should
-remain enabled by configuration only. It is not the primary reviewer dashboard
-for the capstone because the reviewer-visible evidence is backed by PostgreSQL
-and rendered locally in `/monitoring`.
+remain enabled by configuration only. It is not the primary user dashboard for
+the capstone because the user-visible evidence is backed by PostgreSQL and
+rendered locally in `/monitoring`.
 
 Do not spend the next release on Logfire unless PostgreSQL-backed monitoring
-cannot satisfy a rubric requirement.
+cannot satisfy a user-visible evidence requirement.

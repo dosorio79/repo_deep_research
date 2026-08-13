@@ -75,6 +75,43 @@ The default answer model is `RDR_OPENAI_ANSWER_MODEL=gpt-5-mini`; the default
 judge model is `RDR_OPENAI_JUDGE_MODEL=gpt-5.1`. Unit tests use fake model
 adapters and do not require paid model calls.
 
+## Local Alpha BYOK Mode
+
+`v0.5.8 Local Alpha` is planned as a local-only BYOK release. The expected user
+path is:
+
+```bash
+cp .env.example .env
+cp .env.local.example .env.local
+# edit .env.local and set OPENAI_API_KEY
+make install
+make stack-up
+```
+
+Then open `http://localhost:3000`, ingest a local repository, run at least one
+direct and one agentic question, submit feedback, and inspect:
+
+- `http://localhost:3000/monitoring`
+- `http://localhost:3000/evaluations`
+
+This alpha does not target free hosted deployment. Running the full product
+requires a browser frontend, FastAPI backend, Qdrant, PostgreSQL, local
+repository access, and user-provided model credentials.
+
+Local Alpha validation checklist:
+
+```bash
+make install
+make stack-up
+make ingest
+make rag QUESTION="where is configuration validated?"
+make research QUESTION="which files handle answer evaluation persistence?"
+make test-all
+```
+
+After the RAG and research runs, confirm the browser can load the home page,
+`/monitoring`, and `/evaluations`.
+
 ## Full Stack
 
 Start the production-like local stack:
