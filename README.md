@@ -23,6 +23,8 @@ research, and opt-in answer evaluation.
 ![OpenAI](https://img.shields.io/badge/OpenAI-BYOK_Model_Calls-412991?logo=openai&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker_Compose-Local_Stack-2496ED?logo=docker&logoColor=white)
 
+![Local Alpha stack diagram](docs/assets/local-alpha-stack.svg)
+
 ```mermaid
 flowchart LR
   user[User browser / CLI] --> frontend[React UI]
@@ -41,6 +43,8 @@ flowchart LR
 The latest release is `v0.5.7`. The next planned delivery is
 `v0.5.8 Local Alpha`: a local-first, bring-your-own-key release for technical
 users who can run Docker Compose and provide their own OpenAI API key.
+The alpha release handoff is documented in
+[docs/releases/v0.5.8-local-alpha.md](docs/releases/v0.5.8-local-alpha.md).
 
 Cloud deployment is intentionally out of scope for the Local Alpha. The stack
 includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
@@ -182,6 +186,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Architecture](docs/architecture.md) including the Local Alpha stack diagram
 - [Evaluation](docs/evaluation.md)
 - [Monitoring KPIs](docs/monitoring.md)
+- [v0.5.8 Local Alpha release notes](docs/releases/v0.5.8-local-alpha.md)
 - [OpenAPI contract](docs/api/openapi.json)
 - [Implementation history](docs/plans/)
 
