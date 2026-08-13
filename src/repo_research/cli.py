@@ -152,6 +152,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="persist evaluation run and result rows to PostgreSQL",
     )
+    openapi = subparsers.add_parser(
+        "export-openapi", help="write the FastAPI OpenAPI contract to JSON"
+    )
+    openapi.add_argument("--output", type=Path, default=Path("docs/api/openapi.json"))
     return parser
 
 
@@ -159,6 +163,11 @@ def main() -> None:
     """Run one CLI command and emit structured JSON for people and scripts."""
     arguments = build_parser().parse_args()
     settings = Settings()
+    if arguments.command == "export-openapi":
+        _write_openapi_contract(arguments.output, settings)
+        _report_step(f"wrote OpenAPI contract to {arguments.output}")
+        return
+
     root_path = (arguments.path or settings.repository_root).resolve()
     if arguments.command == "evaluate-answers" and arguments.source == "monitored-runs":
         answer_results = _run_monitored_answer_evaluation(
@@ -574,6 +583,17 @@ def _start_qdrant_if_available() -> None:
         check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+    )
+
+
+def _write_openapi_contract(output: Path, settings: Settings) -> None:
+    from repo_research.api import create_app
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    contract = create_app(settings=settings).openapi()
+    output.write_text(
+        json.dumps(contract, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
     )
 
 

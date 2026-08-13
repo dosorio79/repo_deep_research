@@ -1,4 +1,4 @@
-"""Minimal FastAPI backend for M3 grounded direct RAG."""
+"""FastAPI backend for Repo Deep Research."""
 
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
@@ -56,6 +56,33 @@ from repo_research.runtime import (
     create_recording_store,
     create_research_agent,
 )
+
+OPENAPI_TAGS = [
+    {
+        "name": "system",
+        "description": "API discovery and dependency health.",
+    },
+    {
+        "name": "repositories",
+        "description": "Repository ingestion and indexing.",
+    },
+    {
+        "name": "answers",
+        "description": "Direct RAG and bounded agentic research answers.",
+    },
+    {
+        "name": "feedback",
+        "description": "Useful/not-useful feedback linked to answer runs.",
+    },
+    {
+        "name": "monitoring",
+        "description": "Persisted run monitoring summaries and details.",
+    },
+    {
+        "name": "evaluations",
+        "description": "Persisted answer-evaluation summaries and results.",
+    },
+]
 
 
 class RagDatabase(Protocol):
@@ -144,7 +171,19 @@ def create_app(
     """Create a FastAPI app with injectable runtime dependencies."""
     load_dotenv_environment(keys=("OPENAI_API_KEY", "OPENAI_ADMIN_KEY"))
     app_settings = settings or Settings()
-    app = FastAPI(title="Repo Deep Research", version=package_version())
+    app = FastAPI(
+        title="Repo Deep Research",
+        version=package_version(),
+        summary="Evidence-grounded research for Python repositories.",
+        description=(
+            "Repo Deep Research indexes Python repositories, answers direct and "
+            "agentic research questions with cited repository evidence, records "
+            "monitoring data, and exposes persisted answer-evaluation results."
+        ),
+        contact={"name": "Repo Deep Research"},
+        license_info={"name": "MIT"},
+        openapi_tags=OPENAPI_TAGS,
+    )
     instrument_fastapi(app, app_settings)
     if app_settings.cors_allowed_origins:
         app.add_middleware(
@@ -171,7 +210,12 @@ def create_app(
             recording_store_instance = create_recording_store(app_settings)
         return recording_store_instance
 
-    @app.get("/")
+    @app.get(
+        "/",
+        tags=["system"],
+        summary="List API entry points",
+        operation_id="get_api_index",
+    )
     async def root() -> dict[str, str]:
         return {
             "name": "Repo Deep Research API",
@@ -181,7 +225,12 @@ def create_app(
             "agentic_rag": "POST /research",
         }
 
-    @app.get("/health")
+    @app.get(
+        "/health",
+        tags=["system"],
+        summary="Check dependency health",
+        operation_id="get_health",
+    )
     async def health() -> dict[str, str | bool]:
         qdrant_ok = False
         try:
@@ -190,7 +239,13 @@ def create_app(
             qdrant_ok = False
         return {"status": "ok" if qdrant_ok else "degraded", "qdrant": qdrant_ok}
 
-    @app.post("/repositories/ingest", response_model=IngestSummary)
+    @app.post(
+        "/repositories/ingest",
+        response_model=IngestSummary,
+        tags=["repositories"],
+        summary="Ingest and index a repository",
+        operation_id="ingest_repository",
+    )
     async def ingest_repository(request: RepositoryIngestRequest) -> IngestSummary:
         try:
             root_path = materialize_repository_address(
@@ -216,7 +271,13 @@ def create_app(
                 ),
             ) from error
 
-    @app.post("/rag", response_model=RagRunResult)
+    @app.post(
+        "/rag",
+        response_model=RagRunResult,
+        tags=["answers"],
+        summary="Answer with direct RAG",
+        operation_id="run_direct_rag",
+    )
     async def rag(request: RagRequest) -> RagRunResult:
         root_path = (request.repository_path or app_settings.repository_root).resolve()
         try:
@@ -258,7 +319,13 @@ def create_app(
                 ),
             ) from error
 
-    @app.post("/research", response_model=ResearchRunResult)
+    @app.post(
+        "/research",
+        response_model=ResearchRunResult,
+        tags=["answers"],
+        summary="Answer with bounded agentic research",
+        operation_id="run_agentic_research",
+    )
     async def research(request: ResearchRequest) -> JSONResponse:
         root_path = (request.repository_path or app_settings.repository_root).resolve()
         try:
@@ -301,7 +368,13 @@ def create_app(
                 ),
             ) from error
 
-    @app.post("/feedback", response_model=FeedbackEvent)
+    @app.post(
+        "/feedback",
+        response_model=FeedbackEvent,
+        tags=["feedback"],
+        summary="Persist answer feedback",
+        operation_id="record_feedback",
+    )
     async def feedback(request: FeedbackRequest) -> FeedbackEvent:
         event = FeedbackEvent(
             session_id=request.session_id or uuid4().hex,
@@ -314,11 +387,23 @@ def create_app(
         get_recording_store().record_feedback(event)
         return event
 
-    @app.get("/monitoring/summary", response_model=MonitoringSummary)
+    @app.get(
+        "/monitoring/summary",
+        response_model=MonitoringSummary,
+        tags=["monitoring"],
+        summary="Get monitoring summary",
+        operation_id="get_monitoring_summary",
+    )
     async def monitoring_summary() -> MonitoringSummary:
         return get_recording_store().monitoring_summary()
 
-    @app.get("/monitoring/runs", response_model=MonitoringRunList)
+    @app.get(
+        "/monitoring/runs",
+        response_model=MonitoringRunList,
+        tags=["monitoring"],
+        summary="List monitoring runs",
+        operation_id="list_monitoring_runs",
+    )
     async def monitoring_runs(
         limit: int = Query(default=50, ge=1, le=100),
         run_kind: RunKind | None = None,
@@ -334,18 +419,36 @@ def create_app(
             feedback=feedback,
         )
 
-    @app.get("/monitoring/runs/{request_id}", response_model=MonitoringRunDetail)
+    @app.get(
+        "/monitoring/runs/{request_id}",
+        response_model=MonitoringRunDetail,
+        tags=["monitoring"],
+        summary="Get monitoring run detail",
+        operation_id="get_monitoring_run_detail",
+    )
     async def monitoring_run_detail(request_id: str) -> MonitoringRunDetail:
         detail = get_recording_store().get_monitoring_run(request_id)
         if detail is None:
             raise HTTPException(status_code=404, detail="monitoring run not found")
         return detail
 
-    @app.get("/evaluations/summary", response_model=EvaluationDashboardSummary)
+    @app.get(
+        "/evaluations/summary",
+        response_model=EvaluationDashboardSummary,
+        tags=["evaluations"],
+        summary="Get evaluation summary",
+        operation_id="get_evaluation_summary",
+    )
     async def evaluation_summary() -> EvaluationDashboardSummary:
         return get_recording_store().evaluation_summary()
 
-    @app.get("/evaluations/runs", response_model=EvaluationRunList)
+    @app.get(
+        "/evaluations/runs",
+        response_model=EvaluationRunList,
+        tags=["evaluations"],
+        summary="List evaluation runs",
+        operation_id="list_evaluation_runs",
+    )
     async def evaluation_runs(
         limit: int = Query(default=50, ge=1, le=100),
         source_type: EvaluationSourceType | None = None,
@@ -357,7 +460,13 @@ def create_app(
             status=status,
         )
 
-    @app.get("/evaluations/results", response_model=EvaluationResultList)
+    @app.get(
+        "/evaluations/results",
+        response_model=EvaluationResultList,
+        tags=["evaluations"],
+        summary="List evaluation results",
+        operation_id="list_evaluation_results",
+    )
     async def evaluation_results(
         limit: int = Query(default=50, ge=1, le=100),
         source_type: EvaluationSourceType | None = None,

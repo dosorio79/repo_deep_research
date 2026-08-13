@@ -1,0 +1,2755 @@
+{
+  "components": {
+    "schemas": {
+      "ChangeTarget": {
+        "description": "A file or symbol that may need changes, grounded by evidence.",
+        "properties": {
+          "evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Evidence Ids",
+            "type": "array"
+          },
+          "path": {
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          }
+        },
+        "required": [
+          "path",
+          "reason",
+          "evidence_ids"
+        ],
+        "title": "ChangeTarget",
+        "type": "object"
+      },
+      "ErrorCountSummary": {
+        "description": "Count of persisted run errors by error type.",
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "error_type": {
+            "minLength": 1,
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error_type",
+          "count"
+        ],
+        "title": "ErrorCountSummary",
+        "type": "object"
+      },
+      "EvaluationDashboardSummary": {
+        "description": "Aggregate answer-evaluation data for the browser dashboard.",
+        "properties": {
+          "average_by_run_kind": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluationRunKindAverage"
+            },
+            "title": "Average By Run Kind",
+            "type": "array"
+          },
+          "average_score": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Score"
+          },
+          "completed_runs": {
+            "minimum": 0.0,
+            "title": "Completed Runs",
+            "type": "integer"
+          },
+          "failed_runs": {
+            "minimum": 0.0,
+            "title": "Failed Runs",
+            "type": "integer"
+          },
+          "metric_averages": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluationMetricAverage"
+            },
+            "title": "Metric Averages",
+            "type": "array"
+          },
+          "total_results": {
+            "minimum": 0.0,
+            "title": "Total Results",
+            "type": "integer"
+          },
+          "total_runs": {
+            "minimum": 0.0,
+            "title": "Total Runs",
+            "type": "integer"
+          },
+          "unsupported_claim_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Unsupported Claim Rate",
+            "type": "number"
+          }
+        },
+        "required": [
+          "total_runs",
+          "completed_runs",
+          "failed_runs",
+          "total_results",
+          "unsupported_claim_rate"
+        ],
+        "title": "EvaluationDashboardSummary",
+        "type": "object"
+      },
+      "EvaluationMetricAverage": {
+        "description": "Average judge score for one answer-quality metric.",
+        "properties": {
+          "average_score": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Average Score",
+            "type": "number"
+          },
+          "metric": {
+            "minLength": 1,
+            "title": "Metric",
+            "type": "string"
+          },
+          "result_count": {
+            "minimum": 0.0,
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvaluationSourceType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "metric",
+          "average_score",
+          "result_count"
+        ],
+        "title": "EvaluationMetricAverage",
+        "type": "object"
+      },
+      "EvaluationResultList": {
+        "description": "Recent persisted judged answer results.",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluationResultSummary"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "title": "EvaluationResultList",
+        "type": "object"
+      },
+      "EvaluationResultSummary": {
+        "description": "One persisted judged answer result for dashboard inspection.",
+        "properties": {
+          "answer_correctness": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Correctness"
+          },
+          "answer_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItem"
+            },
+            "title": "Answer Evidence",
+            "type": "array"
+          },
+          "answer_relevance": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Answer Relevance",
+            "type": "number"
+          },
+          "average_score": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Average Score",
+            "type": "number"
+          },
+          "citation_precision": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Citation Precision",
+            "type": "number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "evaluation_run_id": {
+            "minLength": 1,
+            "title": "Evaluation Run Id",
+            "type": "string"
+          },
+          "faithfulness": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Faithfulness",
+            "type": "number"
+          },
+          "feedback_not_useful": {
+            "minimum": 0.0,
+            "title": "Feedback Not Useful",
+            "type": "integer"
+          },
+          "feedback_useful": {
+            "minimum": 0.0,
+            "title": "Feedback Useful",
+            "type": "integer"
+          },
+          "latency_ms_total": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms Total"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          },
+          "presentation_quality": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Presentation Quality",
+            "type": "number"
+          },
+          "question": {
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          },
+          "reference_coverage": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Coverage"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "result_id": {
+            "minLength": 1,
+            "title": "Result Id",
+            "type": "string"
+          },
+          "run_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_label": {
+            "minLength": 1,
+            "title": "Source Label",
+            "type": "string"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/EvaluationSourceType"
+          },
+          "total_estimated_cost_usd": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Estimated Cost Usd"
+          },
+          "unsupported_claim_count": {
+            "minimum": 0.0,
+            "title": "Unsupported Claim Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "result_id",
+          "evaluation_run_id",
+          "source_type",
+          "source_label",
+          "question",
+          "faithfulness",
+          "citation_precision",
+          "answer_relevance",
+          "presentation_quality",
+          "average_score",
+          "unsupported_claim_count",
+          "feedback_useful",
+          "feedback_not_useful",
+          "created_at"
+        ],
+        "title": "EvaluationResultSummary",
+        "type": "object"
+      },
+      "EvaluationRunKindAverage": {
+        "description": "Average answer-quality score for one answer approach.",
+        "properties": {
+          "average_score": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Average Score",
+            "type": "number"
+          },
+          "result_count": {
+            "minimum": 0.0,
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "run_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unsupported_claim_count": {
+            "minimum": 0.0,
+            "title": "Unsupported Claim Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "average_score",
+          "result_count",
+          "unsupported_claim_count"
+        ],
+        "title": "EvaluationRunKindAverage",
+        "type": "object"
+      },
+      "EvaluationRunList": {
+        "description": "Recent persisted answer-evaluation runs.",
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluationRunSummary"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "title": "EvaluationRunList",
+        "type": "object"
+      },
+      "EvaluationRunStatus": {
+        "description": "Lifecycle state for a persisted evaluation batch.",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed"
+        ],
+        "title": "EvaluationRunStatus",
+        "type": "string"
+      },
+      "EvaluationRunSummary": {
+        "description": "One persisted answer-evaluation batch for the dashboard.",
+        "properties": {
+          "average_score": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Score"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "evaluation_run_id": {
+            "minLength": 1,
+            "title": "Evaluation Run Id",
+            "type": "string"
+          },
+          "judge_model": {
+            "minLength": 1,
+            "title": "Judge Model",
+            "type": "string"
+          },
+          "result_count": {
+            "minimum": 0.0,
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "source_label": {
+            "minLength": 1,
+            "title": "Source Label",
+            "type": "string"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/EvaluationSourceType"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EvaluationRunStatus"
+          },
+          "unsupported_claim_count": {
+            "minimum": 0.0,
+            "title": "Unsupported Claim Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "evaluation_run_id",
+          "source_type",
+          "source_label",
+          "judge_model",
+          "status",
+          "started_at",
+          "result_count",
+          "unsupported_claim_count"
+        ],
+        "title": "EvaluationRunSummary",
+        "type": "object"
+      },
+      "EvaluationSourceType": {
+        "description": "Sources that can feed an answer-quality evaluation run.",
+        "enum": [
+          "dataset",
+          "monitored_runs"
+        ],
+        "title": "EvaluationSourceType",
+        "type": "string"
+      },
+      "EvidenceItem": {
+        "description": "A canonical citation derived from a retrieved repository chunk.",
+        "properties": {
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "end_line": {
+            "minimum": 1.0,
+            "title": "End Line",
+            "type": "integer"
+          },
+          "evidence_id": {
+            "minLength": 1,
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "path": {
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "start_line": {
+            "minimum": 1.0,
+            "title": "Start Line",
+            "type": "integer"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "path",
+          "start_line",
+          "end_line",
+          "score",
+          "reason"
+        ],
+        "title": "EvidenceItem",
+        "type": "object"
+      },
+      "FeedbackEvent": {
+        "description": "A persisted feedback event.",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "feedback_id": {
+            "minLength": 1,
+            "title": "Feedback Id",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "run_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "session_id": {
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "useful": {
+            "title": "Useful",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id",
+          "useful",
+          "submitted_at"
+        ],
+        "title": "FeedbackEvent",
+        "type": "object"
+      },
+      "FeedbackRequest": {
+        "description": "A user feedback submission for one browser session or returned run.",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "run_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "useful": {
+            "title": "Useful",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "useful"
+        ],
+        "title": "FeedbackRequest",
+        "type": "object"
+      },
+      "FeedbackUsefulSummary": {
+        "description": "Useful/not-useful feedback counts.",
+        "properties": {
+          "not_useful": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Not Useful",
+            "type": "integer"
+          },
+          "useful": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Useful",
+            "type": "integer"
+          }
+        },
+        "title": "FeedbackUsefulSummary",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IngestSummary": {
+        "description": "The observable result of one repository indexing operation.",
+        "properties": {
+          "index_updated": {
+            "default": true,
+            "title": "Index Updated",
+            "type": "boolean"
+          },
+          "indexed_chunks": {
+            "minimum": 0.0,
+            "title": "Indexed Chunks",
+            "type": "integer"
+          },
+          "repository": {
+            "$ref": "#/components/schemas/RepositoryIdentity"
+          },
+          "skipped_files": {
+            "items": {
+              "$ref": "#/components/schemas/IngestionIssue"
+            },
+            "title": "Skipped Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "repository",
+          "indexed_chunks"
+        ],
+        "title": "IngestSummary",
+        "type": "object"
+      },
+      "IngestionIssue": {
+        "description": "A path-scoped reason an otherwise eligible file was not indexed.",
+        "properties": {
+          "error_type": {
+            "minLength": 1,
+            "title": "Error Type",
+            "type": "string"
+          },
+          "message": {
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "error_type",
+          "message"
+        ],
+        "title": "IngestionIssue",
+        "type": "object"
+      },
+      "LatencyByRunKind": {
+        "description": "Average latency for one monitoring run kind.",
+        "properties": {
+          "average_latency_ms": {
+            "minimum": 0.0,
+            "title": "Average Latency Ms",
+            "type": "number"
+          },
+          "run_kind": {
+            "$ref": "#/components/schemas/RunKind"
+          }
+        },
+        "required": [
+          "run_kind",
+          "average_latency_ms"
+        ],
+        "title": "LatencyByRunKind",
+        "type": "object"
+      },
+      "ModelUsage": {
+        "description": "Application-owned model usage and price telemetry for one model call.",
+        "properties": {
+          "cached_input_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Input Tokens"
+          },
+          "estimated_cost_usd": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Usd"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "pricing_source": {
+            "default": "unknown",
+            "minLength": 1,
+            "title": "Pricing Source",
+            "type": "string"
+          },
+          "pricing_version": {
+            "default": "unknown",
+            "minLength": 1,
+            "title": "Pricing Version",
+            "type": "string"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "reasoning_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Tokens"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
+          }
+        },
+        "required": [
+          "provider",
+          "model"
+        ],
+        "title": "ModelUsage",
+        "type": "object"
+      },
+      "ModelUsageSummary": {
+        "description": "Aggregate token and cost telemetry for one model.",
+        "properties": {
+          "estimated_cost_usd": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Usd"
+          },
+          "input_tokens": {
+            "minimum": 0.0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "output_tokens": {
+            "minimum": 0.0,
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "total_tokens": {
+            "minimum": 0.0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "input_tokens",
+          "output_tokens",
+          "total_tokens"
+        ],
+        "title": "ModelUsageSummary",
+        "type": "object"
+      },
+      "MonitoringFeedbackFilter": {
+        "description": "Feedback filters supported by the monitoring run list.",
+        "enum": [
+          "all",
+          "useful",
+          "not_useful",
+          "none"
+        ],
+        "title": "MonitoringFeedbackFilter",
+        "type": "string"
+      },
+      "MonitoringRunDetail": {
+        "description": "Detailed persisted monitoring data for one run.",
+        "properties": {
+          "branch": {
+            "minLength": 1,
+            "title": "Branch",
+            "type": "string"
+          },
+          "commit_hash": {
+            "minLength": 1,
+            "title": "Commit Hash",
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "error_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Type"
+          },
+          "evidence_count": {
+            "minimum": 0.0,
+            "title": "Evidence Count",
+            "type": "integer"
+          },
+          "feedback_events": {
+            "items": {
+              "$ref": "#/components/schemas/MonitoringRunFeedback"
+            },
+            "title": "Feedback Events",
+            "type": "array"
+          },
+          "feedback_not_useful": {
+            "minimum": 0.0,
+            "title": "Feedback Not Useful",
+            "type": "integer"
+          },
+          "feedback_useful": {
+            "minimum": 0.0,
+            "title": "Feedback Useful",
+            "type": "integer"
+          },
+          "has_error": {
+            "title": "Has Error",
+            "type": "boolean"
+          },
+          "insufficient_evidence": {
+            "title": "Insufficient Evidence",
+            "type": "boolean"
+          },
+          "latency_ms_model": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms Model"
+          },
+          "latency_ms_retrieval": {
+            "minimum": 0.0,
+            "title": "Latency Ms Retrieval",
+            "type": "integer"
+          },
+          "latency_ms_total": {
+            "minimum": 0.0,
+            "title": "Latency Ms Total",
+            "type": "integer"
+          },
+          "model_usage": {
+            "items": {
+              "$ref": "#/components/schemas/ModelUsage"
+            },
+            "title": "Model Usage",
+            "type": "array"
+          },
+          "question_mode": {
+            "$ref": "#/components/schemas/RagMode"
+          },
+          "repository_id": {
+            "minLength": 1,
+            "title": "Repository Id",
+            "type": "string"
+          },
+          "repository_name": {
+            "minLength": 1,
+            "title": "Repository Name",
+            "type": "string"
+          },
+          "request_id": {
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retrieval_limit": {
+            "minimum": 1.0,
+            "title": "Retrieval Limit",
+            "type": "integer"
+          },
+          "retrieval_mode": {
+            "$ref": "#/components/schemas/RetrievalMode"
+          },
+          "retrieved_chunk_count": {
+            "minimum": 0.0,
+            "title": "Retrieved Chunk Count",
+            "type": "integer"
+          },
+          "run_kind": {
+            "$ref": "#/components/schemas/RunKind"
+          },
+          "session_id": {
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "tool_call_count": {
+            "minimum": 0.0,
+            "title": "Tool Call Count",
+            "type": "integer"
+          },
+          "total_estimated_cost_usd": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Estimated Cost Usd"
+          },
+          "unique_file_count": {
+            "minimum": 0.0,
+            "title": "Unique File Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "session_id",
+          "run_kind",
+          "started_at",
+          "completed_at",
+          "repository_name",
+          "branch",
+          "commit_hash",
+          "question_mode",
+          "retrieval_mode",
+          "retrieved_chunk_count",
+          "unique_file_count",
+          "evidence_count",
+          "latency_ms_total",
+          "latency_ms_retrieval",
+          "tool_call_count",
+          "insufficient_evidence",
+          "has_error",
+          "feedback_useful",
+          "feedback_not_useful",
+          "repository_id",
+          "retrieval_limit"
+        ],
+        "title": "MonitoringRunDetail",
+        "type": "object"
+      },
+      "MonitoringRunFeedback": {
+        "description": "Feedback displayed in a monitoring run detail view.",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "feedback_id": {
+            "minLength": 1,
+            "title": "Feedback Id",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "useful": {
+            "title": "Useful",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "feedback_id",
+          "useful",
+          "submitted_at"
+        ],
+        "title": "MonitoringRunFeedback",
+        "type": "object"
+      },
+      "MonitoringRunList": {
+        "description": "Recent persisted monitoring runs.",
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/MonitoringRunSummary"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "title": "MonitoringRunList",
+        "type": "object"
+      },
+      "MonitoringRunSummary": {
+        "description": "One persisted run row for the monitoring history table.",
+        "properties": {
+          "branch": {
+            "minLength": 1,
+            "title": "Branch",
+            "type": "string"
+          },
+          "commit_hash": {
+            "minLength": 1,
+            "title": "Commit Hash",
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "evidence_count": {
+            "minimum": 0.0,
+            "title": "Evidence Count",
+            "type": "integer"
+          },
+          "feedback_not_useful": {
+            "minimum": 0.0,
+            "title": "Feedback Not Useful",
+            "type": "integer"
+          },
+          "feedback_useful": {
+            "minimum": 0.0,
+            "title": "Feedback Useful",
+            "type": "integer"
+          },
+          "has_error": {
+            "title": "Has Error",
+            "type": "boolean"
+          },
+          "insufficient_evidence": {
+            "title": "Insufficient Evidence",
+            "type": "boolean"
+          },
+          "latency_ms_model": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms Model"
+          },
+          "latency_ms_retrieval": {
+            "minimum": 0.0,
+            "title": "Latency Ms Retrieval",
+            "type": "integer"
+          },
+          "latency_ms_total": {
+            "minimum": 0.0,
+            "title": "Latency Ms Total",
+            "type": "integer"
+          },
+          "question_mode": {
+            "$ref": "#/components/schemas/RagMode"
+          },
+          "repository_name": {
+            "minLength": 1,
+            "title": "Repository Name",
+            "type": "string"
+          },
+          "request_id": {
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retrieval_mode": {
+            "$ref": "#/components/schemas/RetrievalMode"
+          },
+          "retrieved_chunk_count": {
+            "minimum": 0.0,
+            "title": "Retrieved Chunk Count",
+            "type": "integer"
+          },
+          "run_kind": {
+            "$ref": "#/components/schemas/RunKind"
+          },
+          "session_id": {
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "tool_call_count": {
+            "minimum": 0.0,
+            "title": "Tool Call Count",
+            "type": "integer"
+          },
+          "total_estimated_cost_usd": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Estimated Cost Usd"
+          },
+          "unique_file_count": {
+            "minimum": 0.0,
+            "title": "Unique File Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "session_id",
+          "run_kind",
+          "started_at",
+          "completed_at",
+          "repository_name",
+          "branch",
+          "commit_hash",
+          "question_mode",
+          "retrieval_mode",
+          "retrieved_chunk_count",
+          "unique_file_count",
+          "evidence_count",
+          "latency_ms_total",
+          "latency_ms_retrieval",
+          "tool_call_count",
+          "insufficient_evidence",
+          "has_error",
+          "feedback_useful",
+          "feedback_not_useful"
+        ],
+        "title": "MonitoringRunSummary",
+        "type": "object"
+      },
+      "MonitoringSummary": {
+        "description": "Backend aggregate data for reviewer-visible monitoring panels.",
+        "properties": {
+          "average_latency_by_kind": {
+            "items": {
+              "$ref": "#/components/schemas/LatencyByRunKind"
+            },
+            "title": "Average Latency By Kind",
+            "type": "array"
+          },
+          "errors_by_type": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorCountSummary"
+            },
+            "title": "Errors By Type",
+            "type": "array"
+          },
+          "feedback": {
+            "$ref": "#/components/schemas/FeedbackUsefulSummary"
+          },
+          "model_usage_by_model": {
+            "items": {
+              "$ref": "#/components/schemas/ModelUsageSummary"
+            },
+            "title": "Model Usage By Model",
+            "type": "array"
+          },
+          "retrieval_volume": {
+            "$ref": "#/components/schemas/RetrievalVolumeSummary"
+          },
+          "runs_by_kind": {
+            "items": {
+              "$ref": "#/components/schemas/RunKindCount"
+            },
+            "title": "Runs By Kind",
+            "type": "array"
+          },
+          "total_runs": {
+            "minimum": 0.0,
+            "title": "Total Runs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_runs"
+        ],
+        "title": "MonitoringSummary",
+        "type": "object"
+      },
+      "RagAnswer": {
+        "description": "A grounded direct-RAG answer with validated repository citations.",
+        "properties": {
+          "change_targets": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeTarget"
+            },
+            "title": "Change Targets",
+            "type": "array"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItem"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "implementation_flow": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Implementation Flow",
+            "type": "array"
+          },
+          "insufficient_evidence": {
+            "default": false,
+            "title": "Insufficient Evidence",
+            "type": "boolean"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RagMode"
+          },
+          "question": {
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "relevant_files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Relevant Files",
+            "type": "array"
+          },
+          "relevant_symbols": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Relevant Symbols",
+            "type": "array"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Risks",
+            "type": "array"
+          },
+          "summary": {
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "unresolved_questions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Questions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "question",
+          "mode",
+          "summary",
+          "confidence"
+        ],
+        "title": "RagAnswer",
+        "type": "object"
+      },
+      "RagMode": {
+        "description": "The supported answer intents for direct RAG.",
+        "enum": [
+          "locate",
+          "flow",
+          "change",
+          "auto"
+        ],
+        "title": "RagMode",
+        "type": "string"
+      },
+      "RagRequest": {
+        "description": "A direct-RAG request scoped by CLI or API orchestration.",
+        "properties": {
+          "limit": {
+            "default": 5,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RagMode",
+            "default": "auto"
+          },
+          "question": {
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "repository_path": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Path"
+          },
+          "retrieval_mode": {
+            "$ref": "#/components/schemas/RetrievalMode",
+            "default": "dense"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "RagRequest",
+        "type": "object"
+      },
+      "RagRunResult": {
+        "description": "A direct-RAG answer plus application-owned runtime trace metadata.",
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/RagAnswer"
+          },
+          "trace": {
+            "$ref": "#/components/schemas/RagRunTrace"
+          }
+        },
+        "required": [
+          "answer",
+          "trace"
+        ],
+        "title": "RagRunResult",
+        "type": "object"
+      },
+      "RagRunTrace": {
+        "description": "Application-owned trace metadata for one direct-RAG run.",
+        "properties": {
+          "branch": {
+            "minLength": 1,
+            "title": "Branch",
+            "type": "string"
+          },
+          "commit_hash": {
+            "minLength": 1,
+            "title": "Commit Hash",
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "error_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Type"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Ids",
+            "type": "array"
+          },
+          "insufficient_evidence": {
+            "default": false,
+            "title": "Insufficient Evidence",
+            "type": "boolean"
+          },
+          "latency_ms_model": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms Model"
+          },
+          "latency_ms_retrieval": {
+            "minimum": 0.0,
+            "title": "Latency Ms Retrieval",
+            "type": "integer"
+          },
+          "latency_ms_total": {
+            "minimum": 0.0,
+            "title": "Latency Ms Total",
+            "type": "integer"
+          },
+          "model_usage": {
+            "items": {
+              "$ref": "#/components/schemas/ModelUsage"
+            },
+            "title": "Model Usage",
+            "type": "array"
+          },
+          "question_mode": {
+            "$ref": "#/components/schemas/RagMode"
+          },
+          "repository_id": {
+            "minLength": 1,
+            "title": "Repository Id",
+            "type": "string"
+          },
+          "repository_name": {
+            "minLength": 1,
+            "title": "Repository Name",
+            "type": "string"
+          },
+          "request_id": {
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retrieval_limit": {
+            "minimum": 1.0,
+            "title": "Retrieval Limit",
+            "type": "integer"
+          },
+          "retrieval_mode": {
+            "$ref": "#/components/schemas/RetrievalMode"
+          },
+          "retrieved_chunk_count": {
+            "minimum": 0.0,
+            "title": "Retrieved Chunk Count",
+            "type": "integer"
+          },
+          "session_id": {
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "tool_call_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Tool Call Count",
+            "type": "integer"
+          },
+          "total_estimated_cost_usd": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Estimated Cost Usd"
+          },
+          "unique_file_count": {
+            "minimum": 0.0,
+            "title": "Unique File Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "started_at",
+          "completed_at",
+          "repository_id",
+          "repository_name",
+          "branch",
+          "commit_hash",
+          "question_mode",
+          "retrieval_mode",
+          "retrieval_limit",
+          "retrieved_chunk_count",
+          "unique_file_count",
+          "latency_ms_total",
+          "latency_ms_retrieval"
+        ],
+        "title": "RagRunTrace",
+        "type": "object"
+      },
+      "RepositoryIdentity": {
+        "description": "The immutable source revision that a set of chunks describes.",
+        "properties": {
+          "branch": {
+            "minLength": 1,
+            "title": "Branch",
+            "type": "string"
+          },
+          "commit_hash": {
+            "minLength": 1,
+            "title": "Commit Hash",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "root_path": {
+            "format": "path",
+            "title": "Root Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "root_path",
+          "branch",
+          "commit_hash"
+        ],
+        "title": "RepositoryIdentity",
+        "type": "object"
+      },
+      "RepositoryIngestRequest": {
+        "description": "A request to parse and index a repository available to the backend.",
+        "properties": {
+          "repository_address": {
+            "minLength": 1,
+            "title": "Repository Address",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository_address"
+        ],
+        "title": "RepositoryIngestRequest",
+        "type": "object"
+      },
+      "ResearchAnswer": {
+        "description": "A grounded agentic-research answer with explicit process steps.",
+        "properties": {
+          "change_targets": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeTarget"
+            },
+            "title": "Change Targets",
+            "type": "array"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItem"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "implementation_flow": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Implementation Flow",
+            "type": "array"
+          },
+          "insufficient_evidence": {
+            "default": false,
+            "title": "Insufficient Evidence",
+            "type": "boolean"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RagMode",
+            "default": "change"
+          },
+          "question": {
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "relevant_files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Relevant Files",
+            "type": "array"
+          },
+          "relevant_symbols": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Relevant Symbols",
+            "type": "array"
+          },
+          "research_steps": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchStep"
+            },
+            "title": "Research Steps",
+            "type": "array"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Risks",
+            "type": "array"
+          },
+          "summary": {
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "unresolved_questions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Questions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "question",
+          "summary",
+          "confidence"
+        ],
+        "title": "ResearchAnswer",
+        "type": "object"
+      },
+      "ResearchBudget": {
+        "description": "Configurable tool-call limits for one bounded research run.",
+        "properties": {
+          "max_file_reads": {
+            "default": 6,
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Max File Reads",
+            "type": "integer"
+          },
+          "max_searches": {
+            "default": 5,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Searches",
+            "type": "integer"
+          },
+          "max_total_tool_calls": {
+            "default": 12,
+            "maximum": 40.0,
+            "minimum": 1.0,
+            "title": "Max Total Tool Calls",
+            "type": "integer"
+          }
+        },
+        "title": "ResearchBudget",
+        "type": "object"
+      },
+      "ResearchRequest": {
+        "description": "An agentic-research request scoped by CLI or API orchestration.",
+        "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/ResearchBudget"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RagMode",
+            "default": "change"
+          },
+          "question": {
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "repository_path": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Path"
+          },
+          "retrieval_limit": {
+            "default": 5,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Retrieval Limit",
+            "type": "integer"
+          },
+          "retrieval_mode": {
+            "$ref": "#/components/schemas/RetrievalMode",
+            "default": "dense"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "ResearchRequest",
+        "type": "object"
+      },
+      "ResearchRunResult": {
+        "description": "An agentic-research answer plus application-owned runtime trace metadata.",
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/ResearchAnswer"
+          },
+          "trace": {
+            "$ref": "#/components/schemas/RagRunTrace"
+          }
+        },
+        "required": [
+          "answer",
+          "trace"
+        ],
+        "title": "ResearchRunResult",
+        "type": "object"
+      },
+      "ResearchStep": {
+        "description": "One application-recorded step in a bounded research process.",
+        "properties": {
+          "action": {
+            "minLength": 1,
+            "title": "Action",
+            "type": "string"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Ids",
+            "type": "array"
+          },
+          "rationale": {
+            "minLength": 1,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "action",
+          "rationale"
+        ],
+        "title": "ResearchStep",
+        "type": "object"
+      },
+      "RetrievalMode": {
+        "description": "The supported repository retrieval strategies.",
+        "enum": [
+          "dense",
+          "sparse",
+          "hybrid"
+        ],
+        "title": "RetrievalMode",
+        "type": "string"
+      },
+      "RetrievalVolumeSummary": {
+        "description": "Aggregate retrieval volume for monitoring dashboards.",
+        "properties": {
+          "retrieved_chunk_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Retrieved Chunk Count",
+            "type": "integer"
+          },
+          "unique_file_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Unique File Count",
+            "type": "integer"
+          }
+        },
+        "title": "RetrievalVolumeSummary",
+        "type": "object"
+      },
+      "RunKind": {
+        "description": "The persisted run categories shown in monitoring dashboards.",
+        "enum": [
+          "direct",
+          "agentic"
+        ],
+        "title": "RunKind",
+        "type": "string"
+      },
+      "RunKindCount": {
+        "description": "Run count for one monitoring run kind.",
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "run_kind": {
+            "$ref": "#/components/schemas/RunKind"
+          }
+        },
+        "required": [
+          "run_kind",
+          "count"
+        ],
+        "title": "RunKindCount",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "name": "Repo Deep Research"
+    },
+    "description": "Repo Deep Research indexes Python repositories, answers direct and agentic research questions with cited repository evidence, records monitoring data, and exposes persisted answer-evaluation results.",
+    "license": {
+      "name": "MIT"
+    },
+    "summary": "Evidence-grounded research for Python repositories.",
+    "title": "Repo Deep Research",
+    "version": "0.5.7"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "get_api_index",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Get Api Index",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List API entry points",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/evaluations/results": {
+      "get": {
+        "operationId": "list_evaluation_results",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EvaluationSourceType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "run_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RunKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Run Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationResultList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List evaluation results",
+        "tags": [
+          "evaluations"
+        ]
+      }
+    },
+    "/evaluations/runs": {
+      "get": {
+        "operationId": "list_evaluation_runs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EvaluationSourceType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EvaluationRunStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationRunList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List evaluation runs",
+        "tags": [
+          "evaluations"
+        ]
+      }
+    },
+    "/evaluations/summary": {
+      "get": {
+        "operationId": "get_evaluation_summary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationDashboardSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get evaluation summary",
+        "tags": [
+          "evaluations"
+        ]
+      }
+    },
+    "/feedback": {
+      "post": {
+        "operationId": "record_feedback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackEvent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Persist answer feedback",
+        "tags": [
+          "feedback"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "get_health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "title": "Response Get Health",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Check dependency health",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/monitoring/runs": {
+      "get": {
+        "operationId": "list_monitoring_runs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "run_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RunKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Run Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "repository_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Repository Name"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_error",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Error"
+            }
+          },
+          {
+            "in": "query",
+            "name": "feedback",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MonitoringFeedbackFilter",
+              "default": "all"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringRunList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List monitoring runs",
+        "tags": [
+          "monitoring"
+        ]
+      }
+    },
+    "/monitoring/runs/{request_id}": {
+      "get": {
+        "operationId": "get_monitoring_run_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringRunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get monitoring run detail",
+        "tags": [
+          "monitoring"
+        ]
+      }
+    },
+    "/monitoring/summary": {
+      "get": {
+        "operationId": "get_monitoring_summary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get monitoring summary",
+        "tags": [
+          "monitoring"
+        ]
+      }
+    },
+    "/rag": {
+      "post": {
+        "operationId": "run_direct_rag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RagRunResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Answer with direct RAG",
+        "tags": [
+          "answers"
+        ]
+      }
+    },
+    "/repositories/ingest": {
+      "post": {
+        "operationId": "ingest_repository",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositoryIngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest and index a repository",
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/research": {
+      "post": {
+        "operationId": "run_agentic_research",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchRunResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Answer with bounded agentic research",
+        "tags": [
+          "answers"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "API discovery and dependency health.",
+      "name": "system"
+    },
+    {
+      "description": "Repository ingestion and indexing.",
+      "name": "repositories"
+    },
+    {
+      "description": "Direct RAG and bounded agentic research answers.",
+      "name": "answers"
+    },
+    {
+      "description": "Useful/not-useful feedback linked to answer runs.",
+      "name": "feedback"
+    },
+    {
+      "description": "Persisted run monitoring summaries and details.",
+      "name": "monitoring"
+    },
+    {
+      "description": "Persisted answer-evaluation summaries and results.",
+      "name": "evaluations"
+    }
+  ]
+}

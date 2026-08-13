@@ -91,6 +91,7 @@ make stack-up
 Then open `http://localhost:3000`, ingest a local repository, run at least one
 direct and one agentic question, submit feedback, and inspect:
 
+- `http://localhost:8000/docs`
 - `http://localhost:3000/monitoring`
 - `http://localhost:3000/evaluations`
 
@@ -106,11 +107,14 @@ make stack-up
 make ingest
 make rag QUESTION="where is configuration validated?"
 make research QUESTION="which files handle answer evaluation persistence?"
+make export-openapi
 make test-all
 ```
 
 After the RAG and research runs, confirm the browser can load the home page,
-`/monitoring`, and `/evaluations`.
+`/monitoring`, `/evaluations`, and the API Swagger UI at
+`http://localhost:8000/docs`. The generated OpenAPI contract is committed at
+`docs/api/openapi.json`.
 
 ## Full Stack
 
