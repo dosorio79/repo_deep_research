@@ -201,6 +201,7 @@ Required deliverables:
 
 - README Local Alpha section.
 - Stack diagram linked from README.
+- Swagger UI check and versioned OpenAPI contract.
 - Monitoring dashboard screenshot.
 - Evaluation dashboard screenshot.
 - Research UI screenshot.
@@ -216,6 +217,8 @@ Acceptance checks:
 
 - A user can clone, configure, start, ingest, query, inspect monitoring, and
   find evaluation evidence using only README and linked docs.
+- A user can open Swagger at `/docs` and inspect the committed
+  `docs/api/openapi.json` contract.
 - README maps major product capabilities to concrete files, commands,
   screenshots, or examples.
 - The release explicitly states that hosted deployment, multi-tenant auth, and
