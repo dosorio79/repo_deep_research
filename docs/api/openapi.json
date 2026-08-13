@@ -2163,31 +2163,6 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/": {
-      "get": {
-        "operationId": "get_api_index",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Get Api Index",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "List API entry points",
-        "tags": [
-          "system"
-        ]
-      }
-    },
     "/evaluations/results": {
       "get": {
         "operationId": "list_evaluation_results",

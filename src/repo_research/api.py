@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from openai import OpenAIError
 from qdrant_client.http.exceptions import ResponseHandlingException
 
@@ -212,18 +212,10 @@ def create_app(
 
     @app.get(
         "/",
-        tags=["system"],
-        summary="List API entry points",
-        operation_id="get_api_index",
+        include_in_schema=False,
     )
-    async def root() -> dict[str, str]:
-        return {
-            "name": "Repo Deep Research API",
-            "health": "/health",
-            "ingest": "POST /repositories/ingest",
-            "direct_rag": "POST /rag",
-            "agentic_rag": "POST /research",
-        }
+    async def root() -> RedirectResponse:
+        return RedirectResponse(url="/docs")
 
     @app.get(
         "/health",

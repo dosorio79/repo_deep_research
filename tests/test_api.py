@@ -391,7 +391,7 @@ async def test_health_reports_qdrant_status() -> None:
 
 
 @pytest.mark.anyio
-async def test_root_identifies_api_routes() -> None:
+async def test_root_redirects_to_swagger_docs() -> None:
     app = create_app(
         settings=Settings(repository_root=Path(".")),
         database=FakeDatabase(healthy=True),
@@ -403,16 +403,10 @@ async def test_root_identifies_api_routes() -> None:
     async with httpx.AsyncClient(
         transport=transport, base_url="http://testserver"
     ) as client:
-        response = await client.get("/")
+        response = await client.get("/", follow_redirects=False)
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "name": "Repo Deep Research API",
-        "health": "/health",
-        "ingest": "POST /repositories/ingest",
-        "direct_rag": "POST /rag",
-        "agentic_rag": "POST /research",
-    }
+    assert response.status_code == 307
+    assert response.headers["location"] == "/docs"
 
 
 @pytest.mark.anyio
