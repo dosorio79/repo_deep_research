@@ -17,8 +17,7 @@ Highest priorities:
 Goal: turn the PostgreSQL-backed monitoring page from cards and tables into a
 dashboard with at least five useful charts.
 
-Status: complete on `dev` through PR #11 and PR #12; not yet promoted to
-`main` as a tagged release.
+Status: released to `main` as `v0.5.6`.
 
 Requirements from the PRD:
 
@@ -87,8 +86,10 @@ Out of scope:
 Goal: publish defensible evaluation evidence for retrieval and answer quality,
 including both curated datasets and real monitored answers.
 
-Split the work into three release slices so the storage contract lands before
-runner and UI behavior:
+Status: released to `main` as `v0.5.7`.
+
+The work landed in three slices so the storage contract arrived before runner
+and UI behavior:
 
 - `v0.5.7a`: PostgreSQL persistence foundation for answer snapshots,
   evaluation runs, and evaluation results.
@@ -98,7 +99,7 @@ runner and UI behavior:
 
 ### v0.5.7a: Evaluation persistence foundation
 
-Status: merged to `dev`.
+Status: released in `v0.5.7`.
 
 Scope:
 
@@ -121,7 +122,7 @@ Acceptance checks:
 
 ### v0.5.7b: Unified evaluation runner
 
-Status: in progress on `feat/v0.5.7b-unified-evaluation-runner`.
+Status: released in `v0.5.7`.
 
 Retrieval evaluation:
 
@@ -168,8 +169,9 @@ Acceptance checks:
 Goal: make evaluation inspectable from the browser rather than only from CLI
 JSON output.
 
-Planned dashboard panels:
+Status: released in `v0.5.7`.
 
+Dashboard panels:
 - Average score by approach: direct versus agentic.
 - Score distribution by metric.
 - Unsupported-claim rate by approach.

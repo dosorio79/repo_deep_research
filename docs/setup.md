@@ -168,4 +168,5 @@ The project uses two long-lived branches:
 - `dev`: integration.
 
 Feature branches start from `dev`. Promote to production with a pull request
-from `dev` to `main`, then tag `main` with the release version.
+from `dev` to `main`, then tag `main` with the release version. The current
+release is `v0.5.7`.
