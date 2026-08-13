@@ -85,7 +85,7 @@ cp .env.example .env
 cp .env.local.example .env.local
 # edit .env.local and set OPENAI_API_KEY
 make install
-make stack-up
+make stack-start
 ```
 
 Then open `http://localhost:3000`, ingest a local repository, run at least one
@@ -104,7 +104,7 @@ Local Alpha validation checklist:
 
 ```bash
 make install
-make stack-up
+make stack-start
 make ingest
 make rag QUESTION="where is configuration validated?"
 make research QUESTION="which files handle answer evaluation persistence?"
@@ -122,16 +122,20 @@ OpenAPI contract is committed at `docs/api/openapi.json`.
 Start the production-like local stack:
 
 ```bash
-make stack-up
+make stack-start
 ```
 
 The frontend is available at `http://localhost:3000`; the API is available at
 `http://localhost:8000`. The frontend proxies API requests to the backend.
 
+Use `make stack-rebuild` after Dockerfile, dependency, or frontend build
+changes. Day-to-day alpha testing should use `make stack-start` so Docker can
+reuse existing images.
+
 Stop the stack:
 
 ```bash
-make stack-down
+make stack-stop
 ```
 
 ## Local App Mode

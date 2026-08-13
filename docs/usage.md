@@ -108,11 +108,14 @@ Direct RAG uses `limit`; agentic research uses `retrieval_limit`.
 Run the containerized stack:
 
 ```bash
-make stack-up
+make stack-start
 ```
 
 Open `http://localhost:3000`, ingest a repository, run direct or agentic
 research, submit feedback, and inspect monitoring at `/monitoring`.
+
+Use `make stack-rebuild` when Docker images need to be rebuilt after dependency,
+Dockerfile, or frontend build changes.
 
 For local development:
 

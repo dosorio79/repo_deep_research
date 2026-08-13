@@ -9,7 +9,7 @@ FRONTEND_NODE_VERSION := $(shell cat frontend/.nvmrc 2>/dev/null)
 FRONTEND_NODE_BIN := $(HOME)/.nvm/versions/node/v$(FRONTEND_NODE_VERSION)/bin
 FRONTEND_NPM := PATH=$(FRONTEND_NODE_BIN):$$PATH npm
 
-.PHONY: help install format lint typecheck test check test-all services-up services-down stack-up stack-down ingest rag research evaluate-retrieval evaluate-answers export-openapi api app
+.PHONY: help install format lint typecheck test check test-all services-up services-down stack-start stack-rebuild stack-up stack-stop stack-down ingest rag research evaluate-retrieval evaluate-answers export-openapi api app
 
 # -----------------------------------------------------------------------------
 # Help
@@ -30,8 +30,9 @@ help:
 	printf '%s\n' 'Services and stack'
 	printf '%s\n' '  make services-up            start Qdrant and PostgreSQL'
 	printf '%s\n' '  make services-down          stop local services'
-	printf '%s\n' '  make stack-up               build and start API, frontend, Qdrant, PostgreSQL'
-	printf '%s\n' '  make stack-down             stop the full stack'
+	printf '%s\n' '  make stack-start            start full stack without rebuilding'
+	printf '%s\n' '  make stack-rebuild          rebuild images and start full stack'
+	printf '%s\n' '  make stack-stop             stop the full stack'
 	printf '%s\n' ''
 	printf '%s\n' 'Repository workflows'
 	printf '%s\n' '  make ingest                 index this repository'
@@ -88,11 +89,18 @@ services-up:
 services-down:
 	docker compose down
 
-stack-up:
+stack-start:
+	docker compose up -d --wait
+
+stack-rebuild:
 	docker compose up --build -d --wait
 
-stack-down:
+stack-up: stack-rebuild
+
+stack-stop:
 	docker compose down
+
+stack-down: stack-stop
 
 # -----------------------------------------------------------------------------
 # Repository workflows
