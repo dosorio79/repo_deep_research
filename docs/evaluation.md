@@ -35,6 +35,16 @@ Metrics at the requested result limit:
 - file Precision;
 - symbol Hit Rate.
 
+Definitions:
+
+| Metric | Definition | Interpretation |
+|---|---|---|
+| File Hit Rate | Share of questions where at least one expected file appears in the top `k` retrieved results. | Best quick signal that retrieval can find the right area of the repository. |
+| File MRR | Mean reciprocal rank of the first expected file in the top `k` results. Questions with no hit contribute 0. | Rewards expected files appearing earlier in the ranked list. |
+| File Recall | For each question, expected files found in top `k` divided by total expected files; then averaged. | Measures coverage of all expected files, not only the first hit. |
+| File Precision | For each question, retrieved expected files divided by retrieved file results; then averaged. | Penalizes broad result sets that include many irrelevant files. |
+| Symbol Hit Rate | Share of questions with expected symbols where at least one expected symbol appears in the top `k` results. | Applies only when the record declares relevant symbols. |
+
 Use the held-out report to choose the production retrieval mode. The baseline
 uses Qdrant Reciprocal Rank Fusion without tuned weights; query rewriting and
 reranking are intentionally not part of this comparison.
@@ -111,6 +121,24 @@ claim count. For monitored Evidence Audit runs, answer correctness and
 reference coverage are unavailable because there is no independent ground-truth
 record. The dashboard omits unavailable values from metric averages and shows
 persisted answer evidence so evidence IDs can be inspected.
+
+Answer-evaluation metric definitions:
+
+| Metric | Scale | Available for | Definition |
+|---|---:|---|---|
+| Answer correctness | 0-5, nullable | Ground Truth dataset runs | How well the answer matches the manually verified expected files, symbols, and notes. |
+| Faithfulness | 0-5 | Ground Truth and Evidence Audit | Whether claims in the answer are supported by cited repository evidence. |
+| Citation precision | 0-5 | Ground Truth and Evidence Audit | Whether cited evidence IDs actually support the claims attached to them. |
+| Reference coverage | 0-5, nullable | Ground Truth dataset runs | How completely the answer cites the expected files or symbols from the dataset record. |
+| Answer relevance | 0-5 | Ground Truth and Evidence Audit | Whether the answer addresses the user question without drifting into unrelated implementation detail. |
+| Presentation quality | 0-5 | Ground Truth and Evidence Audit | Whether the answer is structured, concise, and useful for a technical reader. |
+| Unsupported claim count | Count | Ground Truth and Evidence Audit | Number of material answer claims the judge identifies as unsupported by evidence. |
+
+Dashboard average score is intentionally conservative and comparable across
+Ground Truth and Evidence Audit rows. It averages only the metrics that exist in
+both modes: faithfulness, citation precision, answer relevance, and
+presentation quality. Ground-truth-only fields remain visible in the table but
+are not part of the cross-mode average.
 
 When `--persist` is supplied, dataset evaluations write `evaluation_results`
 with the dataset `record_id` and no `request_id`, because generated dataset

@@ -181,6 +181,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Usage](docs/usage.md)
 - [Architecture](docs/architecture.md) including the Local Alpha stack diagram
 - [Evaluation](docs/evaluation.md)
+- [Monitoring KPIs](docs/monitoring.md)
 - [OpenAPI contract](docs/api/openapi.json)
 - [Implementation history](docs/plans/)
 
