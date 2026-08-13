@@ -93,6 +93,9 @@ POST /feedback    Persist useful/not-useful feedback linked by session_id
 GET  /monitoring/summary    Aggregate admin dashboard data from PostgreSQL
 GET  /monitoring/runs       Recent persisted run rows
 GET  /monitoring/runs/{request_id}  One persisted run detail
+GET  /evaluations/summary   Aggregate admin evaluation data from PostgreSQL
+GET  /evaluations/runs      Recent persisted evaluation runs
+GET  /evaluations/results   Recent persisted evaluation result rows
 ```
 
 ## Data Flow
@@ -124,6 +127,24 @@ and commit identity, path, symbol, parent symbol, line range, content,
 contextual metadata, and deterministic content/point IDs. Qdrant persists that
 payload, allowing search and answers to return evidence rather than only text
 snippets.
+
+Each indexed chunk becomes one Qdrant point:
+
+- Point ID: the deterministic chunk ID.
+- Payload: the full `ParsedChunk` JSON, including the chunk text in `content`
+  plus repository, commit, path, symbol, line range, chunk type, and metadata.
+- Dense vector: a named `dense` vector generated from `ParsedChunk.content` by
+  the configured FastEmbed dense model and compared with cosine distance.
+- Sparse vector: a named `sparse` vector generated from the same
+  `ParsedChunk.content` by the configured FastEmbed sparse encoder.
+
+The source text is therefore not stored "inside" the vector. Qdrant stores the
+text as point payload so the application can reconstruct evidence, and stores
+the dense and sparse vectors beside that payload so queries can rank matching
+chunks. Dense search embeds the query and searches the `dense` vector; sparse
+search encodes the query and searches the `sparse` vector; hybrid search asks
+Qdrant to combine bounded dense and sparse candidates with Reciprocal Rank
+Fusion.
 
 `RepositoryDatabase` stages replacements by validating dense and sparse
 embeddings and upserting named `dense`/`sparse` vectors before deleting stale

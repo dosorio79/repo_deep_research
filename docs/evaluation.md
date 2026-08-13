@@ -49,6 +49,12 @@ Use the held-out report to choose the production retrieval mode. The baseline
 uses Qdrant Reciprocal Rank Fusion without tuned weights; query rewriting and
 reranking are intentionally not part of this comparison.
 
+The `/evaluations` dashboard shows a read-only highlight of the curated
+held-out search baseline so a local alpha user can see retrieval quality even
+before any answer-judge results have been persisted. Full search-evaluation
+reports still come from the CLI and remain reproducible through the versioned
+datasets and `make evaluate-retrieval`.
+
 ## Measured Retrieval Baseline
 
 On 2026-07-24, commit `5e23291`, this repository was re-ingested into a local
@@ -157,6 +163,11 @@ dashboard reads:
 - `GET /evaluations/summary` for aggregate score cards and chart data.
 - `GET /evaluations/runs` for recent persisted evaluation runs.
 - `GET /evaluations/results` for individual judged answer rows.
+
+Search-evaluation highlights on this page are documented release measurements,
+not rows loaded from PostgreSQL. They summarize the latest curated
+`eval/held_out.json` retrieval baseline, while answer-evaluation charts and
+tables reflect persisted PostgreSQL rows.
 
 Evaluation scores are scoped evidence, not global model scores. Dataset
 evaluations are specific to the JSON dataset used for the run, and monitored-run
