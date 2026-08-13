@@ -35,24 +35,40 @@ Metrics at the requested result limit:
 - file Precision;
 - symbol Hit Rate.
 
+Definitions:
+
+| Metric | Definition | Interpretation |
+|---|---|---|
+| File Hit Rate | Share of questions where at least one expected file appears in the top `k` retrieved results. | Best quick signal that retrieval can find the right area of the repository. |
+| File MRR | Mean reciprocal rank of the first expected file in the top `k` results. Questions with no hit contribute 0. | Rewards expected files appearing earlier in the ranked list. |
+| File Recall | For each question, expected files found in top `k` divided by total expected files; then averaged. | Measures coverage of all expected files, not only the first hit. |
+| File Precision | For each question, retrieved expected files divided by retrieved file results; then averaged. | Penalizes broad result sets that include many irrelevant files. |
+| Symbol Hit Rate | Share of questions with expected symbols where at least one expected symbol appears in the top `k` results. | Applies only when the record declares relevant symbols. |
+
 Use the held-out report to choose the production retrieval mode. The baseline
 uses Qdrant Reciprocal Rank Fusion without tuned weights; query rewriting and
 reranking are intentionally not part of this comparison.
 
+The `/evaluations` dashboard shows a read-only highlight of the curated
+held-out search baseline so a local alpha user can see retrieval quality even
+before any answer-judge results have been persisted. Full search-evaluation
+reports still come from the CLI and remain reproducible through the versioned
+datasets and `make evaluate-retrieval`.
+
 ## Measured Retrieval Baseline
 
-On 2026-07-24, commit `5e23291`, this repository was re-ingested into a local
+On 2026-08-13, the local alpha branch was re-ingested into a local
 `repo_chunks_v2` collection and evaluated at five results per question. The
 generated reports are intentionally not committed; the audited measurements are:
 
 | Dataset | Mode | File Hit Rate | File MRR | File Recall | File Precision | Symbol Hit Rate |
 |---|---:|---:|---:|---:|---:|---:|
-| Development | dense | 0.667 | 0.491 | 0.461 | 0.190 | 0.429 |
-| Development | sparse | 0.267 | 0.139 | 0.222 | 0.066 | 0.071 |
-| Development | hybrid | 0.467 | 0.347 | 0.294 | 0.112 | 0.286 |
-| Held-out | dense | 0.733 | 0.539 | 0.589 | 0.247 | 0.600 |
-| Held-out | sparse | 0.467 | 0.236 | 0.356 | 0.100 | 0.333 |
-| Held-out | hybrid | 0.600 | 0.417 | 0.456 | 0.153 | 0.467 |
+| Development | dense | 0.400 | 0.236 | 0.272 | 0.090 | 0.357 |
+| Development | sparse | 0.067 | 0.033 | 0.067 | 0.013 | 0.071 |
+| Development | hybrid | 0.333 | 0.163 | 0.250 | 0.077 | 0.357 |
+| Held-out | dense | 0.467 | 0.313 | 0.311 | 0.200 | 0.400 |
+| Held-out | sparse | 0.133 | 0.080 | 0.100 | 0.030 | 0.267 |
+| Held-out | hybrid | 0.400 | 0.261 | 0.278 | 0.103 | 0.333 |
 
 Dense retrieval is therefore the production default
 (`RDR_RETRIEVAL_MODE=dense`). Hybrid remains available for future evaluated
@@ -112,6 +128,24 @@ reference coverage are unavailable because there is no independent ground-truth
 record. The dashboard omits unavailable values from metric averages and shows
 persisted answer evidence so evidence IDs can be inspected.
 
+Answer-evaluation metric definitions:
+
+| Metric | Scale | Available for | Definition |
+|---|---:|---|---|
+| Answer correctness | 0-5, nullable | Ground Truth dataset runs | How well the answer matches the manually verified expected files, symbols, and notes. |
+| Faithfulness | 0-5 | Ground Truth and Evidence Audit | Whether claims in the answer are supported by cited repository evidence. |
+| Citation precision | 0-5 | Ground Truth and Evidence Audit | Whether cited evidence IDs actually support the claims attached to them. |
+| Reference coverage | 0-5, nullable | Ground Truth dataset runs | How completely the answer cites the expected files or symbols from the dataset record. |
+| Answer relevance | 0-5 | Ground Truth and Evidence Audit | Whether the answer addresses the user question without drifting into unrelated implementation detail. |
+| Presentation quality | 0-5 | Ground Truth and Evidence Audit | Whether the answer is structured, concise, and useful for a technical reader. |
+| Unsupported claim count | Count | Ground Truth and Evidence Audit | Number of material answer claims the judge identifies as unsupported by evidence. |
+
+Dashboard average score is intentionally conservative and comparable across
+Ground Truth and Evidence Audit rows. It averages only the metrics that exist in
+both modes: faithfulness, citation precision, answer relevance, and
+presentation quality. Ground-truth-only fields remain visible in the table but
+are not part of the cross-mode average.
+
 When `--persist` is supplied, dataset evaluations write `evaluation_results`
 with the dataset `record_id` and no `request_id`, because generated dataset
 answers are not stored in `answer_snapshots`. Monitored-run evaluations keep the
@@ -129,6 +163,17 @@ dashboard reads:
 - `GET /evaluations/summary` for aggregate score cards and chart data.
 - `GET /evaluations/runs` for recent persisted evaluation runs.
 - `GET /evaluations/results` for individual judged answer rows.
+
+Search-evaluation highlights on this page are documented release measurements,
+not rows loaded from PostgreSQL. They summarize the latest curated
+`eval/held_out.json` retrieval baseline, while answer-evaluation charts and
+tables reflect persisted PostgreSQL rows.
+
+Evaluation scores are scoped evidence, not global model scores. Dataset
+evaluations are specific to the JSON dataset used for the run, and monitored-run
+evaluations are specific to the repository that produced the original answer
+snapshot. The dashboard exposes this as a repository-or-dataset context so users
+can compare scores within the same source instead of mixing unrelated questions.
 
 Run answer evaluation from the CLI with `--persist` to populate the dashboard.
 Files under `eval/results/` remain optional exports for reproducible batch runs.

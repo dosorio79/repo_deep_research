@@ -49,12 +49,14 @@ class FakeConnection:
         answer_snapshot_rows: list[dict[str, Any]] | None = None,
         evaluation_run_rows: list[dict[str, Any]] | None = None,
         evaluation_result_rows: list[dict[str, Any]] | None = None,
+        retrieval_evaluation_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self.run_rows = run_rows or []
         self.feedback_rows = feedback_rows or []
         self.answer_snapshot_rows = answer_snapshot_rows or []
         self.evaluation_run_rows = evaluation_run_rows or []
         self.evaluation_result_rows = evaluation_result_rows or []
+        self.retrieval_evaluation_rows = retrieval_evaluation_rows or []
         self.executed: list[tuple[str, dict[str, Any] | None]] = []
 
     def __enter__(self) -> FakeConnection:
@@ -69,6 +71,8 @@ class FakeConnection:
         self.executed.append((statement, params))
         if "FROM answer_snapshots" in statement:
             return FakeCursor(self.answer_snapshot_rows)
+        if "FROM retrieval_evaluation_results" in statement:
+            return FakeCursor(self.retrieval_evaluation_rows)
         if "FROM evaluation_results" in statement:
             return FakeCursor(self.evaluation_result_rows)
         if "FROM evaluation_runs" in statement:
@@ -115,6 +119,11 @@ def test_recording_store_initializes_postgres_schema() -> None:
     assert any(
         "CREATE TABLE IF NOT EXISTS evaluation_results" in sql for sql in statements
     )
+    assert any(
+        "CREATE TABLE IF NOT EXISTS retrieval_evaluation_results" in sql
+        for sql in statements
+    )
+    assert any("INSERT INTO retrieval_evaluation_results" in sql for sql in statements)
     assert any("monitoring_runs_session_id_idx" in sql for sql in statements)
     assert any("monitoring_runs_completed_at_idx" in sql for sql in statements)
     assert any("feedback_events_session_id_idx" in sql for sql in statements)
@@ -411,6 +420,29 @@ def test_recording_store_returns_evaluation_dashboard_data() -> None:
     assert results.results[0].average_score == 5
     assert results.results[0].feedback_useful == 1
     assert results.results[0].answer_evidence[0].evidence_id == "E1"
+
+
+def test_recording_store_returns_retrieval_evaluation_results() -> None:
+    connection = FakeConnection(
+        retrieval_evaluation_rows=[
+            _retrieval_evaluation_row(dataset="Development", mode="dense"),
+            _retrieval_evaluation_row(dataset="Held-out", mode="hybrid"),
+            _retrieval_evaluation_row(dataset="Held-out", mode="dense", selected=True),
+        ]
+    )
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    results = store.list_retrieval_evaluation_results()
+
+    assert [(item.dataset, item.mode) for item in results.results] == [
+        ("Held-out", RetrievalMode.DENSE),
+        ("Held-out", RetrievalMode.HYBRID),
+        ("Development", RetrievalMode.DENSE),
+    ]
+    assert results.results[0].selected is True
+    assert results.results[0].file_hit_rate == 0.467
 
 
 def test_recording_store_returns_monitoring_summary() -> None:
@@ -750,6 +782,11 @@ def _evaluation_result_row(
         "evaluation_run_id": evaluation_run_id,
         "source_type": source_type,
         "source_label": source_label,
+        "repository_name": "repo_deep_research"
+        if source_type == "monitored_runs"
+        else None,
+        "branch": "dev" if source_type == "monitored_runs" else None,
+        "commit_hash": "abc123" if source_type == "monitored_runs" else None,
         "record_id": "record-1",
         "request_id": "request-1",
         "run_kind": run_kind,
@@ -779,4 +816,27 @@ def _evaluation_result_row(
             }
         ],
         "created_at": datetime(2026, 8, 11, 12, tzinfo=UTC),
+    }
+
+
+def _retrieval_evaluation_row(
+    *,
+    dataset: str,
+    mode: str,
+    selected: bool = False,
+) -> dict[str, Any]:
+    dataset_path = dataset.lower().replace("-", "_")
+    return {
+        "dataset": dataset,
+        "mode": mode,
+        "source_label": f"eval/{dataset_path}.json local alpha smoke",
+        "limit_value": 5,
+        "record_count": 15,
+        "file_hit_rate": Decimal("0.467") if selected else Decimal("0.400"),
+        "file_mrr": Decimal("0.313") if selected else Decimal("0.261"),
+        "file_recall": Decimal("0.311") if selected else Decimal("0.278"),
+        "file_precision": Decimal("0.200") if selected else Decimal("0.103"),
+        "symbol_hit_rate": Decimal("0.400") if selected else Decimal("0.333"),
+        "selected": selected,
+        "measured_at": datetime(2026, 8, 13, tzinfo=UTC),
     }

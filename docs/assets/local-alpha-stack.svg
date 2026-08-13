@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-labelledby="title desc">
+  <title id="title">Repo Deep Research Local Alpha stack</title>
+  <desc id="desc">Local browser and CLI call a React frontend and FastAPI backend. The backend uses Qdrant for dense and sparse search, PostgreSQL for monitoring and evaluations, OpenAI in bring-your-own-key mode, and a local Python repository.</desc>
+  <style>
+    .bg { fill: #f8fafc; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 10; }
+    .accent { fill: #ecfeff; stroke: #0891b2; }
+    .store { fill: #f0fdf4; stroke: #16a34a; }
+    .model { fill: #faf5ff; stroke: #9333ea; }
+    .repo { fill: #fff7ed; stroke: #ea580c; }
+    .text { font: 600 18px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+    .small { font: 500 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+    .label { font: 700 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+    .arrow { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#64748b" />
+    </marker>
+  </defs>
+  <rect class="bg" width="960" height="360" rx="18" />
+  <text class="text" x="36" y="42">Repo Deep Research v0.5.8 Local Alpha</text>
+  <text class="small" x="36" y="66">Local-only BYOK stack for repository research, monitoring, and evaluation evidence.</text>
+
+  <rect class="panel" x="38" y="118" width="130" height="82" />
+  <text class="label" x="66" y="151">Browser</text>
+  <text class="small" x="62" y="174">User workflow</text>
+
+  <rect class="panel" x="38" y="228" width="130" height="82" />
+  <text class="label" x="80" y="261">CLI</text>
+  <text class="small" x="61" y="284">Local runs</text>
+
+  <rect class="accent" x="245" y="118" width="150" height="82" rx="10" />
+  <text class="label" x="294" y="151">React</text>
+  <text class="small" x="277" y="174">Frontend UI</text>
+
+  <rect class="accent" x="245" y="228" width="150" height="82" rx="10" />
+  <text class="label" x="294" y="261">FastAPI</text>
+  <text class="small" x="273" y="284">Swagger / API</text>
+
+  <rect class="store" x="485" y="42" width="160" height="72" rx="10" />
+  <text class="label" x="540" y="73">Qdrant</text>
+  <text class="small" x="508" y="96">dense + sparse vectors</text>
+
+  <rect class="store" x="485" y="144" width="160" height="72" rx="10" />
+  <text class="label" x="526" y="175">PostgreSQL</text>
+  <text class="small" x="509" y="198">monitoring + evals</text>
+
+  <rect class="model" x="485" y="246" width="160" height="72" rx="10" />
+  <text class="label" x="541" y="277">OpenAI</text>
+  <text class="small" x="527" y="300">BYOK calls</text>
+
+  <rect class="repo" x="740" y="144" width="170" height="72" rx="10" />
+  <text class="label" x="784" y="175">Local Repo</text>
+  <text class="small" x="773" y="198">Python + docs</text>
+
+  <path class="arrow" d="M168 159 H245" />
+  <path class="arrow" d="M168 269 H245" />
+  <path class="arrow" d="M320 200 V228" />
+  <path class="arrow" d="M395 269 C430 269 446 282 485 282" />
+  <path class="arrow" d="M395 159 C432 159 445 78 485 78" />
+  <path class="arrow" d="M395 269 C432 269 445 180 485 180" />
+  <path class="arrow" d="M645 78 C696 78 696 180 740 180" />
+  <path class="arrow" d="M740 180 H645" />
+  <path class="arrow" d="M645 282 C700 282 705 216 740 198" />
+
+  <text class="small" x="742" y="273">Docker Compose runs frontend, API, Qdrant, and PostgreSQL locally.</text>
+  <text class="small" x="742" y="296">Admin monitoring and evaluation views are local operator evidence surfaces.</text>
+</svg>

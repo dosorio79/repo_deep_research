@@ -7,7 +7,7 @@ flowchart LR
   User[User Browser / CLI] --> Frontend[React Frontend]
   User --> CLI[repo-research CLI]
 
-  Frontend --> API[FastAPI Backend]
+  Frontend --> API[FastAPI Backend / Swagger UI]
   CLI --> Core[Repo Research Services]
   API --> Core
 
@@ -28,8 +28,8 @@ flowchart LR
   API --> Postgres[PostgreSQL]
   Core --> Postgres
 
-  Postgres --> Monitoring[Monitoring Dashboard]
-  Postgres --> EvalDash[Evaluation Dashboard]
+  Postgres --> Monitoring[Admin Monitoring Dashboard]
+  Postgres --> EvalDash[Admin Evaluation Dashboard]
   Frontend --> Monitoring
   Frontend --> EvalDash
 ```
@@ -82,15 +82,20 @@ reads, and total calls.
 ## API Surface
 
 ```text
-GET  /            API index with endpoint listing
+GET  /            Redirect to Swagger UI at /docs
+GET  /docs        Swagger UI for the FastAPI contract
+GET  /openapi.json  Runtime OpenAPI JSON
 GET  /health      Qdrant dependency health
 POST /repositories/ingest   Parse and index a repository
 POST /rag         Direct RAG answer with trace metadata
 POST /research    Bounded agentic research with trace metadata
 POST /feedback    Persist useful/not-useful feedback linked by session_id
-GET  /monitoring/summary    Aggregate dashboard data from PostgreSQL
+GET  /monitoring/summary    Aggregate admin dashboard data from PostgreSQL
 GET  /monitoring/runs       Recent persisted run rows
 GET  /monitoring/runs/{request_id}  One persisted run detail
+GET  /evaluations/summary   Aggregate admin evaluation data from PostgreSQL
+GET  /evaluations/runs      Recent persisted evaluation runs
+GET  /evaluations/results   Recent persisted evaluation result rows
 ```
 
 ## Data Flow
@@ -114,7 +119,7 @@ recording_store.py -- persist run data, feedback, snapshots, evaluations
 repo-research CLI / FastAPI -- JSON evidence and grounded answers
         |
         v
-frontend/ -- browser research UI, feedback, and monitoring dashboard
+frontend/ -- browser research UI, feedback, and admin monitoring dashboard
 ```
 
 `ParsedChunk` is the boundary between parsing and storage. It carries repository
@@ -122,6 +127,24 @@ and commit identity, path, symbol, parent symbol, line range, content,
 contextual metadata, and deterministic content/point IDs. Qdrant persists that
 payload, allowing search and answers to return evidence rather than only text
 snippets.
+
+Each indexed chunk becomes one Qdrant point:
+
+- Point ID: the deterministic chunk ID.
+- Payload: the full `ParsedChunk` JSON, including the chunk text in `content`
+  plus repository, commit, path, symbol, line range, chunk type, and metadata.
+- Dense vector: a named `dense` vector generated from `ParsedChunk.content` by
+  the configured FastEmbed dense model and compared with cosine distance.
+- Sparse vector: a named `sparse` vector generated from the same
+  `ParsedChunk.content` by the configured FastEmbed sparse encoder.
+
+The source text is therefore not stored "inside" the vector. Qdrant stores the
+text as point payload so the application can reconstruct evidence, and stores
+the dense and sparse vectors beside that payload so queries can rank matching
+chunks. Dense search embeds the query and searches the `dense` vector; sparse
+search encodes the query and searches the `sparse` vector; hybrid search asks
+Qdrant to combine bounded dense and sparse candidates with Reciprocal Rank
+Fusion.
 
 `RepositoryDatabase` stages replacements by validating dense and sparse
 embeddings and upserting named `dense`/`sparse` vectors before deleting stale
@@ -165,8 +188,9 @@ persisted application data.
 client of the FastAPI contract: it submits question mode, retrieval mode, limit,
 research kind, and session ID, then renders answers, evidence, trace metadata,
 model usage, cost telemetry, research steps, and change targets. The monitoring
-route renders PostgreSQL-backed run history, scoped summary cards, chart panels,
-an all-time summary, and selected run detail in a sheet.
+and evaluations routes are local admin/operator surfaces: they render
+PostgreSQL-backed run history, scoped summary cards, chart panels, evaluation
+results, and selected run detail for the person running the stack.
 
 `pricing.py` keeps OpenAI cost estimation separate from answer generation.
 Unknown model prices, explicit empty pricing overrides, and inconsistent

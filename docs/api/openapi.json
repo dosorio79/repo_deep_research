@@ -217,11 +217,40 @@
             "title": "Average Score",
             "type": "number"
           },
+          "branch": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
           "citation_precision": {
             "maximum": 5.0,
             "minimum": 0.0,
             "title": "Citation Precision",
             "type": "number"
+          },
+          "commit_hash": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Hash"
+          },
+          "context_label": {
+            "minLength": 1,
+            "title": "Context Label",
+            "type": "string"
           },
           "created_at": {
             "format": "date-time",
@@ -302,6 +331,18 @@
             ],
             "title": "Reference Coverage"
           },
+          "repository_name": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Name"
+          },
           "request_id": {
             "anyOf": [
               {
@@ -360,6 +401,7 @@
           "evaluation_run_id",
           "source_type",
           "source_label",
+          "context_label",
           "question",
           "faithfulness",
           "citation_precision",
@@ -464,6 +506,13 @@
               }
             ],
             "title": "Completed At"
+          },
+          "context_labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Context Labels",
+            "type": "array"
           },
           "error_message": {
             "anyOf": [
@@ -2050,6 +2099,103 @@
         "title": "ResearchStep",
         "type": "object"
       },
+      "RetrievalEvaluationList": {
+        "description": "Persisted retrieval-evaluation metrics for the dashboard.",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalEvaluationSummary"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "title": "RetrievalEvaluationList",
+        "type": "object"
+      },
+      "RetrievalEvaluationSummary": {
+        "description": "Persisted retrieval-evaluation metric row for dashboard highlights.",
+        "properties": {
+          "dataset": {
+            "minLength": 1,
+            "title": "Dataset",
+            "type": "string"
+          },
+          "file_hit_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "File Hit Rate",
+            "type": "number"
+          },
+          "file_mrr": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "File Mrr",
+            "type": "number"
+          },
+          "file_precision": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "File Precision",
+            "type": "number"
+          },
+          "file_recall": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "File Recall",
+            "type": "number"
+          },
+          "limit": {
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "measured_at": {
+            "format": "date-time",
+            "title": "Measured At",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RetrievalMode"
+          },
+          "record_count": {
+            "minimum": 0.0,
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "selected": {
+            "default": false,
+            "title": "Selected",
+            "type": "boolean"
+          },
+          "source_label": {
+            "minLength": 1,
+            "title": "Source Label",
+            "type": "string"
+          },
+          "symbol_hit_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Symbol Hit Rate",
+            "type": "number"
+          }
+        },
+        "required": [
+          "dataset",
+          "mode",
+          "limit",
+          "record_count",
+          "file_hit_rate",
+          "file_mrr",
+          "file_recall",
+          "file_precision",
+          "symbol_hit_rate",
+          "source_label",
+          "measured_at"
+        ],
+        "title": "RetrievalEvaluationSummary",
+        "type": "object"
+      },
       "RetrievalMode": {
         "description": "The supported repository retrieval strategies.",
         "enum": [
@@ -2159,35 +2305,10 @@
     },
     "summary": "Evidence-grounded research for Python repositories.",
     "title": "Repo Deep Research",
-    "version": "0.5.7"
+    "version": "0.5.8"
   },
   "openapi": "3.1.0",
   "paths": {
-    "/": {
-      "get": {
-        "operationId": "get_api_index",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Get Api Index",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "List API entry points",
-        "tags": [
-          "system"
-        ]
-      }
-    },
     "/evaluations/results": {
       "get": {
         "operationId": "list_evaluation_results",
@@ -2235,6 +2356,23 @@
               ],
               "title": "Run Kind"
             }
+          },
+          {
+            "in": "query",
+            "name": "context_label",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Context Label"
+            }
           }
         ],
         "responses": {
@@ -2260,6 +2398,27 @@
           }
         },
         "summary": "List evaluation results",
+        "tags": [
+          "evaluations"
+        ]
+      }
+    },
+    "/evaluations/retrieval": {
+      "get": {
+        "operationId": "list_retrieval_evaluation_results",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrievalEvaluationList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List retrieval evaluation metrics",
         "tags": [
           "evaluations"
         ]

@@ -4,11 +4,17 @@ import userEvent from "@testing-library/user-event";
 import type { ComponentType, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route } from "./evaluations";
-import { getEvaluationResults, getEvaluationRuns, getEvaluationSummary } from "@/lib/rag-client";
+import {
+  getEvaluationResults,
+  getEvaluationRuns,
+  getEvaluationSummary,
+  getRetrievalEvaluationResults,
+} from "@/lib/rag-client";
 import type {
   EvaluationDashboardSummary,
   EvaluationResultList,
   EvaluationRunList,
+  RetrievalEvaluationList,
 } from "@/lib/rag-types";
 
 vi.mock("@/components/AppShell", () => ({
@@ -19,6 +25,7 @@ vi.mock("@/lib/rag-client", () => ({
   getEvaluationResults: vi.fn(),
   getEvaluationRuns: vi.fn(),
   getEvaluationSummary: vi.fn(),
+  getRetrievalEvaluationResults: vi.fn(),
 }));
 
 const emptySummary: EvaluationDashboardSummary = {
@@ -66,6 +73,7 @@ const runList: EvaluationRunList = {
       evaluation_run_id: "eval-run-1",
       source_type: "monitored_runs",
       source_label: "monitored-runs",
+      context_labels: ["repo_deep_research"],
       judge_model: "gpt-5.1",
       status: "completed",
       started_at: "2026-08-11T12:00:00Z",
@@ -85,6 +93,10 @@ const resultList: EvaluationResultList = {
       evaluation_run_id: "eval-run-1",
       source_type: "monitored_runs",
       source_label: "monitored-runs",
+      context_label: "repo_deep_research",
+      repository_name: "repo_deep_research",
+      branch: "dev",
+      commit_hash: "abc123",
       record_id: null,
       request_id: "request-1",
       run_kind: "agentic",
@@ -121,6 +133,10 @@ const resultList: EvaluationResultList = {
       evaluation_run_id: "eval-run-1",
       source_type: "monitored_runs",
       source_label: "monitored-runs",
+      context_label: "repo_deep_research",
+      repository_name: "repo_deep_research",
+      branch: "dev",
+      commit_hash: "abc123",
       record_id: null,
       request_id: "request-2",
       run_kind: "direct",
@@ -144,6 +160,53 @@ const resultList: EvaluationResultList = {
   ],
 };
 
+const retrievalEvaluationList: RetrievalEvaluationList = {
+  results: [
+    {
+      dataset: "Held-out",
+      mode: "dense",
+      source_label: "eval/held_out.json local alpha smoke",
+      limit: 5,
+      record_count: 15,
+      file_hit_rate: 0.467,
+      file_mrr: 0.313,
+      file_recall: 0.311,
+      file_precision: 0.2,
+      symbol_hit_rate: 0.4,
+      selected: true,
+      measured_at: "2026-08-13T00:00:00Z",
+    },
+    {
+      dataset: "Held-out",
+      mode: "hybrid",
+      source_label: "eval/held_out.json local alpha smoke",
+      limit: 5,
+      record_count: 15,
+      file_hit_rate: 0.4,
+      file_mrr: 0.261,
+      file_recall: 0.278,
+      file_precision: 0.103,
+      symbol_hit_rate: 0.333,
+      selected: false,
+      measured_at: "2026-08-13T00:00:00Z",
+    },
+    {
+      dataset: "Held-out",
+      mode: "sparse",
+      source_label: "eval/held_out.json local alpha smoke",
+      limit: 5,
+      record_count: 15,
+      file_hit_rate: 0.133,
+      file_mrr: 0.08,
+      file_recall: 0.1,
+      file_precision: 0.03,
+      symbol_hit_rate: 0.267,
+      selected: false,
+      measured_at: "2026-08-13T00:00:00Z",
+    },
+  ],
+};
+
 function renderEvaluationsRoute() {
   const EvaluationsComponent = Route.options.component as ComponentType;
   return render(
@@ -158,8 +221,10 @@ describe("Evaluations route", () => {
     vi.mocked(getEvaluationResults).mockReset();
     vi.mocked(getEvaluationRuns).mockReset();
     vi.mocked(getEvaluationSummary).mockReset();
+    vi.mocked(getRetrievalEvaluationResults).mockReset();
     vi.mocked(getEvaluationRuns).mockResolvedValue({ runs: [] });
     vi.mocked(getEvaluationResults).mockResolvedValue({ results: [] });
+    vi.mocked(getRetrievalEvaluationResults).mockResolvedValue(retrievalEvaluationList);
   });
 
   it("renders an honest empty state before persisted results exist", async () => {
@@ -167,9 +232,11 @@ describe("Evaluations route", () => {
 
     renderEvaluationsRoute();
 
-    expect(
-      await screen.findByText(/No persisted evaluation results are available/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Search evaluation highlights")).toBeInTheDocument();
+    expect(screen.getByText("Selected retrieval mode")).toBeInTheDocument();
+    expect(screen.getByText("Held-out file hit rate")).toBeInTheDocument();
+    expect(screen.getAllByText("47%").length).toBeGreaterThan(0);
+    expect(screen.getByText(/No persisted evaluation results are available/)).toBeInTheDocument();
   });
 
   it("shows an API error without also claiming there are no results", async () => {
@@ -193,7 +260,9 @@ describe("Evaluations route", () => {
 
     renderEvaluationsRoute();
 
-    expect(await screen.findByText("Evaluated answers")).toBeInTheDocument();
+    expect(await screen.findByText("Search evaluation highlights")).toBeInTheDocument();
+    expect(screen.getByText("Selected retrieval mode")).toBeInTheDocument();
+    expect(screen.getByText("Evaluated answers")).toBeInTheDocument();
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Average score").length).toBeGreaterThan(0);
     expect(screen.getAllByText("4.2").length).toBeGreaterThan(0);
@@ -205,6 +274,8 @@ describe("Evaluations route", () => {
     expect(screen.getByText("Recent quality compared with latency and cost")).toBeInTheDocument();
     expect(screen.getByText("Recent evaluation runs")).toBeInTheDocument();
     expect(screen.getAllByText("Evidence Audit").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Repository or dataset")).toHaveValue("all");
+    expect(screen.getAllByText("repo_deep_research").length).toBeGreaterThan(0);
     expect(screen.getByText("Lowest-scoring loaded answers")).toBeInTheDocument();
     expect(screen.getByText("Where is evaluation stored?")).toBeInTheDocument();
     expect(screen.getByText("Which modules changed for answer evaluation?")).toBeInTheDocument();
