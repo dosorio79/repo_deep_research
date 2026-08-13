@@ -77,7 +77,7 @@ adapters and do not require paid model calls.
 
 ## Local Alpha BYOK Mode
 
-`v0.5.8 Local Alpha` is planned as a local-only BYOK release. The expected user
+`v0.5.8 Local Alpha` is a local-only BYOK release. The expected user
 path is:
 
 ```bash
@@ -178,4 +178,4 @@ The project uses two long-lived branches:
 
 Feature branches start from `dev`. Promote to production with a pull request
 from `dev` to `main`, then tag `main` with the release version. The current
-release is `v0.5.7`.
+release is `v0.5.8`.

@@ -46,8 +46,8 @@ flowchart LR
 
 ## Release Status
 
-The latest release is `v0.5.7`. The next planned delivery is
-`v0.5.8 Local Alpha`: a local-first, bring-your-own-key release for technical
+The current release is `v0.5.8 Local Alpha`: a local-first,
+bring-your-own-key release for technical
 users who can run Docker Compose and provide their own OpenAI API key.
 The alpha release handoff is documented in
 [docs/releases/v0.5.8-local-alpha.md](docs/releases/v0.5.8-local-alpha.md).
@@ -202,11 +202,11 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
 Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current user-ready
-MVP stack is released as `v0.5.7`.
+local alpha stack is released as `v0.5.8`.
 
 ## Local Alpha Scope
 
-`v0.5.8 Local Alpha` is planned as the first user-ready alpha. It should prove
+`v0.5.8 Local Alpha` is the first user-ready alpha. It proves
 that a user can run the product locally, bring their own model key, ingest a
 repository, ask grounded repository questions, and inspect monitoring and
 evaluation evidence.
