@@ -54,6 +54,8 @@ make stack-up
 
 Then open `http://localhost:3000`, ingest a repository, ask a direct or agentic
 question, submit feedback, and inspect monitoring and evaluation dashboards.
+The FastAPI Swagger UI is available at `http://localhost:8000/docs`; the
+versioned OpenAPI contract is stored at [docs/api/openapi.json](docs/api/openapi.json).
 
 ## Main Commands
 
@@ -75,6 +77,7 @@ question, submit feedback, and inspect monitoring and evaluation dashboards.
 | `make research QUESTION="..."` | Run bounded agentic repository research. |
 | `make evaluate-retrieval` | Compare dense, sparse, and hybrid retrieval. |
 | `make evaluate-answers` | Run opt-in answer evaluation. |
+| `make export-openapi` | Refresh the versioned OpenAPI contract. |
 | `make api` | Run FastAPI locally. |
 | `make app` | Run the API and Vite frontend locally. |
 
@@ -151,6 +154,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Usage](docs/usage.md)
 - [Architecture](docs/architecture.md) including the Local Alpha stack diagram
 - [Evaluation](docs/evaluation.md)
+- [OpenAPI contract](docs/api/openapi.json)
 - [Implementation history](docs/plans/)
 
 ## Branches and Releases
@@ -173,6 +177,7 @@ Included:
 - Local Docker Compose stack for frontend, API, Qdrant, and PostgreSQL.
 - BYOK OpenAI configuration through `.env.local`.
 - Direct RAG and bounded agentic research paths.
+- Swagger UI and a versioned OpenAPI contract for the local API.
 - Persisted monitoring, feedback, answer snapshots, and evaluation dashboards.
 - User-facing screenshots, examples, runbook, and known limitations.
 

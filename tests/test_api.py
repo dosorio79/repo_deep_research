@@ -1,6 +1,7 @@
 """Contract tests for the minimal M3 FastAPI backend."""
 
 import asyncio
+import json
 import os
 import subprocess
 from datetime import UTC, datetime
@@ -311,6 +312,45 @@ def test_app_uses_package_version() -> None:
     assert app.version == version("repo-deep-research")
 
 
+def test_openapi_schema_has_user_facing_metadata() -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+    )
+
+    schema = app.openapi()
+
+    assert schema["info"]["title"] == "Repo Deep Research"
+    assert schema["info"]["version"] == version("repo-deep-research")
+    assert {tag["name"] for tag in schema["tags"]} == {
+        "system",
+        "repositories",
+        "answers",
+        "feedback",
+        "monitoring",
+        "evaluations",
+    }
+    assert schema["paths"]["/rag"]["post"]["operationId"] == "run_direct_rag"
+    assert schema["paths"]["/research"]["post"]["tags"] == ["answers"]
+    assert schema["paths"]["/evaluations/results"]["get"]["tags"] == ["evaluations"]
+
+
+def test_versioned_openapi_contract_matches_app_schema() -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+    )
+    contract_path = Path("docs/api/openapi.json")
+
+    assert contract_path.exists()
+    persisted_schema = contract_path.read_text(encoding="utf-8")
+    assert json.loads(persisted_schema) == app.openapi()
+
+
 def test_create_app_loads_env_local_before_runtime_dependencies(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -373,6 +413,31 @@ async def test_root_identifies_api_routes() -> None:
         "direct_rag": "POST /rag",
         "agentic_rag": "POST /research",
     }
+
+
+@pytest.mark.anyio
+async def test_swagger_docs_and_openapi_json_are_available() -> None:
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        docs_response = await client.get("/docs")
+        schema_response = await client.get("/openapi.json")
+
+    assert docs_response.status_code == 200
+    assert "Swagger UI" in docs_response.text
+    assert schema_response.status_code == 200
+    schema = schema_response.json()
+    assert schema["info"]["title"] == "Repo Deep Research"
+    assert "/repositories/ingest" in schema["paths"]
+    assert "/monitoring/summary" in schema["paths"]
 
 
 @pytest.mark.anyio

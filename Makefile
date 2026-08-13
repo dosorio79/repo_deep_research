@@ -9,7 +9,7 @@ FRONTEND_NODE_VERSION := $(shell cat frontend/.nvmrc 2>/dev/null)
 FRONTEND_NODE_BIN := $(HOME)/.nvm/versions/node/v$(FRONTEND_NODE_VERSION)/bin
 FRONTEND_NPM := PATH=$(FRONTEND_NODE_BIN):$$PATH npm
 
-.PHONY: help install format lint typecheck test check test-all services-up services-down stack-up stack-down ingest rag research evaluate-retrieval evaluate-answers api app
+.PHONY: help install format lint typecheck test check test-all services-up services-down stack-up stack-down ingest rag research evaluate-retrieval evaluate-answers export-openapi api app
 
 # -----------------------------------------------------------------------------
 # Help
@@ -41,6 +41,7 @@ help:
 	printf '%s\n' 'Evaluation'
 	printf '%s\n' '  make evaluate-retrieval     compare retrieval modes'
 	printf '%s\n' '  make evaluate-answers       run answer evaluation'
+	printf '%s\n' '  make export-openapi         refresh docs/api/openapi.json'
 	printf '%s\n' ''
 	printf '%s\n' 'Local app'
 	printf '%s\n' '  make api                    run FastAPI locally'
@@ -115,6 +116,9 @@ evaluate-retrieval:
 
 evaluate-answers:
 	$(RUN) repo-research evaluate-answers
+
+export-openapi:
+	$(RUN) repo-research export-openapi
 
 # -----------------------------------------------------------------------------
 # Local app
