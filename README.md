@@ -14,6 +14,17 @@ The app provides a CLI, FastAPI backend, React frontend, local Qdrant vector
 search, PostgreSQL-backed monitoring and feedback, direct RAG, bounded agentic
 research, and opt-in answer evaluation.
 
+## Release Status
+
+The latest release is `v0.5.7`. The next planned delivery is
+`v0.5.8 Local Alpha`: a local-first, bring-your-own-key release for technical
+users who can run Docker Compose and provide their own OpenAI API key.
+
+Cloud deployment is intentionally out of scope for the Local Alpha. The stack
+includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
+user-provided model credentials, which is too much moving infrastructure for a
+free hosted demo target such as Render.
+
 ## Requirements
 
 - Python 3.12
@@ -34,6 +45,15 @@ make rag QUESTION="where is configuration validated?"
 
 Set `OPENAI_API_KEY` in `.env.local` before running live RAG, agentic research,
 or answer evaluation.
+
+For the full Local Alpha path, use the container stack:
+
+```bash
+make stack-up
+```
+
+Then open `http://localhost:3000`, ingest a repository, ask a direct or agentic
+question, submit feedback, and inspect monitoring and evaluation dashboards.
 
 ## Main Commands
 
@@ -129,7 +149,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 
 - [Setup](docs/setup.md)
 - [Usage](docs/usage.md)
-- [Architecture](docs/architecture.md)
+- [Architecture](docs/architecture.md) including the Local Alpha stack diagram
 - [Evaluation](docs/evaluation.md)
 - [Implementation history](docs/plans/)
 
@@ -138,4 +158,28 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 `main` is production. `dev` is the integration branch. Feature branches start
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
-Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`.
+Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current user-ready
+MVP stack is released as `v0.5.7`.
+
+## Local Alpha Scope
+
+`v0.5.8 Local Alpha` is planned as the first user-ready alpha. It should prove
+that a user can run the product locally, bring their own model key, ingest a
+repository, ask grounded repository questions, and inspect monitoring and
+evaluation evidence.
+
+Included:
+
+- Local Docker Compose stack for frontend, API, Qdrant, and PostgreSQL.
+- BYOK OpenAI configuration through `.env.local`.
+- Direct RAG and bounded agentic research paths.
+- Persisted monitoring, feedback, answer snapshots, and evaluation dashboards.
+- User-facing screenshots, examples, runbook, and known limitations.
+
+Not included:
+
+- Hosted public demo.
+- Free Render deployment.
+- Multi-tenant authentication.
+- Managed cloud persistence.
+- Automatic code changes or pull requests.

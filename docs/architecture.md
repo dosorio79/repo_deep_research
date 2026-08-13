@@ -1,5 +1,43 @@
 # Architecture
 
+## Local Alpha Stack
+
+```mermaid
+flowchart LR
+  User[User Browser / CLI] --> Frontend[React Frontend]
+  User --> CLI[repo-research CLI]
+
+  Frontend --> API[FastAPI Backend]
+  CLI --> Core[Repo Research Services]
+  API --> Core
+
+  Core --> Ingestion[Repository Ingestion]
+  Core --> Retrieval[Dense / Sparse / Hybrid Retrieval]
+  Core --> DirectRAG[Direct RAG]
+  Core --> Agentic[Bounded Agentic Research]
+  Core --> Evaluation[Answer Evaluation]
+
+  Ingestion --> Repo[Local Python Repository]
+  Ingestion --> Qdrant[Qdrant Vector Store]
+  Retrieval --> Qdrant
+
+  DirectRAG --> OpenAI[OpenAI API BYOK]
+  Agentic --> OpenAI
+  Evaluation --> OpenAI
+
+  API --> Postgres[PostgreSQL]
+  Core --> Postgres
+
+  Postgres --> Monitoring[Monitoring Dashboard]
+  Postgres --> EvalDash[Evaluation Dashboard]
+  Frontend --> Monitoring
+  Frontend --> EvalDash
+```
+
+The Local Alpha deployment model is local-first: Docker Compose runs Qdrant,
+PostgreSQL, the FastAPI backend, and the React frontend on the user's machine.
+Live answer generation and judging use the user's own OpenAI API key.
+
 ## Working Layers
 
 ```text
