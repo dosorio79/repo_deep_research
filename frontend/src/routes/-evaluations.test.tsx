@@ -66,6 +66,7 @@ const runList: EvaluationRunList = {
       evaluation_run_id: "eval-run-1",
       source_type: "monitored_runs",
       source_label: "monitored-runs",
+      context_labels: ["repo_deep_research"],
       judge_model: "gpt-5.1",
       status: "completed",
       started_at: "2026-08-11T12:00:00Z",
@@ -85,6 +86,10 @@ const resultList: EvaluationResultList = {
       evaluation_run_id: "eval-run-1",
       source_type: "monitored_runs",
       source_label: "monitored-runs",
+      context_label: "repo_deep_research",
+      repository_name: "repo_deep_research",
+      branch: "dev",
+      commit_hash: "abc123",
       record_id: null,
       request_id: "request-1",
       run_kind: "agentic",
@@ -121,6 +126,10 @@ const resultList: EvaluationResultList = {
       evaluation_run_id: "eval-run-1",
       source_type: "monitored_runs",
       source_label: "monitored-runs",
+      context_label: "repo_deep_research",
+      repository_name: "repo_deep_research",
+      branch: "dev",
+      commit_hash: "abc123",
       record_id: null,
       request_id: "request-2",
       run_kind: "direct",
@@ -205,6 +214,8 @@ describe("Evaluations route", () => {
     expect(screen.getByText("Recent quality compared with latency and cost")).toBeInTheDocument();
     expect(screen.getByText("Recent evaluation runs")).toBeInTheDocument();
     expect(screen.getAllByText("Evidence Audit").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Repository or dataset")).toHaveValue("all");
+    expect(screen.getAllByText("repo_deep_research").length).toBeGreaterThan(0);
     expect(screen.getByText("Lowest-scoring loaded answers")).toBeInTheDocument();
     expect(screen.getByText("Where is evaluation stored?")).toBeInTheDocument();
     expect(screen.getByText("Which modules changed for answer evaluation?")).toBeInTheDocument();

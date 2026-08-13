@@ -116,9 +116,10 @@ class NoOpRecordingStore:
         limit: int = 50,
         source_type: EvaluationSourceType | None = None,
         run_kind: RunKind | None = None,
+        context_label: str | None = None,
     ) -> EvaluationResultList:
         """Return no evaluation results when persistence is disabled."""
-        del limit, source_type, run_kind
+        del limit, source_type, run_kind, context_label
         return EvaluationResultList()
 
     def monitoring_summary(self) -> MonitoringSummary:
@@ -345,6 +346,7 @@ class PostgresRecordingStore:
         limit: int = 50,
         source_type: EvaluationSourceType | None = None,
         run_kind: RunKind | None = None,
+        context_label: str | None = None,
     ) -> EvaluationResultList:
         """Return recent persisted judged answer results."""
         with self._connect() as connection:
@@ -362,6 +364,10 @@ class PostgresRecordingStore:
             for result in results
             if (source_type is None or result.source_type is source_type)
             and (run_kind is None or result.run_kind is run_kind)
+            and (
+                context_label is None
+                or result.context_label.lower() == context_label.lower()
+            )
         ]
         return EvaluationResultList(results=filtered[:limit])
 
@@ -595,6 +601,10 @@ def _evaluation_run_summary_from_row(
         evaluation_run_id=str(row["evaluation_run_id"]),
         source_type=EvaluationSourceType(str(row["source_type"])),
         source_label=str(row["source_label"]),
+        context_labels=_evaluation_context_labels(
+            source_label=str(row["source_label"]),
+            result_rows=run_results,
+        ),
         judge_model=str(row["judge_model"]),
         status=EvaluationRunStatus(str(row["status"])),
         started_at=row["started_at"],
@@ -620,6 +630,10 @@ def _evaluation_result_summary_from_row(row: dict[str, Any]) -> EvaluationResult
         evaluation_run_id=str(row["evaluation_run_id"]),
         source_type=EvaluationSourceType(str(row["source_type"])),
         source_label=str(row["source_label"]),
+        context_label=_evaluation_context_label(row),
+        repository_name=row.get("repository_name"),
+        branch=row.get("branch"),
+        commit_hash=row.get("commit_hash"),
         record_id=row.get("record_id"),
         request_id=row.get("request_id"),
         run_kind=RunKind(str(run_kind_value)) if run_kind_value else None,
@@ -654,6 +668,20 @@ def _average_result_score(row: dict[str, Any]) -> float:
         if row.get(metric) is not None
     ]
     return sum(scores) / len(scores) if scores else 0
+
+
+def _evaluation_context_label(row: dict[str, Any]) -> str:
+    repository_name = row.get("repository_name")
+    if repository_name:
+        return str(repository_name)
+    return str(row["source_label"])
+
+
+def _evaluation_context_labels(
+    *, source_label: str, result_rows: list[dict[str, Any]]
+) -> list[str]:
+    labels = sorted({_evaluation_context_label(row) for row in result_rows})
+    return labels or [source_label]
 
 
 def _evidence_items_from_json(value: Any) -> list[EvidenceItem]:
@@ -1379,6 +1407,9 @@ SELECT
     r.evaluation_run_id,
     e.source_type,
     e.source_label,
+    s.repository_name,
+    s.branch,
+    s.commit_hash,
     r.record_id,
     r.request_id,
     r.run_kind,

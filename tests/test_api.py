@@ -900,6 +900,7 @@ async def test_evaluation_runs_returns_recorder_history() -> None:
                 evaluation_run_id="eval-run-1",
                 source_type=EvaluationSourceType.MONITORED_RUNS,
                 source_label="monitored-runs",
+                context_labels=["repo_deep_research"],
                 judge_model="gpt-5.1",
                 status=EvaluationRunStatus.COMPLETED,
                 started_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
@@ -928,7 +929,9 @@ async def test_evaluation_runs_returns_recorder_history() -> None:
         )
 
     assert response.status_code == 200
-    assert response.json()["runs"][0]["evaluation_run_id"] == "eval-run-1"
+    run = response.json()["runs"][0]
+    assert run["evaluation_run_id"] == "eval-run-1"
+    assert run["context_labels"] == ["repo_deep_research"]
 
 
 @pytest.mark.anyio
@@ -941,6 +944,10 @@ async def test_evaluation_results_returns_recorder_rows() -> None:
                 evaluation_run_id="eval-run-1",
                 source_type=EvaluationSourceType.MONITORED_RUNS,
                 source_label="monitored-runs",
+                context_label="repo_deep_research",
+                repository_name="repo_deep_research",
+                branch="dev",
+                commit_hash="abc123",
                 request_id="request-1",
                 run_kind=RunKind.DIRECT,
                 question="Where is target?",
@@ -978,7 +985,10 @@ async def test_evaluation_results_returns_recorder_rows() -> None:
         )
 
     assert response.status_code == 200
-    assert response.json()["results"][0]["result_id"] == "result-1"
+    result = response.json()["results"][0]
+    assert result["result_id"] == "result-1"
+    assert result["context_label"] == "repo_deep_research"
+    assert result["repository_name"] == "repo_deep_research"
 
 
 @pytest.mark.anyio

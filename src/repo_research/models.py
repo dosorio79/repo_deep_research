@@ -601,6 +601,7 @@ class EvaluationRunSummary(BaseModel):
     evaluation_run_id: str = Field(min_length=1)
     source_type: EvaluationSourceType
     source_label: str = Field(min_length=1)
+    context_labels: list[str] = Field(default_factory=list)
     judge_model: str = Field(min_length=1)
     status: EvaluationRunStatus
     started_at: datetime
@@ -624,6 +625,10 @@ class EvaluationResultSummary(BaseModel):
     evaluation_run_id: str = Field(min_length=1)
     source_type: EvaluationSourceType
     source_label: str = Field(min_length=1)
+    context_label: str = Field(min_length=1)
+    repository_name: str | None = Field(default=None, min_length=1)
+    branch: str | None = Field(default=None, min_length=1)
+    commit_hash: str | None = Field(default=None, min_length=1)
     record_id: str | None = Field(default=None, min_length=1)
     request_id: str | None = Field(default=None, min_length=1)
     run_kind: RunKind | None = None

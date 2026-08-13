@@ -750,6 +750,11 @@ def _evaluation_result_row(
         "evaluation_run_id": evaluation_run_id,
         "source_type": source_type,
         "source_label": source_label,
+        "repository_name": "repo_deep_research"
+        if source_type == "monitored_runs"
+        else None,
+        "branch": "dev" if source_type == "monitored_runs" else None,
+        "commit_hash": "abc123" if source_type == "monitored_runs" else None,
         "record_id": "record-1",
         "request_id": "request-1",
         "run_kind": run_kind,

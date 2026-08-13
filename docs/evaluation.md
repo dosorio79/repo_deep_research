@@ -130,6 +130,12 @@ dashboard reads:
 - `GET /evaluations/runs` for recent persisted evaluation runs.
 - `GET /evaluations/results` for individual judged answer rows.
 
+Evaluation scores are scoped evidence, not global model scores. Dataset
+evaluations are specific to the JSON dataset used for the run, and monitored-run
+evaluations are specific to the repository that produced the original answer
+snapshot. The dashboard exposes this as a repository-or-dataset context so users
+can compare scores within the same source instead of mixing unrelated questions.
+
 Run answer evaluation from the CLI with `--persist` to populate the dashboard.
 Files under `eval/results/` remain optional exports for reproducible batch runs.
 The dashboard is read-only and compares persisted dataset and monitored-run

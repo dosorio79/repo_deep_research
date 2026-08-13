@@ -148,6 +148,7 @@ class RecordingStore(Protocol):
         limit: int = 50,
         source_type: EvaluationSourceType | None = None,
         run_kind: RunKind | None = None,
+        context_label: str | None = None,
     ) -> EvaluationResultList:
         """Return recent persisted evaluation results."""
 
@@ -463,11 +464,13 @@ def create_app(
         limit: int = Query(default=50, ge=1, le=100),
         source_type: EvaluationSourceType | None = None,
         run_kind: RunKind | None = None,
+        context_label: str | None = Query(default=None, min_length=1),
     ) -> EvaluationResultList:
         return get_recording_store().list_evaluation_results(
             limit=limit,
             source_type=source_type,
             run_kind=run_kind,
+            context_label=context_label,
         )
 
     return app

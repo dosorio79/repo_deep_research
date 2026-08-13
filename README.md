@@ -206,7 +206,7 @@ Included:
 - Direct RAG and bounded agentic research paths.
 - Swagger UI and a versioned OpenAPI contract for the local API.
 - Persisted monitoring, feedback, answer snapshots, and admin evaluation
-  dashboards.
+  dashboards split by repository or dataset context.
 - User-facing screenshots, examples, runbook, and known limitations.
 
 Not included:

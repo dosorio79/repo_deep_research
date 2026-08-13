@@ -187,6 +187,7 @@ const evaluationRuns: EvaluationRunList = {
       evaluation_run_id: "eval-run-1",
       source_type: "monitored_runs",
       source_label: "monitored-runs",
+      context_labels: ["repo_deep_research"],
       judge_model: "gpt-5.1",
       status: "completed",
       started_at: "2026-08-11T12:00:00Z",
@@ -206,6 +207,10 @@ const evaluationResults: EvaluationResultList = {
       evaluation_run_id: "eval-run-1",
       source_type: "monitored_runs",
       source_label: "monitored-runs",
+      context_label: "repo_deep_research",
+      repository_name: "repo_deep_research",
+      branch: "dev",
+      commit_hash: "abc123",
       record_id: null,
       request_id: "req-1",
       run_kind: "agentic",
@@ -534,11 +539,12 @@ describe("runRagQuery", () => {
         limit: 25,
         source_type: "monitored_runs",
         run_kind: "agentic",
+        context_label: "repo_deep_research",
       }),
     ).resolves.toEqual(evaluationResults);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/evaluations/results?limit=25&run_kind=agentic&source_type=monitored_runs",
+      "http://localhost:8000/evaluations/results?limit=25&run_kind=agentic&source_type=monitored_runs&context_label=repo_deep_research",
       expect.objectContaining({ signal: null }),
     );
   });
