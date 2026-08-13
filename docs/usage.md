@@ -108,7 +108,7 @@ Direct RAG uses `limit`; agentic research uses `retrieval_limit`.
 Run the containerized stack:
 
 ```bash
-make stack-start
+make stack-up
 ```
 
 Open `http://localhost:3000`, ingest a repository, run direct or agentic

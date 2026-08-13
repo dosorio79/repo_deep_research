@@ -30,9 +30,11 @@ help:
 	printf '%s\n' 'Services and stack'
 	printf '%s\n' '  make services-up            start Qdrant and PostgreSQL'
 	printf '%s\n' '  make services-down          stop local services'
-	printf '%s\n' '  make stack-start            start full stack without rebuilding'
+	printf '%s\n' '  make stack-up               create and start full stack'
+	printf '%s\n' '  make stack-down             stop and remove full stack'
+	printf '%s\n' '  make stack-start            start existing full stack containers'
+	printf '%s\n' '  make stack-stop             stop existing full stack containers'
 	printf '%s\n' '  make stack-rebuild          rebuild images and start full stack'
-	printf '%s\n' '  make stack-stop             stop the full stack'
 	printf '%s\n' ''
 	printf '%s\n' 'Repository workflows'
 	printf '%s\n' '  make ingest                 index this repository'
@@ -90,17 +92,19 @@ services-down:
 	docker compose down
 
 stack-start:
-	docker compose up -d --wait
+	docker compose start
 
 stack-rebuild:
 	docker compose up --build -d --wait
 
-stack-up: stack-rebuild
+stack-up:
+	docker compose up -d --wait
 
 stack-stop:
-	docker compose down
+	docker compose stop
 
-stack-down: stack-stop
+stack-down:
+	docker compose down
 
 # -----------------------------------------------------------------------------
 # Repository workflows

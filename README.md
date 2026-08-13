@@ -71,7 +71,7 @@ or answer evaluation.
 For the full Local Alpha path, use the container stack:
 
 ```bash
-make stack-start
+make stack-up
 ```
 
 Then open `http://localhost:3000`, ingest a repository, ask a direct or agentic
@@ -93,11 +93,11 @@ Opening `http://localhost:8000` redirects to the FastAPI Swagger UI at
 | `make test-all` | Run backend checks plus frontend tests, typecheck, and build. |
 | `make services-up` | Start Qdrant and PostgreSQL. |
 | `make services-down` | Stop local services. |
-| `make stack-start` | Start API, frontend, Qdrant, and PostgreSQL without rebuilding images. |
+| `make stack-up` | Create and start API, frontend, Qdrant, and PostgreSQL without rebuilding images. |
+| `make stack-down` | Stop and remove the full stack. |
+| `make stack-start` | Start existing full-stack containers. |
+| `make stack-stop` | Stop existing full-stack containers without removing them. |
 | `make stack-rebuild` | Rebuild images and start the full stack. |
-| `make stack-stop` | Stop the full stack. |
-| `make stack-up` | Compatibility alias for `make stack-rebuild`. |
-| `make stack-down` | Compatibility alias for `make stack-stop`. |
 | `make ingest` | Index this repository. |
 | `make rag QUESTION="..."` | Run direct RAG against the indexed repository. |
 | `make research QUESTION="..."` | Run bounded agentic repository research. |
@@ -124,7 +124,7 @@ output options.
 Run the production-like container stack:
 
 ```bash
-make stack-start
+make stack-up
 ```
 
 Open `http://localhost:3000`, ingest a repository, ask a direct or agentic
@@ -146,7 +146,7 @@ Stop services with:
 ```bash
 make services-down
 # or, for the full container stack:
-make stack-stop
+make stack-down
 ```
 
 ## Configuration
