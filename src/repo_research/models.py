@@ -512,6 +512,20 @@ class EvaluationResult(BaseModel):
     symbol_hit_rate: float = Field(ge=0, le=1)
 
 
+class RetrievalEvaluationSummary(EvaluationResult):
+    """Persisted retrieval-evaluation metric row for dashboard highlights."""
+
+    source_label: str = Field(min_length=1)
+    selected: bool = False
+    measured_at: datetime
+
+
+class RetrievalEvaluationList(BaseModel):
+    """Persisted retrieval-evaluation metrics for the dashboard."""
+
+    results: list[RetrievalEvaluationSummary] = Field(default_factory=list)
+
+
 class AnswerEvaluationResult(BaseModel):
     """LLM-judge scores for one grounded repository answer."""
 

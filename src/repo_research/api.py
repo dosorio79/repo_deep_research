@@ -41,6 +41,7 @@ from repo_research.models import (
     ResearchAnswer,
     ResearchRequest,
     ResearchRunResult,
+    RetrievalEvaluationList,
     RunKind,
     SearchQuery,
     SearchResult,
@@ -151,6 +152,9 @@ class RecordingStore(Protocol):
         context_label: str | None = None,
     ) -> EvaluationResultList:
         """Return recent persisted evaluation results."""
+
+    def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
+        """Return persisted retrieval-evaluation metrics."""
 
 
 def package_version() -> str:
@@ -472,6 +476,16 @@ def create_app(
             run_kind=run_kind,
             context_label=context_label,
         )
+
+    @app.get(
+        "/evaluations/retrieval",
+        response_model=RetrievalEvaluationList,
+        tags=["evaluations"],
+        summary="List retrieval evaluation metrics",
+        operation_id="list_retrieval_evaluation_results",
+    )
+    async def retrieval_evaluation_results() -> RetrievalEvaluationList:
+        return get_recording_store().list_retrieval_evaluation_results()
 
     return app
 

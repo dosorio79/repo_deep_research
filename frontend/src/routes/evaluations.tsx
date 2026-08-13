@@ -8,47 +8,21 @@ import { AppShell } from "@/components/AppShell";
 import { EvidenceReferences } from "@/components/EvidenceReferences";
 import { EmptyLine, Field, Panel } from "@/components/primitives";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { getEvaluationResults, getEvaluationRuns, getEvaluationSummary } from "@/lib/rag-client";
+import {
+  getEvaluationResults,
+  getEvaluationRuns,
+  getEvaluationSummary,
+  getRetrievalEvaluationResults,
+} from "@/lib/rag-client";
 import type {
   ApiErrorShape,
   EvaluationDashboardSummary,
   EvaluationResultSummary,
   EvaluationRunSummary,
+  RetrievalEvaluationSummary,
 } from "@/lib/rag-types";
 
 const DEFAULT_API_BASE_URL = (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "/api";
-const RETRIEVAL_HIGHLIGHTS = [
-  {
-    dataset: "Held-out",
-    mode: "dense",
-    fileHitRate: 0.733,
-    fileMrr: 0.539,
-    fileRecall: 0.589,
-    filePrecision: 0.247,
-    symbolHitRate: 0.6,
-    selected: true,
-  },
-  {
-    dataset: "Held-out",
-    mode: "hybrid",
-    fileHitRate: 0.6,
-    fileMrr: 0.417,
-    fileRecall: 0.456,
-    filePrecision: 0.153,
-    symbolHitRate: 0.467,
-    selected: false,
-  },
-  {
-    dataset: "Held-out",
-    mode: "sparse",
-    fileHitRate: 0.467,
-    fileMrr: 0.236,
-    fileRecall: 0.356,
-    filePrecision: 0.1,
-    symbolHitRate: 0.333,
-    selected: false,
-  },
-] as const;
 
 export const Route = createFileRoute("/evaluations")({
   head: () => ({
@@ -88,6 +62,12 @@ function EvaluationsView() {
     retry: false,
     staleTime: 5_000,
   });
+  const retrievalQuery = useQuery({
+    queryKey: ["retrieval-evaluation-results", DEFAULT_API_BASE_URL],
+    queryFn: ({ signal }) => getRetrievalEvaluationResults(DEFAULT_API_BASE_URL, signal),
+    retry: false,
+    staleTime: 30_000,
+  });
 
   return (
     <AppShell>
@@ -99,13 +79,18 @@ function EvaluationsView() {
       {resultsQuery.error ? (
         <ApiError error={resultsQuery.error as unknown as ApiErrorShape} />
       ) : null}
+      {retrievalQuery.error ? (
+        <ApiError error={retrievalQuery.error as unknown as ApiErrorShape} />
+      ) : null}
       {summaryQuery.error ? null : summaryQuery.data ? (
         <EvaluationDashboard
           summary={summaryQuery.data}
           runs={runsQuery.data?.runs ?? []}
           results={resultsQuery.data?.results ?? []}
+          retrievalResults={retrievalQuery.data?.results ?? []}
           loadingRuns={runsQuery.isLoading}
           loadingResults={resultsQuery.isLoading}
+          loadingRetrievalResults={retrievalQuery.isLoading}
           selectedContext={contextLabel}
           onContextChange={setContextLabel}
         />
@@ -115,7 +100,10 @@ function EvaluationsView() {
         </Panel>
       ) : (
         <div className="space-y-3">
-          <SearchEvaluationHighlights />
+          <SearchEvaluationHighlights
+            results={retrievalQuery.data?.results ?? []}
+            loading={retrievalQuery.isLoading}
+          />
           <EmptyEvaluations />
         </div>
       )}
@@ -137,16 +125,20 @@ function EvaluationDashboard({
   summary,
   runs,
   results,
+  retrievalResults,
   loadingRuns,
   loadingResults,
+  loadingRetrievalResults,
   selectedContext,
   onContextChange,
 }: {
   summary: EvaluationDashboardSummary;
   runs: EvaluationRunSummary[];
   results: EvaluationResultSummary[];
+  retrievalResults: RetrievalEvaluationSummary[];
   loadingRuns: boolean;
   loadingResults: boolean;
+  loadingRetrievalResults: boolean;
   selectedContext: string;
   onContextChange: (value: string) => void;
 }) {
@@ -154,7 +146,7 @@ function EvaluationDashboard({
   if (summary.total_results === 0)
     return (
       <div className="space-y-3">
-        <SearchEvaluationHighlights />
+        <SearchEvaluationHighlights results={retrievalResults} loading={loadingRetrievalResults} />
         <EmptyEvaluations />
       </div>
     );
@@ -175,7 +167,7 @@ function EvaluationDashboard({
 
   return (
     <div className="space-y-3">
-      <SearchEvaluationHighlights />
+      <SearchEvaluationHighlights results={retrievalResults} loading={loadingRetrievalResults} />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -294,81 +286,97 @@ function EvaluationDashboard({
   );
 }
 
-function SearchEvaluationHighlights() {
-  const selected = RETRIEVAL_HIGHLIGHTS.find((item) => item.selected);
+function SearchEvaluationHighlights({
+  results,
+  loading,
+}: {
+  results: RetrievalEvaluationSummary[];
+  loading: boolean;
+}) {
+  const heldOutResults = results.filter((item) => item.dataset.toLowerCase() === "held-out");
+  const visibleResults = heldOutResults.length ? heldOutResults : results;
+  const selected = visibleResults.find((item) => item.selected) ?? visibleResults[0];
   return (
     <Panel title="Search evaluation highlights">
-      <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
-        <div className="grid gap-2">
-          <Field label="Selected retrieval mode">{selected?.mode ?? "dense"}</Field>
-          <Field label="Held-out file hit rate">
-            {formatPercent(selected?.fileHitRate ?? null)}
-          </Field>
-          <Field label="Held-out symbol hit rate">
-            {formatPercent(selected?.symbolHitRate ?? null)}
-          </Field>
-        </div>
-        <div className="grid gap-2 md:hidden">
-          {RETRIEVAL_HIGHLIGHTS.map((item) => (
-            <div key={item.mode} className="border-t border-border pt-2 first:border-t-0">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="font-medium">{item.mode}</span>
-                {item.selected ? (
-                  <span className="rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                    default
-                  </span>
-                ) : null}
-              </div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                <Field label="File hit">{formatPercent(item.fileHitRate)}</Field>
-                <Field label="File MRR">{item.fileMrr.toFixed(3)}</Field>
-                <Field label="Recall">{formatPercent(item.fileRecall)}</Field>
-                <Field label="Precision">{formatPercent(item.filePrecision)}</Field>
-                <Field label="Symbol hit">{formatPercent(item.symbolHitRate)}</Field>
-              </div>
+      {loading ? <EmptyLine>Loading retrieval evaluation metrics.</EmptyLine> : null}
+      {!loading && visibleResults.length === 0 ? (
+        <EmptyLine>No persisted retrieval evaluation metrics are available.</EmptyLine>
+      ) : null}
+      {!loading && visibleResults.length > 0 ? (
+        <>
+          <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
+            <div className="grid gap-2">
+              <Field label="Selected retrieval mode">{selected?.mode ?? "dense"}</Field>
+              <Field label="Held-out file hit rate">
+                {formatPercent(selected?.file_hit_rate ?? null)}
+              </Field>
+              <Field label="Held-out symbol hit rate">
+                {formatPercent(selected?.symbol_hit_rate ?? null)}
+              </Field>
             </div>
-          ))}
-        </div>
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[640px] text-left text-[12px]">
-            <thead className="border-b border-border text-muted-foreground">
-              <tr>
-                <th className="py-2 pr-3 font-medium">Dataset</th>
-                <th className="py-2 pr-3 font-medium">Mode</th>
-                <th className="py-2 pr-3 font-medium">File hit</th>
-                <th className="py-2 pr-3 font-medium">File MRR</th>
-                <th className="py-2 pr-3 font-medium">Recall</th>
-                <th className="py-2 pr-3 font-medium">Precision</th>
-                <th className="py-2 pr-3 font-medium">Symbol hit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {RETRIEVAL_HIGHLIGHTS.map((item) => (
-                <tr key={item.mode} className="border-b border-border/60">
-                  <td className="py-2 pr-3">{item.dataset}</td>
-                  <td className="py-2 pr-3">
-                    {item.mode}
+            <div className="grid gap-2 md:hidden">
+              {visibleResults.map((item) => (
+                <div key={item.mode} className="border-t border-border pt-2 first:border-t-0">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="font-medium">{item.mode}</span>
                     {item.selected ? (
-                      <span className="ml-2 rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                      <span className="rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
                         default
                       </span>
                     ) : null}
-                  </td>
-                  <td className="py-2 pr-3 mono">{formatPercent(item.fileHitRate)}</td>
-                  <td className="py-2 pr-3 mono">{item.fileMrr.toFixed(3)}</td>
-                  <td className="py-2 pr-3 mono">{formatPercent(item.fileRecall)}</td>
-                  <td className="py-2 pr-3 mono">{formatPercent(item.filePrecision)}</td>
-                  <td className="py-2 pr-3 mono">{formatPercent(item.symbolHitRate)}</td>
-                </tr>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                    <Field label="File hit">{formatPercent(item.file_hit_rate)}</Field>
+                    <Field label="File MRR">{item.file_mrr.toFixed(3)}</Field>
+                    <Field label="Recall">{formatPercent(item.file_recall)}</Field>
+                    <Field label="Precision">{formatPercent(item.file_precision)}</Field>
+                    <Field label="Symbol hit">{formatPercent(item.symbol_hit_rate)}</Field>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <p className="mt-2 text-[12px] text-muted-foreground">
-        Search evaluation is produced from versioned repository question datasets. These highlights
-        show the curated held-out baseline.
-      </p>
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[640px] text-left text-[12px]">
+                <thead className="border-b border-border text-muted-foreground">
+                  <tr>
+                    <th className="py-2 pr-3 font-medium">Dataset</th>
+                    <th className="py-2 pr-3 font-medium">Mode</th>
+                    <th className="py-2 pr-3 font-medium">File hit</th>
+                    <th className="py-2 pr-3 font-medium">File MRR</th>
+                    <th className="py-2 pr-3 font-medium">Recall</th>
+                    <th className="py-2 pr-3 font-medium">Precision</th>
+                    <th className="py-2 pr-3 font-medium">Symbol hit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleResults.map((item) => (
+                    <tr key={item.mode} className="border-b border-border/60">
+                      <td className="py-2 pr-3">{item.dataset}</td>
+                      <td className="py-2 pr-3">
+                        {item.mode}
+                        {item.selected ? (
+                          <span className="ml-2 rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                            default
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="py-2 pr-3 mono">{formatPercent(item.file_hit_rate)}</td>
+                      <td className="py-2 pr-3 mono">{item.file_mrr.toFixed(3)}</td>
+                      <td className="py-2 pr-3 mono">{formatPercent(item.file_recall)}</td>
+                      <td className="py-2 pr-3 mono">{formatPercent(item.file_precision)}</td>
+                      <td className="py-2 pr-3 mono">{formatPercent(item.symbol_hit_rate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="mt-2 text-[12px] text-muted-foreground">
+            Search evaluation is loaded from persisted retrieval metrics produced from versioned
+            repository question datasets.
+          </p>
+        </>
+      ) : null}
     </Panel>
   );
 }

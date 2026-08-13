@@ -296,6 +296,25 @@ export interface EvaluationDashboardSummary {
   metric_averages: EvaluationMetricAverage[];
 }
 
+export interface RetrievalEvaluationSummary {
+  dataset: string;
+  mode: RetrievalMode;
+  source_label: string;
+  limit: number;
+  record_count: number;
+  file_hit_rate: number;
+  file_mrr: number;
+  file_recall: number;
+  file_precision: number;
+  symbol_hit_rate: number;
+  selected: boolean;
+  measured_at: string;
+}
+
+export interface RetrievalEvaluationList {
+  results: RetrievalEvaluationSummary[];
+}
+
 export interface EvaluationRunSummary {
   evaluation_run_id: string;
   source_type: EvaluationSourceType;

@@ -18,6 +18,7 @@ import type {
   RepositoryIngestRequest,
   ResearchRequest,
   ResearchRunResult,
+  RetrievalEvaluationList,
 } from "./rag-types";
 
 const ERROR_BODY_PREVIEW_LIMIT = 1200;
@@ -226,6 +227,13 @@ export async function getEvaluationResults(
     `/evaluations/results${queryString(params)}`,
     signal,
   );
+}
+
+export async function getRetrievalEvaluationResults(
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<RetrievalEvaluationList> {
+  return getJson<RetrievalEvaluationList>(baseUrl, "/evaluations/retrieval", signal);
 }
 
 export async function ingestRepository(

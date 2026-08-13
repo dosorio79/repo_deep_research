@@ -42,6 +42,8 @@ from repo_research.models import (
     RagMode,
     RagRunTrace,
     ResearchAnswer,
+    RetrievalEvaluationList,
+    RetrievalEvaluationSummary,
     RetrievalMode,
     RetrievalVolumeSummary,
     RunKind,
@@ -121,6 +123,10 @@ class NoOpRecordingStore:
         """Return no evaluation results when persistence is disabled."""
         del limit, source_type, run_kind, context_label
         return EvaluationResultList()
+
+    def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
+        """Return no retrieval-evaluation rows when persistence is disabled."""
+        return RetrievalEvaluationList()
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return an empty dashboard summary."""
@@ -370,6 +376,25 @@ class PostgresRecordingStore:
             )
         ]
         return EvaluationResultList(results=filtered[:limit])
+
+    def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
+        """Return persisted retrieval-evaluation metrics for dashboard highlights."""
+        with self._connect() as connection:
+            rows = list(
+                connection.execute(_SELECT_RETRIEVAL_EVALUATION_RESULT_ROWS).fetchall()
+            )
+        results = [
+            _retrieval_evaluation_summary_from_row(row)
+            for row in sorted(
+                rows,
+                key=lambda item: (
+                    str(item["dataset"]).lower() != "held-out",
+                    not bool(item["selected"]),
+                    str(item["mode"]),
+                ),
+            )
+        ]
+        return RetrievalEvaluationList(results=results)
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return dashboard aggregates from persisted monitoring and feedback."""
@@ -653,6 +678,25 @@ def _evaluation_result_summary_from_row(row: dict[str, Any]) -> EvaluationResult
         notes=str(row.get("notes") or ""),
         answer_evidence=_evidence_items_from_json(row.get("answer_evidence")),
         created_at=row["created_at"],
+    )
+
+
+def _retrieval_evaluation_summary_from_row(
+    row: dict[str, Any],
+) -> RetrievalEvaluationSummary:
+    return RetrievalEvaluationSummary(
+        dataset=str(row["dataset"]),
+        mode=RetrievalMode(str(row["mode"])),
+        source_label=str(row["source_label"]),
+        limit=int(row["limit_value"]),
+        record_count=int(row["record_count"]),
+        file_hit_rate=float(row["file_hit_rate"]),
+        file_mrr=float(row["file_mrr"]),
+        file_recall=float(row["file_recall"]),
+        file_precision=float(row["file_precision"]),
+        symbol_hit_rate=float(row["symbol_hit_rate"]),
+        selected=bool(row["selected"]),
+        measured_at=row["measured_at"],
     )
 
 
@@ -1077,6 +1121,79 @@ _SCHEMA_STATEMENTS = (
     CREATE INDEX IF NOT EXISTS evaluation_results_request_id_idx
     ON evaluation_results (request_id)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS retrieval_evaluation_results (
+        dataset TEXT NOT NULL CHECK (length(dataset) > 0),
+        mode TEXT NOT NULL CHECK (mode IN ('dense', 'sparse', 'hybrid')),
+        source_label TEXT NOT NULL CHECK (length(source_label) > 0),
+        limit_value INTEGER NOT NULL CHECK (limit_value > 0),
+        record_count INTEGER NOT NULL CHECK (record_count >= 0),
+        file_hit_rate NUMERIC NOT NULL CHECK (
+            file_hit_rate >= 0 AND file_hit_rate <= 1
+        ),
+        file_mrr NUMERIC NOT NULL CHECK (file_mrr >= 0 AND file_mrr <= 1),
+        file_recall NUMERIC NOT NULL CHECK (
+            file_recall >= 0 AND file_recall <= 1
+        ),
+        file_precision NUMERIC NOT NULL CHECK (
+            file_precision >= 0 AND file_precision <= 1
+        ),
+        symbol_hit_rate NUMERIC NOT NULL CHECK (
+            symbol_hit_rate >= 0 AND symbol_hit_rate <= 1
+        ),
+        selected BOOLEAN NOT NULL DEFAULT false,
+        measured_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (dataset, mode)
+    )
+    """,
+    """
+    INSERT INTO retrieval_evaluation_results (
+        dataset,
+        mode,
+        source_label,
+        limit_value,
+        record_count,
+        file_hit_rate,
+        file_mrr,
+        file_recall,
+        file_precision,
+        symbol_hit_rate,
+        selected,
+        measured_at
+    ) VALUES
+        (
+            'Development', 'dense', 'eval/development.json at commit 5e23291',
+            5, 15, 0.667, 0.491, 0.461, 0.190, 0.429, false,
+            '2026-07-24T00:00:00Z'
+        ),
+        (
+            'Development', 'sparse', 'eval/development.json at commit 5e23291',
+            5, 15, 0.267, 0.139, 0.222, 0.066, 0.071, false,
+            '2026-07-24T00:00:00Z'
+        ),
+        (
+            'Development', 'hybrid', 'eval/development.json at commit 5e23291',
+            5, 15, 0.467, 0.347, 0.294, 0.112, 0.286, false,
+            '2026-07-24T00:00:00Z'
+        ),
+        (
+            'Held-out', 'dense', 'eval/held_out.json at commit 5e23291',
+            5, 15, 0.733, 0.539, 0.589, 0.247, 0.600, true,
+            '2026-07-24T00:00:00Z'
+        ),
+        (
+            'Held-out', 'sparse', 'eval/held_out.json at commit 5e23291',
+            5, 15, 0.467, 0.236, 0.356, 0.100, 0.333, false,
+            '2026-07-24T00:00:00Z'
+        ),
+        (
+            'Held-out', 'hybrid', 'eval/held_out.json at commit 5e23291',
+            5, 15, 0.600, 0.417, 0.456, 0.153, 0.467, false,
+            '2026-07-24T00:00:00Z'
+        )
+    ON CONFLICT (dataset, mode) DO NOTHING
+    """,
 )
 
 _UPSERT_MONITORING_RUN = """
@@ -1431,6 +1548,23 @@ SELECT
 FROM evaluation_results r
 JOIN evaluation_runs e ON e.evaluation_run_id = r.evaluation_run_id
 LEFT JOIN answer_snapshots s ON s.request_id = r.request_id
+"""
+
+_SELECT_RETRIEVAL_EVALUATION_RESULT_ROWS = """
+SELECT
+    dataset,
+    mode,
+    source_label,
+    limit_value,
+    record_count,
+    file_hit_rate,
+    file_mrr,
+    file_recall,
+    file_precision,
+    symbol_hit_rate,
+    selected,
+    measured_at
+FROM retrieval_evaluation_results
 """
 
 _SELECT_MONITORING_RUN_HISTORY = """

@@ -4,11 +4,17 @@ import userEvent from "@testing-library/user-event";
 import type { ComponentType, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route } from "./evaluations";
-import { getEvaluationResults, getEvaluationRuns, getEvaluationSummary } from "@/lib/rag-client";
+import {
+  getEvaluationResults,
+  getEvaluationRuns,
+  getEvaluationSummary,
+  getRetrievalEvaluationResults,
+} from "@/lib/rag-client";
 import type {
   EvaluationDashboardSummary,
   EvaluationResultList,
   EvaluationRunList,
+  RetrievalEvaluationList,
 } from "@/lib/rag-types";
 
 vi.mock("@/components/AppShell", () => ({
@@ -19,6 +25,7 @@ vi.mock("@/lib/rag-client", () => ({
   getEvaluationResults: vi.fn(),
   getEvaluationRuns: vi.fn(),
   getEvaluationSummary: vi.fn(),
+  getRetrievalEvaluationResults: vi.fn(),
 }));
 
 const emptySummary: EvaluationDashboardSummary = {
@@ -153,6 +160,53 @@ const resultList: EvaluationResultList = {
   ],
 };
 
+const retrievalEvaluationList: RetrievalEvaluationList = {
+  results: [
+    {
+      dataset: "Held-out",
+      mode: "dense",
+      source_label: "eval/held_out.json at commit 5e23291",
+      limit: 5,
+      record_count: 15,
+      file_hit_rate: 0.733,
+      file_mrr: 0.539,
+      file_recall: 0.589,
+      file_precision: 0.247,
+      symbol_hit_rate: 0.6,
+      selected: true,
+      measured_at: "2026-07-24T00:00:00Z",
+    },
+    {
+      dataset: "Held-out",
+      mode: "hybrid",
+      source_label: "eval/held_out.json at commit 5e23291",
+      limit: 5,
+      record_count: 15,
+      file_hit_rate: 0.6,
+      file_mrr: 0.417,
+      file_recall: 0.456,
+      file_precision: 0.153,
+      symbol_hit_rate: 0.467,
+      selected: false,
+      measured_at: "2026-07-24T00:00:00Z",
+    },
+    {
+      dataset: "Held-out",
+      mode: "sparse",
+      source_label: "eval/held_out.json at commit 5e23291",
+      limit: 5,
+      record_count: 15,
+      file_hit_rate: 0.467,
+      file_mrr: 0.236,
+      file_recall: 0.356,
+      file_precision: 0.1,
+      symbol_hit_rate: 0.333,
+      selected: false,
+      measured_at: "2026-07-24T00:00:00Z",
+    },
+  ],
+};
+
 function renderEvaluationsRoute() {
   const EvaluationsComponent = Route.options.component as ComponentType;
   return render(
@@ -167,8 +221,10 @@ describe("Evaluations route", () => {
     vi.mocked(getEvaluationResults).mockReset();
     vi.mocked(getEvaluationRuns).mockReset();
     vi.mocked(getEvaluationSummary).mockReset();
+    vi.mocked(getRetrievalEvaluationResults).mockReset();
     vi.mocked(getEvaluationRuns).mockResolvedValue({ runs: [] });
     vi.mocked(getEvaluationResults).mockResolvedValue({ results: [] });
+    vi.mocked(getRetrievalEvaluationResults).mockResolvedValue(retrievalEvaluationList);
   });
 
   it("renders an honest empty state before persisted results exist", async () => {

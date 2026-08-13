@@ -2099,6 +2099,103 @@
         "title": "ResearchStep",
         "type": "object"
       },
+      "RetrievalEvaluationList": {
+        "description": "Persisted retrieval-evaluation metrics for the dashboard.",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalEvaluationSummary"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "title": "RetrievalEvaluationList",
+        "type": "object"
+      },
+      "RetrievalEvaluationSummary": {
+        "description": "Persisted retrieval-evaluation metric row for dashboard highlights.",
+        "properties": {
+          "dataset": {
+            "minLength": 1,
+            "title": "Dataset",
+            "type": "string"
+          },
+          "file_hit_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "File Hit Rate",
+            "type": "number"
+          },
+          "file_mrr": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "File Mrr",
+            "type": "number"
+          },
+          "file_precision": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "File Precision",
+            "type": "number"
+          },
+          "file_recall": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "File Recall",
+            "type": "number"
+          },
+          "limit": {
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "measured_at": {
+            "format": "date-time",
+            "title": "Measured At",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RetrievalMode"
+          },
+          "record_count": {
+            "minimum": 0.0,
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "selected": {
+            "default": false,
+            "title": "Selected",
+            "type": "boolean"
+          },
+          "source_label": {
+            "minLength": 1,
+            "title": "Source Label",
+            "type": "string"
+          },
+          "symbol_hit_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Symbol Hit Rate",
+            "type": "number"
+          }
+        },
+        "required": [
+          "dataset",
+          "mode",
+          "limit",
+          "record_count",
+          "file_hit_rate",
+          "file_mrr",
+          "file_recall",
+          "file_precision",
+          "symbol_hit_rate",
+          "source_label",
+          "measured_at"
+        ],
+        "title": "RetrievalEvaluationSummary",
+        "type": "object"
+      },
       "RetrievalMode": {
         "description": "The supported repository retrieval strategies.",
         "enum": [
@@ -2301,6 +2398,27 @@
           }
         },
         "summary": "List evaluation results",
+        "tags": [
+          "evaluations"
+        ]
+      }
+    },
+    "/evaluations/retrieval": {
+      "get": {
+        "operationId": "list_retrieval_evaluation_results",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrievalEvaluationList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List retrieval evaluation metrics",
         "tags": [
           "evaluations"
         ]

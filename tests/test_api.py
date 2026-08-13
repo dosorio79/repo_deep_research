@@ -39,6 +39,8 @@ from repo_research.models import (
     RepositoryIdentity,
     ResearchAnswer,
     ResearchRequest,
+    RetrievalEvaluationList,
+    RetrievalEvaluationSummary,
     RetrievalMode,
     RunKind,
     SearchResult,
@@ -161,6 +163,7 @@ class FakeRecordingStore:
         )
         self.evaluation_run_list = EvaluationRunList()
         self.evaluation_result_list = EvaluationResultList()
+        self.retrieval_evaluation_list = RetrievalEvaluationList()
 
     def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
         self.runs.append((run_kind, trace))
@@ -190,6 +193,9 @@ class FakeRecordingStore:
 
     def list_evaluation_results(self, **_kwargs: object) -> EvaluationResultList:
         return self.evaluation_result_list
+
+    def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
+        return self.retrieval_evaluation_list
 
 
 def test_record_completed_answer_persists_agentic_snapshot() -> None:
@@ -335,6 +341,9 @@ def test_openapi_schema_has_user_facing_metadata() -> None:
     assert schema["paths"]["/rag"]["post"]["operationId"] == "run_direct_rag"
     assert schema["paths"]["/research"]["post"]["tags"] == ["answers"]
     assert schema["paths"]["/evaluations/results"]["get"]["tags"] == ["evaluations"]
+    assert schema["paths"]["/evaluations/retrieval"]["get"]["operationId"] == (
+        "list_retrieval_evaluation_results"
+    )
 
 
 def test_versioned_openapi_contract_matches_app_schema() -> None:
@@ -989,6 +998,49 @@ async def test_evaluation_results_returns_recorder_rows() -> None:
     assert result["result_id"] == "result-1"
     assert result["context_label"] == "repo_deep_research"
     assert result["repository_name"] == "repo_deep_research"
+
+
+@pytest.mark.anyio
+async def test_retrieval_evaluation_results_returns_recorder_rows() -> None:
+    recording_store = FakeRecordingStore()
+    recording_store.retrieval_evaluation_list = RetrievalEvaluationList(
+        results=[
+            RetrievalEvaluationSummary(
+                dataset="Held-out",
+                mode=RetrievalMode.DENSE,
+                source_label="eval/held_out.json at commit 5e23291",
+                limit=5,
+                record_count=15,
+                file_hit_rate=0.733,
+                file_mrr=0.539,
+                file_recall=0.589,
+                file_precision=0.247,
+                symbol_hit_rate=0.6,
+                selected=True,
+                measured_at=datetime(2026, 7, 24, tzinfo=UTC),
+            )
+        ]
+    )
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get("/evaluations/retrieval")
+
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert result["dataset"] == "Held-out"
+    assert result["mode"] == "dense"
+    assert result["selected"] is True
+    assert result["file_hit_rate"] == 0.733
 
 
 @pytest.mark.anyio
