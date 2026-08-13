@@ -76,23 +76,24 @@ const EXAMPLES = [
 const QUESTION_MODES: QuestionMode[] = ["auto", "locate", "flow", "change"];
 const RETRIEVAL_MODES: RetrievalMode[] = ["dense", "sparse", "hybrid"];
 const DEFAULT_API_BASE_URL = (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "/api";
+export const RESEARCH_HEAD = {
+  meta: [
+    { title: "Repo Deep Research" },
+    {
+      name: "description",
+      content:
+        "Local-first repository research with ingestion, direct RAG, agentic RAG, grounded answers, and evidence.",
+    },
+    { property: "og:title", content: "Repo Deep Research" },
+    {
+      property: "og:description",
+      content: "Ingest a Python repository and ask grounded RAG questions with citations.",
+    },
+  ],
+};
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Repo Deep Research — Capstone Demo" },
-      {
-        name: "description",
-        content:
-          "Reviewer-facing repository research demo with ingestion, direct RAG, agentic RAG, grounded answers, and evidence.",
-      },
-      { property: "og:title", content: "Repo Deep Research — Capstone Demo" },
-      {
-        property: "og:description",
-        content: "Ingest a Python repository and ask grounded RAG questions with citations.",
-      },
-    ],
-  }),
+  head: () => RESEARCH_HEAD,
   component: ResearchView,
 });
 
