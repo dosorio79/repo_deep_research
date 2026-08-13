@@ -2,16 +2,15 @@
 
 ## Summary
 
-`v0.5.6` makes monitoring visible and inspectable with a charted, run-first
-dashboard. The final capstone evidence work is not finished. The next releases
-should focus on
-reviewer scoring evidence, not new product surface area.
+`v0.5.7` makes monitoring and evaluation visible and inspectable with
+PostgreSQL-backed dashboards. The next release should focus on reviewer
+packaging, not new product surface area.
 
 Highest priorities:
 
-1. Final retrieval and answer-evaluation evidence.
-2. Reviewer packaging: screenshots, examples, README rubric map, and runbook.
-3. Reviewer packaging after evaluation evidence is final.
+1. Reviewer packaging: screenshots, examples, README rubric map, and runbook.
+2. Final capstone evidence summaries that point to persisted dashboard data.
+3. Known limitations and a concise local review path.
 
 ## v0.5.6: Monitoring charts
 
@@ -87,8 +86,10 @@ Out of scope:
 Goal: publish defensible evaluation evidence for retrieval and answer quality,
 including both curated datasets and real monitored answers.
 
-Split the work into three release slices so the storage contract lands before
-runner and UI behavior:
+Status: released to `main` as `v0.5.7`.
+
+The work landed in three slices so the storage contract arrived before runner
+and UI behavior:
 
 - `v0.5.7a`: PostgreSQL persistence foundation for answer snapshots,
   evaluation runs, and evaluation results.
@@ -98,7 +99,7 @@ runner and UI behavior:
 
 ### v0.5.7a: Evaluation persistence foundation
 
-Status: merged to `dev`.
+Status: released in `v0.5.7`.
 
 Scope:
 
@@ -121,7 +122,7 @@ Acceptance checks:
 
 ### v0.5.7b: Unified evaluation runner
 
-Status: in progress on `feat/v0.5.7b-unified-evaluation-runner`.
+Status: released in `v0.5.7`.
 
 Retrieval evaluation:
 
@@ -168,7 +169,9 @@ Acceptance checks:
 Goal: make evaluation inspectable from the browser rather than only from CLI
 JSON output.
 
-Planned dashboard panels:
+Status: released in `v0.5.7`.
+
+Dashboard panels:
 
 - Average score by approach: direct versus agentic.
 - Score distribution by metric.

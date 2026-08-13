@@ -139,4 +139,4 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
 Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current reviewable
-MVP stack is released as `v0.5.6`.
+MVP stack is released as `v0.5.7`.
