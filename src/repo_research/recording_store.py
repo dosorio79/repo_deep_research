@@ -1163,32 +1163,32 @@ _SCHEMA_STATEMENTS = (
         measured_at
     ) VALUES
         (
-            'Development', 'dense', 'eval/development.json local alpha smoke',
+            'Development', 'dense', 'legacy self-repo local alpha smoke',
             5, 15, 0.400, 0.236, 0.272, 0.090, 0.357, false,
             '2026-08-13T00:00:00Z'
         ),
         (
-            'Development', 'sparse', 'eval/development.json local alpha smoke',
+            'Development', 'sparse', 'legacy self-repo local alpha smoke',
             5, 15, 0.067, 0.033, 0.067, 0.013, 0.071, false,
             '2026-08-13T00:00:00Z'
         ),
         (
-            'Development', 'hybrid', 'eval/development.json local alpha smoke',
+            'Development', 'hybrid', 'legacy self-repo local alpha smoke',
             5, 15, 0.333, 0.163, 0.250, 0.077, 0.357, false,
             '2026-08-13T00:00:00Z'
         ),
         (
-            'Held-out', 'dense', 'eval/held_out.json local alpha smoke',
+            'Held-out', 'dense', 'legacy self-repo held-out smoke',
             5, 15, 0.467, 0.313, 0.311, 0.200, 0.400, true,
             '2026-08-13T00:00:00Z'
         ),
         (
-            'Held-out', 'sparse', 'eval/held_out.json local alpha smoke',
+            'Held-out', 'sparse', 'legacy self-repo held-out smoke',
             5, 15, 0.133, 0.080, 0.100, 0.030, 0.267, false,
             '2026-08-13T00:00:00Z'
         ),
         (
-            'Held-out', 'hybrid', 'eval/held_out.json local alpha smoke',
+            'Held-out', 'hybrid', 'legacy self-repo held-out smoke',
             5, 15, 0.400, 0.261, 0.278, 0.103, 0.333, false,
             '2026-08-13T00:00:00Z'
         )

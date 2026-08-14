@@ -1,17 +1,122 @@
 [
-  {"id":"locate_001","question":"Where is repository discovery implemented?","question_type":"locate","relevant_files":["src/repo_research/ingestion.py"],"relevant_symbols":["discover_repository"],"notes":"Local path discovery and Git identity."},
-  {"id":"locate_002","question":"Where are dense vectors created?","question_type":"locate","relevant_files":["src/repo_research/db.py"],"relevant_symbols":["local_embedder"],"notes":"FastEmbed dense encoder factory."},
-  {"id":"locate_003","question":"Where are sparse vectors created?","question_type":"locate","relevant_files":["src/repo_research/db.py"],"relevant_symbols":["local_sparse_embedder"],"notes":"FastEmbed sparse encoder factory."},
-  {"id":"locate_004","question":"Where is hybrid retrieval implemented?","question_type":"locate","relevant_files":["src/repo_research/db.py"],"relevant_symbols":["RepositoryDatabase.search"],"notes":"Qdrant RRF query path."},
-  {"id":"locate_005","question":"Where is runtime configuration validated?","question_type":"locate","relevant_files":["src/repo_research/config.py"],"relevant_symbols":["Settings"],"notes":"Pydantic settings boundary."},
-  {"id":"flow_001","question":"How does CLI ingestion reach Qdrant?","question_type":"flow","relevant_files":["src/repo_research/cli.py","src/repo_research/ingestion.py","src/repo_research/db.py"],"relevant_symbols":["main","parse_files","RepositoryDatabase.replace"],"notes":"CLI orchestration, parsing, and indexing."},
-  {"id":"flow_002","question":"How does a dense search query reach Qdrant?","question_type":"flow","relevant_files":["src/repo_research/cli.py","src/repo_research/db.py","src/repo_research/models.py"],"relevant_symbols":["main","RepositoryDatabase.search","SearchQuery"],"notes":"Typed query to dense mode."},
-  {"id":"flow_003","question":"How are Python functions turned into evidence chunks?","question_type":"flow","relevant_files":["src/repo_research/ingestion.py","src/repo_research/models.py"],"relevant_symbols":["parse_file","create_chunk"],"notes":"AST parser and deterministic chunk factory."},
-  {"id":"flow_004","question":"How does evaluation run each retrieval mode?","question_type":"flow","relevant_files":["src/repo_research/evaluation.py","src/repo_research/db.py"],"relevant_symbols":["evaluate_records","RepositoryDatabase.search"],"notes":"Mode iteration and search calls."},
-  {"id":"flow_005","question":"How are skipped source files reported to a CLI user?","question_type":"flow","relevant_files":["src/repo_research/ingestion.py","src/repo_research/cli.py","src/repo_research/models.py"],"relevant_symbols":["parse_files","main","IngestionIssue"],"notes":"Per-file diagnostics in ingest JSON."},
-  {"id":"change_001","question":"Which files change to add another retrieval mode?","question_type":"change","relevant_files":["src/repo_research/models.py","src/repo_research/db.py","src/repo_research/cli.py","src/repo_research/evaluation.py"],"relevant_symbols":["RetrievalMode","RepositoryDatabase.search","build_parser","evaluate_records"],"notes":"Mode enum, search branch, CLI, and evaluation."},
-  {"id":"change_002","question":"Which files configure a different sparse embedding model?","question_type":"change","relevant_files":["src/repo_research/config.py","src/repo_research/cli.py","src/repo_research/db.py"],"relevant_symbols":["Settings","_create_database","local_sparse_embedder"],"notes":"Configuration is injected into database creation."},
-  {"id":"change_003","question":"Which tests cover Qdrant retrieval modes?","question_type":"change","relevant_files":["tests/test_qdrant_store.py"],"relevant_symbols":[],"notes":"In-memory Qdrant regression coverage."},
-  {"id":"change_004","question":"Which files define retrieval evaluation metrics?","question_type":"change","relevant_files":["src/repo_research/evaluation.py","src/repo_research/models.py"],"relevant_symbols":["EvaluationResult","evaluate_records"],"notes":"Metric computation and typed output."},
-  {"id":"change_005","question":"Which files change to alter result limits?","question_type":"change","relevant_files":["src/repo_research/models.py","src/repo_research/cli.py","src/repo_research/db.py"],"relevant_symbols":["SearchQuery","build_parser","RepositoryDatabase.search"],"notes":"Validated query limit, CLI option, and Qdrant call."}
+  {
+    "id": "dev_locate_001",
+    "question": "Where is Qdrant collection setup and vector indexing implemented?",
+    "question_type": "locate",
+    "relevant_files": ["src/repo_research/qdrant_store.py"],
+    "relevant_symbols": ["RepositoryDatabase"],
+    "notes": "RepositoryDatabase owns collection setup, dense/sparse embedding use, and point replacement."
+  },
+  {
+    "id": "dev_locate_002",
+    "question": "Where is direct RAG answer generation implemented?",
+    "question_type": "locate",
+    "relevant_files": ["src/repo_research/rag.py"],
+    "relevant_symbols": ["DirectRagService"],
+    "notes": "DirectRagService assembles retrieved context, calls the answer generator, and validates citations."
+  },
+  {
+    "id": "dev_locate_003",
+    "question": "Where is bounded agentic research implemented?",
+    "question_type": "locate",
+    "relevant_files": ["src/repo_research/research.py"],
+    "relevant_symbols": ["BoundedResearchService", "ResearchToolContext"],
+    "notes": "BoundedResearchService and ResearchToolContext enforce tool budgets and produce grounded research answers."
+  },
+  {
+    "id": "dev_locate_004",
+    "question": "Where are persisted monitoring and evaluation rows stored?",
+    "question_type": "locate",
+    "relevant_files": ["src/repo_research/recording_store.py"],
+    "relevant_symbols": ["PostgresRecordingStore"],
+    "notes": "PostgresRecordingStore owns PostgreSQL persistence for runs, feedback, retrieval summaries, and evaluations."
+  },
+  {
+    "id": "dev_locate_005",
+    "question": "Where is runtime configuration loaded and validated?",
+    "question_type": "locate",
+    "relevant_files": ["src/repo_research/config.py"],
+    "relevant_symbols": ["Settings"],
+    "notes": "Settings centralizes environment-driven runtime configuration."
+  },
+  {
+    "id": "dev_flow_001",
+    "question": "How does the API create services for direct and agentic research requests?",
+    "question_type": "flow",
+    "relevant_files": ["src/repo_research/api.py", "src/repo_research/runtime.py", "src/repo_research/rag.py", "src/repo_research/research.py"],
+    "relevant_symbols": ["create_app", "RuntimeServices", "DirectRagService", "BoundedResearchService"],
+    "notes": "The FastAPI app uses runtime service factories to route requests to direct RAG or bounded research."
+  },
+  {
+    "id": "dev_flow_002",
+    "question": "How does repository ingestion parse files before indexing them?",
+    "question_type": "flow",
+    "relevant_files": ["src/repo_research/ingestion.py", "src/repo_research/models.py", "src/repo_research/qdrant_store.py"],
+    "relevant_symbols": ["parse_files", "create_chunk", "RepositoryDatabase"],
+    "notes": "Ingestion discovers eligible files, creates typed chunks, and hands them to the Qdrant store."
+  },
+  {
+    "id": "dev_flow_003",
+    "question": "How does retrieval evaluation run the same records across all retrieval modes?",
+    "question_type": "flow",
+    "relevant_files": ["src/repo_research/evaluation.py", "src/repo_research/models.py", "src/repo_research/qdrant_store.py"],
+    "relevant_symbols": ["evaluate_records", "RetrievalMode", "RepositoryDatabase.search"],
+    "notes": "evaluate_records iterates RetrievalMode and delegates each query to the configured RepositorySearcher."
+  },
+  {
+    "id": "dev_flow_004",
+    "question": "How does answer evaluation compare dataset answers and monitored runs?",
+    "question_type": "flow",
+    "relevant_files": ["src/repo_research/answer_evaluation.py", "src/repo_research/rag.py", "src/repo_research/research.py", "src/repo_research/recording_store.py"],
+    "relevant_symbols": ["run_answer_evaluation", "load_dataset_records", "load_monitored_snapshots"],
+    "notes": "Answer evaluation builds candidates from either versioned records or persisted snapshots and can persist judge results."
+  },
+  {
+    "id": "dev_flow_005",
+    "question": "How are unsupported or invalid citations checked before returning an answer?",
+    "question_type": "flow",
+    "relevant_files": ["src/repo_research/grounding.py", "src/repo_research/rag.py", "src/repo_research/research.py"],
+    "relevant_symbols": ["validate_citations", "DirectRagService", "BoundedResearchService"],
+    "notes": "Grounding validation checks answer evidence against retrieved or read chunks in direct and agentic paths."
+  },
+  {
+    "id": "dev_change_001",
+    "question": "Which files must change to add another retrieval mode?",
+    "question_type": "change",
+    "relevant_files": ["src/repo_research/models.py", "src/repo_research/qdrant_store.py", "src/repo_research/cli.py", "src/repo_research/evaluation.py", "tests/test_qdrant_store.py", "tests/test_cli.py"],
+    "relevant_symbols": ["RetrievalMode", "RepositoryDatabase.search", "build_parser", "evaluate_records"],
+    "notes": "A retrieval mode touches the enum, Qdrant search branch, CLI parser, evaluation loop, and tests."
+  },
+  {
+    "id": "dev_change_002",
+    "question": "Which files must change to add a new bounded research tool?",
+    "question_type": "change",
+    "relevant_files": ["src/repo_research/research.py", "src/repo_research/models.py", "tests/test_research.py"],
+    "relevant_symbols": ["ResearchToolContext", "BoundedResearchService", "ResearchBudget"],
+    "notes": "A new tool must respect budget accounting, structured output, and focused research tests."
+  },
+  {
+    "id": "dev_change_003",
+    "question": "Which files must change to expose a new API request option?",
+    "question_type": "change",
+    "relevant_files": ["src/repo_research/models.py", "src/repo_research/api.py", "src/repo_research/cli.py", "tests/test_api.py", "tests/test_cli.py"],
+    "relevant_symbols": ["ResearchRequest", "create_app", "build_parser"],
+    "notes": "Request options cross Pydantic models, FastAPI validation, CLI parsing, and contract tests."
+  },
+  {
+    "id": "dev_change_004",
+    "question": "Which files must change to add a new evaluation dashboard metric?",
+    "question_type": "change",
+    "relevant_files": ["src/repo_research/models.py", "src/repo_research/recording_store.py", "src/repo_research/api.py", "frontend/src/routes/evaluations.tsx", "tests/test_recording_store.py", "tests/test_api.py"],
+    "relevant_symbols": ["EvaluationSummary", "PostgresRecordingStore", "create_app"],
+    "notes": "Dashboard metrics require typed API shapes, SQL aggregation, route exposure, frontend rendering, and persistence/API tests."
+  },
+  {
+    "id": "dev_change_005",
+    "question": "Which files must change to update default model or retrieval settings?",
+    "question_type": "change",
+    "relevant_files": ["src/repo_research/config.py", ".env.example", "README.md", "docs/setup.md"],
+    "relevant_symbols": ["Settings"],
+    "notes": "Runtime defaults live in Settings and must stay aligned with environment examples and operator docs."
+  }
 ]

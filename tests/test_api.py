@@ -1008,7 +1008,7 @@ async def test_retrieval_evaluation_results_returns_recorder_rows() -> None:
             RetrievalEvaluationSummary(
                 dataset="Held-out",
                 mode=RetrievalMode.DENSE,
-                source_label="eval/held_out.json local alpha smoke",
+                source_label="legacy self-repo held-out smoke",
                 limit=5,
                 record_count=15,
                 file_hit_rate=0.467,
