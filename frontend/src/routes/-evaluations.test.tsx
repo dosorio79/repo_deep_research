@@ -165,7 +165,7 @@ const retrievalEvaluationList: RetrievalEvaluationList = {
     {
       dataset: "Held-out",
       mode: "dense",
-      source_label: "eval/held_out.json local alpha smoke",
+      source_label: "legacy self-repo held-out smoke",
       limit: 5,
       record_count: 15,
       file_hit_rate: 0.467,
@@ -179,7 +179,7 @@ const retrievalEvaluationList: RetrievalEvaluationList = {
     {
       dataset: "Held-out",
       mode: "hybrid",
-      source_label: "eval/held_out.json local alpha smoke",
+      source_label: "legacy self-repo held-out smoke",
       limit: 5,
       record_count: 15,
       file_hit_rate: 0.4,
@@ -193,7 +193,7 @@ const retrievalEvaluationList: RetrievalEvaluationList = {
     {
       dataset: "Held-out",
       mode: "sparse",
-      source_label: "eval/held_out.json local alpha smoke",
+      source_label: "legacy self-repo held-out smoke",
       limit: 5,
       record_count: 15,
       file_hit_rate: 0.133,

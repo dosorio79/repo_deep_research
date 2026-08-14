@@ -1,17 +1,122 @@
 [
-  {"id":"locate_006","question":"Where are deterministic chunk IDs created?","question_type":"locate","relevant_files":["src/repo_research/models.py"],"relevant_symbols":["create_chunk"],"notes":"UUID and content-hash construction."},
-  {"id":"locate_007","question":"Where does the application filter ignored files?","question_type":"locate","relevant_files":["src/repo_research/ingestion.py"],"relevant_symbols":["_is_eligible"],"notes":"Ignore, size, and binary checks."},
-  {"id":"locate_008","question":"Where are retrieval reports written?","question_type":"locate","relevant_files":["src/repo_research/evaluation.py"],"relevant_symbols":["write_report"],"notes":"Stable JSON report writer."},
-  {"id":"locate_009","question":"Where are sparse vectors validated before indexing?","question_type":"locate","relevant_files":["src/repo_research/db.py"],"relevant_symbols":["_validate_sparse_vectors"],"notes":"Sparse shape validation."},
-  {"id":"locate_010","question":"Where are Markdown headings chunked?","question_type":"locate","relevant_files":["src/repo_research/ingestion.py"],"relevant_symbols":["_parse_markdown"],"notes":"Heading hierarchy parser."},
-  {"id":"flow_006","question":"How does hybrid search combine dense and sparse candidates?","question_type":"flow","relevant_files":["src/repo_research/db.py","src/repo_research/models.py"],"relevant_symbols":["RepositoryDatabase.search","RetrievalMode"],"notes":"RRF is selected for hybrid mode."},
-  {"id":"flow_007","question":"How are current repository revisions isolated during retrieval?","question_type":"flow","relevant_files":["src/repo_research/models.py","src/repo_research/db.py"],"relevant_symbols":["SearchQuery","_repository_filter"],"notes":"Repository and commit filters."},
-  {"id":"flow_008","question":"How does a ground-truth JSON file become evaluation input?","question_type":"flow","relevant_files":["src/repo_research/cli.py","src/repo_research/evaluation.py","src/repo_research/models.py"],"relevant_symbols":["main","load_records","EvaluationRecord"],"notes":"CLI validates records then evaluates."},
-  {"id":"flow_009","question":"How does safe replacement remove deleted chunks?","question_type":"flow","relevant_files":["src/repo_research/db.py"],"relevant_symbols":["RepositoryDatabase.replace","RepositoryDatabase._existing_chunk_ids"],"notes":"Upsert first, then stale ID deletion."},
-  {"id":"flow_010","question":"How are functions inside classes represented in chunks?","question_type":"flow","relevant_files":["src/repo_research/ingestion.py","src/repo_research/models.py"],"relevant_symbols":["_class_chunks","_function_chunk"],"notes":"Parent symbol and method chunk type."},
-  {"id":"change_006","question":"Which files change to alter hybrid candidate depth?","question_type":"change","relevant_files":["src/repo_research/db.py","src/repo_research/models.py","tests/test_qdrant_store.py"],"relevant_symbols":["RepositoryDatabase.search","SearchQuery"],"notes":"Candidate depth derives from result limit."},
-  {"id":"change_007","question":"Which files change to add a new evaluation metric?","question_type":"change","relevant_files":["src/repo_research/models.py","src/repo_research/evaluation.py","tests/test_evaluation.py"],"relevant_symbols":["EvaluationResult","evaluate_records"],"notes":"Typed report and deterministic tests."},
-  {"id":"change_008","question":"Which files change to add a new supported source suffix?","question_type":"change","relevant_files":["src/repo_research/ingestion.py","tests/test_parsers.py"],"relevant_symbols":["SUPPORTED_SUFFIXES","parse_file"],"notes":"Eligibility and parser behavior."},
-  {"id":"change_009","question":"Which files change to expose another CLI evaluation option?","question_type":"change","relevant_files":["src/repo_research/cli.py","tests/test_cli.py"],"relevant_symbols":["build_parser"],"notes":"Argument parser and contract test."},
-  {"id":"change_010","question":"Which files change to update the default Qdrant collection?","question_type":"change","relevant_files":["src/repo_research/config.py",".env.example","README.md"],"relevant_symbols":["Settings"],"notes":"Default settings and operator documentation."}
+  {
+    "id": "datapeek_locate_001",
+    "question": "Where is the DatasetPeek Robyn application created and routes registered?",
+    "question_type": "locate",
+    "relevant_files": ["app/main.py"],
+    "relevant_symbols": ["create_app"],
+    "notes": "create_app builds the Robyn app, registers home/profile routes, and exposes static/health endpoints."
+  },
+  {
+    "id": "datapeek_locate_002",
+    "question": "Where does DatasetPeek handle the analyze upload route?",
+    "question_type": "locate",
+    "relevant_files": ["app/routes/profile.py"],
+    "relevant_symbols": ["register_profile_routes"],
+    "notes": "register_profile_routes owns GET/POST /analyze and calls file reading plus profile view-model assembly."
+  },
+  {
+    "id": "datapeek_locate_003",
+    "question": "Where are uploaded CSV and Parquet files validated and read?",
+    "question_type": "locate",
+    "relevant_files": ["app/services/file_reader.py"],
+    "relevant_symbols": ["UploadedFile", "read_uploaded_file"],
+    "notes": "UploadedFile normalizes local/S3 inputs and read_uploaded_file loads them into Polars."
+  },
+  {
+    "id": "datapeek_locate_004",
+    "question": "Where is the structured dataset profile built?",
+    "question_type": "locate",
+    "relevant_files": ["app/services/profiler.py"],
+    "relevant_symbols": ["build_profile_model", "build_profile_view_model"],
+    "notes": "The profiler builds structured profile data and template context from a Polars DataFrame."
+  },
+  {
+    "id": "datapeek_locate_005",
+    "question": "Where are DatasetPeek operational settings defined?",
+    "question_type": "locate",
+    "relevant_files": ["app/services/settings.py"],
+    "relevant_symbols": ["AppSettings", "get_settings"],
+    "notes": "Settings reads upload limits, preview sizes, text truncation, CSV inference, and S3 timeout options."
+  },
+  {
+    "id": "datapeek_flow_001",
+    "question": "How does a local upload become a rendered profile page?",
+    "question_type": "flow",
+    "relevant_files": ["app/routes/profile.py", "app/services/file_reader.py", "app/services/profiler.py", "app/services/profile_model.py"],
+    "relevant_symbols": ["register_profile_routes", "UploadedFile.from_request_files", "read_uploaded_file", "build_profile_view_model"],
+    "notes": "The route normalizes the upload, reads it with Polars, builds a profile view model, and renders home.html."
+  },
+  {
+    "id": "datapeek_flow_002",
+    "question": "How does DatasetPeek load an S3-compatible object for profiling?",
+    "question_type": "flow",
+    "relevant_files": ["app/routes/profile.py", "app/services/file_reader.py", "app/services/s3_reader.py", "app/services/settings.py"],
+    "relevant_symbols": ["UploadedFile.from_s3_uri", "download_s3_object", "parse_s3_uri", "AppSettings"],
+    "notes": "The analyze route detects an s3 URI, validates settings, downloads the object, and passes it through the same upload model."
+  },
+  {
+    "id": "datapeek_flow_003",
+    "question": "How are column roles and quality signals produced?",
+    "question_type": "flow",
+    "relevant_files": ["app/services/profiler.py", "app/services/heuristics.py", "app/services/profile_model.py"],
+    "relevant_symbols": ["build_profile_model", "detect_column_role", "detect_column_signals", "ColumnSignal"],
+    "notes": "The profiler collects column metrics, delegates role/signal heuristics, and stores results in structured profile models."
+  },
+  {
+    "id": "datapeek_flow_004",
+    "question": "How does DatasetPeek generate downloadable Markdown and HTML reports?",
+    "question_type": "flow",
+    "relevant_files": ["app/services/profiler.py", "app/services/profile_model.py"],
+    "relevant_symbols": ["build_profile_model", "_markdown_report", "_html_report", "DatasetProfile"],
+    "notes": "The profile model is enriched with generated report strings used by the rendered page."
+  },
+  {
+    "id": "datapeek_flow_005",
+    "question": "How does runtime host and port configuration reach the Robyn app?",
+    "question_type": "flow",
+    "relevant_files": ["main.py", "app/main.py"],
+    "relevant_symbols": ["parse_runtime_config", "run"],
+    "notes": "The root launcher parses HOST and PORT, then starts the module-level app through app.main.run."
+  },
+  {
+    "id": "datapeek_change_001",
+    "question": "Which files must change to add support for another upload file type?",
+    "question_type": "change",
+    "relevant_files": ["app/services/file_reader.py", "app/services/profiler.py", "README.md", "tests/test_app.py"],
+    "relevant_symbols": ["UploadedFile", "read_uploaded_file", "build_profile_model"],
+    "notes": "A new file type touches upload validation, Polars reading/profile assumptions, documentation, and service tests."
+  },
+  {
+    "id": "datapeek_change_002",
+    "question": "Which files must change to add another column quality heuristic?",
+    "question_type": "change",
+    "relevant_files": ["app/services/heuristics.py", "app/services/profiler.py", "app/services/profile_model.py", "tests/test_app.py"],
+    "relevant_symbols": ["detect_column_signals", "build_profile_model", "ColumnSignal"],
+    "notes": "Signals are detected in heuristics, assembled by the profiler, represented in profile models, and asserted in tests."
+  },
+  {
+    "id": "datapeek_change_003",
+    "question": "Which files must change to add a new operational setting?",
+    "question_type": "change",
+    "relevant_files": ["app/services/settings.py", "app/services/profiler.py", "README.md", "tests/test_settings.py", "tests/test_app.py"],
+    "relevant_symbols": ["AppSettings", "get_settings", "build_profile_view_model"],
+    "notes": "Operational settings are read from environment, used by profiling or reading code, documented, and covered by tests."
+  },
+  {
+    "id": "datapeek_change_004",
+    "question": "Which files must change to add a new route to the server-rendered app?",
+    "question_type": "change",
+    "relevant_files": ["app/main.py", "app/routes/home.py", "app/routes/profile.py", "tests/test_app.py"],
+    "relevant_symbols": ["create_app", "register_home_routes", "register_profile_routes"],
+    "notes": "New routes follow the route registration pattern and need app-level route tests."
+  },
+  {
+    "id": "datapeek_change_005",
+    "question": "Which files must change to improve S3-compatible object handling?",
+    "question_type": "change",
+    "relevant_files": ["app/services/s3_reader.py", "app/services/file_reader.py", "app/services/settings.py", "tests/test_s3_reader.py", "README.md"],
+    "relevant_symbols": ["download_s3_object", "UploadedFile.from_s3_uri", "AppSettings"],
+    "notes": "S3 behavior crosses URI parsing/download, file validation, credential/settings handling, tests, and user docs."
+  }
 ]

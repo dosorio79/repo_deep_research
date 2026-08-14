@@ -8,20 +8,30 @@ project.
 
 Datasets:
 
-- `eval/development.json` contains 15 records for iteration.
-- `eval/held_out.json` contains 15 separate records for final reporting.
+- `eval/development.json` contains 15 records for iteration against this
+  repository.
+- `eval/held_out.json` contains 15 records for external demo held-out reporting
+  against `/home/daniel/code/dosorio79/datapeek`.
 
 Together they contain ten locate, ten flow, and ten change-impact questions.
 Each record names expected files, expected symbols where applicable, and a
-human-verification note. Do not modify held-out records to improve a reported
-result.
+human-verification note. The held-out set is intentionally a small public-demo
+repository, not a broad benchmark. Before running a dataset, ingest the
+repository that the dataset targets.
 
-After starting services and ingesting the repository into `repo_chunks_v2`, run:
+After starting services, run the development dataset against this repository:
 
 ```bash
+make ingest
 make evaluate-retrieval
+```
+
+Run the external demo held-out dataset after ingesting Datapeek:
+
+```bash
+uv run repo-research ingest /home/daniel/code/dosorio79/datapeek
 uv run repo-research evaluate-retrieval --dataset eval/held_out.json \
-  --output eval/results/retrieval-held-out.json
+  --output eval/results/retrieval-held-out-datapeek.json
 ```
 
 Generated reports under `eval/results/` are ignored. Copy only curated summary
@@ -45,21 +55,23 @@ Definitions:
 | File Precision | For each question, retrieved expected files divided by retrieved file results; then averaged. | Penalizes broad result sets that include many irrelevant files. |
 | Symbol Hit Rate | Share of questions with expected symbols where at least one expected symbol appears in the top `k` results. | Applies only when the record declares relevant symbols. |
 
-Use the held-out report to choose the production retrieval mode. The baseline
-uses Qdrant Reciprocal Rank Fusion without tuned weights; query rewriting and
-reranking are intentionally not part of this comparison.
+Use the held-out report to evaluate behavior on the external demo repository.
+The baseline uses Qdrant Reciprocal Rank Fusion without tuned weights; query
+rewriting and reranking are intentionally not part of this comparison.
 
-The `/evaluations` dashboard shows a read-only highlight of the curated
-held-out search baseline so a local alpha user can see retrieval quality even
-before any answer-judge results have been persisted. Full search-evaluation
-reports still come from the CLI and remain reproducible through the versioned
-datasets and `make evaluate-retrieval`.
+The `/evaluations` dashboard can show read-only retrieval highlights so a local
+alpha user can see retrieval quality before any answer-judge results have been
+persisted. The seeded highlights are historical local-alpha measurements until
+the external Datapeek held-out run is regenerated and persisted. Full
+search-evaluation reports still come from the CLI and remain reproducible
+through the versioned datasets and `make evaluate-retrieval`.
 
-## Measured Retrieval Baseline
+## Previous Measured Retrieval Baseline
 
-On 2026-08-13, the local alpha branch was re-ingested into a local
-`repo_chunks_v2` collection and evaluated at five results per question. The
-generated reports are intentionally not committed; the audited measurements are:
+On 2026-08-13, before the external Datapeek held-out refresh, the local alpha
+branch was re-ingested into a local `repo_chunks_v2` collection and evaluated
+at five results per question. The generated reports were intentionally not
+committed; the audited historical measurements were:
 
 | Dataset | Mode | File Hit Rate | File MRR | File Recall | File Precision | Symbol Hit Rate |
 |---|---:|---:|---:|---:|---:|---:|
@@ -70,9 +82,9 @@ generated reports are intentionally not committed; the audited measurements are:
 | Held-out | sparse | 0.133 | 0.080 | 0.100 | 0.030 | 0.267 |
 | Held-out | hybrid | 0.400 | 0.261 | 0.278 | 0.103 | 0.333 |
 
-Dense retrieval is therefore the production default
-(`RDR_RETRIEVAL_MODE=dense`). Hybrid remains available for future evaluated
-changes; the measurements do not support making it the default yet.
+Dense retrieval remains the production default (`RDR_RETRIEVAL_MODE=dense`)
+from the previous local-alpha measurement. Regenerate this section after
+ingesting Datapeek and running the external demo held-out dataset.
 
 ## Answer Evaluation
 
@@ -164,10 +176,11 @@ dashboard reads:
 - `GET /evaluations/runs` for recent persisted evaluation runs.
 - `GET /evaluations/results` for individual judged answer rows.
 
-Search-evaluation highlights on this page are documented release measurements,
-not rows loaded from PostgreSQL. They summarize the latest curated
-`eval/held_out.json` retrieval baseline, while answer-evaluation charts and
-tables reflect persisted PostgreSQL rows.
+Search-evaluation highlights on this page come from PostgreSQL retrieval
+summary rows. The default seeded rows are historical local-alpha measurements;
+rerun retrieval evaluation after ingesting Datapeek before presenting them as
+the current `eval/held_out.json` external demo baseline. Answer-evaluation
+charts and tables reflect persisted PostgreSQL rows.
 
 Evaluation scores are scoped evidence, not global model scores. Dataset
 evaluations are specific to the JSON dataset used for the run, and monitored-run

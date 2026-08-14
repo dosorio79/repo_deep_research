@@ -79,8 +79,9 @@ def test_evaluation_calculates_metrics_and_writes_stable_report(tmp_path: Path) 
     )
 
 
-def test_versioned_ground_truth_sets_are_complete_and_disjoint() -> None:
+def test_versioned_ground_truth_sets_are_complete_disjoint_and_current() -> None:
     root = Path(__file__).parents[1]
+    datapeek_root = root.parent / "datapeek"
     development = load_records(root / "eval/development.json")
     held_out = load_records(root / "eval/held_out.json")
 
@@ -92,3 +93,18 @@ def test_versioned_ground_truth_sets_are_complete_and_disjoint() -> None:
     audit = audit_evaluation_records({"development": development, "held_out": held_out})
     assert audit.record_count == 30
     assert audit.question_type_counts == {"change": 10, "flow": 10, "locate": 10}
+
+    _assert_record_files_exist(development, root)
+    _assert_record_files_exist(held_out, datapeek_root)
+
+
+def _assert_record_files_exist(
+    records: list[EvaluationRecord], repository_root: Path
+) -> None:
+    missing = [
+        f"{record.id}: {path}"
+        for record in records
+        for path in record.relevant_files
+        if not (repository_root / path).exists()
+    ]
+    assert missing == []

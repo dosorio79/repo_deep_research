@@ -139,17 +139,26 @@ npm run build
 
 ## Evaluate Retrieval
 
-After ingesting into `repo_chunks_v2`, compare baseline modes:
+After ingesting this repository into `repo_chunks_v2`, compare baseline modes
+on the development dataset:
 
 ```bash
+make ingest
 make evaluate-retrieval
+```
+
+For the external Datapeek demo held-out dataset, ingest Datapeek first:
+
+```bash
+uv run repo-research ingest /home/daniel/code/dosorio79/datapeek
 uv run repo-research evaluate-retrieval --dataset eval/held_out.json \
-  --output eval/results/retrieval-held-out.json
+  --output eval/results/retrieval-held-out-datapeek.json
 ```
 
 The output reports file Hit Rate, MRR, Recall, Precision, and symbol Hit Rate
-for each mode. The current held-out comparison selects dense as the production
-default; see `docs/evaluation.md` for recorded measurements.
+for each mode. The Datapeek held-out set is a small public-demo repository, not
+a broad benchmark. See `docs/evaluation.md` for dataset semantics and recorded
+measurements.
 
 ## Evaluate Answers
 
