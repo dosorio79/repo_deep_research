@@ -43,6 +43,62 @@ For tasks that span multiple modules or require significant design decisions:
 
 Avoid broad scaffolding that contains placeholders without a working path.
 
+## Development workflow
+
+### Workflow selection
+
+Choose the lightest workflow appropriate for the task.
+
+#### Simple tasks
+
+Treat a task as simple when it is localized, low-risk, and its implementation is already clear. Examples:
+
+- Typographical or copy changes
+- Small styling adjustments
+- Renaming a variable or label
+- Updating a dependency version requested by the user
+- A localized bug with an obvious cause
+- Small configuration changes
+- A modification confined to one or two files with no architectural impact
+
+For simple tasks:
+
+- Do not invoke Superpowers brainstorming, worktree, planning, or subagent workflows.
+- Inspect the relevant files, make the change directly, and run the smallest relevant verification.
+- Do not create design documents or implementation plans unless the user requests them.
+- Do not create a separate worktree unless isolation is necessary for safety.
+
+#### Complex tasks
+
+Treat a task as complex when it includes one or more of the following:
+
+- New features with unclear or incomplete requirements
+- Changes spanning multiple components or layers
+- Architecture, data-model, API, security, or persistence decisions
+- Multiple plausible implementations with meaningful tradeoffs
+- Significant refactoring
+- Difficult bugs without an established root cause
+- Changes likely to require more than five implementation steps
+- Work that benefits from parallel investigation or independent review
+
+For complex tasks:
+
+- Use the relevant Superpowers skills.
+- Start with brainstorming when requirements or design choices are unclear.
+- Produce an implementation plan before editing when the change spans multiple components.
+- Use test-driven development for new behavior and bug fixes where practical.
+- Use subagents only when the work has genuinely independent streams.
+- Run the relevant verification and code-review workflow before declaring completion.
+
+#### Borderline tasks
+
+When classification is uncertain:
+
+- Briefly state whether the task is being treated as simple or complex and why.
+- Prefer direct implementation when the change is reversible and low-risk.
+- Escalate to the complex workflow if inspection reveals broader impact.
+- A user request to use or skip a particular workflow overrides this default.
+
 ## Expected repository layout
 
 ```text
