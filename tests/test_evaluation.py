@@ -95,7 +95,22 @@ def test_versioned_ground_truth_sets_are_complete_disjoint_and_current() -> None
     assert audit.question_type_counts == {"change": 10, "flow": 10, "locate": 10}
 
     _assert_record_files_exist(development, root)
-    _assert_record_files_exist(held_out, datapeek_root)
+    _assert_external_record_files_exist_if_available(held_out, datapeek_root)
+
+
+def test_external_ground_truth_file_check_allows_missing_repository(
+    tmp_path: Path,
+) -> None:
+    records = [
+        EvaluationRecord(
+            id="external_locate_001",
+            question="Where is the route?",
+            question_type="locate",
+            relevant_files=["app/main.py"],
+        )
+    ]
+
+    _assert_external_record_files_exist_if_available(records, tmp_path / "missing")
 
 
 def _assert_record_files_exist(
@@ -108,3 +123,13 @@ def _assert_record_files_exist(
         if not (repository_root / path).exists()
     ]
     assert missing == []
+
+
+def _assert_external_record_files_exist_if_available(
+    records: list[EvaluationRecord], repository_root: Path
+) -> None:
+    if repository_root.exists():
+        _assert_record_files_exist(records, repository_root)
+        return
+
+    assert all(record.relevant_files for record in records)
