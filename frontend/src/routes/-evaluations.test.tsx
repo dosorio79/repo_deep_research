@@ -287,9 +287,7 @@ describe("Evaluations route", () => {
     expect(screen.getByLabelText("Repository or dataset")).toHaveValue("all");
     expect(screen.getAllByText("repo_deep_research").length).toBeGreaterThan(0);
     expect(screen.getByText("Answer reviews")).toBeInTheDocument();
-    expect(
-      screen.getByRole("tab", { name: "Ground Truth Assessments (2)" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Ground Truth Assessments (2)" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Post-hoc LLM Review (1)" })).toBeInTheDocument();
     expect(screen.getAllByText("eval/held_out.json").length).toBe(2);
     expect(screen.getByText("agentic")).toBeInTheDocument();

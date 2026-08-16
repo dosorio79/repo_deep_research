@@ -465,10 +465,7 @@ function GroundTruthAssessmentTable({
         </thead>
         <tbody>
           {results.map((result) => (
-            <tr
-              key={`${result.dataset}-${result.run_kind}`}
-              className="border-b border-border/60"
-            >
+            <tr key={`${result.dataset}-${result.run_kind}`} className="border-b border-border/60">
               <td className="max-w-[260px] break-words py-2 pr-3">{result.dataset}</td>
               <td className="py-2 pr-3">{result.run_kind}</td>
               <td className="py-2 pr-3 mono">{result.record_count}</td>
@@ -476,9 +473,7 @@ function GroundTruthAssessmentTable({
               <td className="py-2 pr-3 mono">{formatScore(result.reference_coverage)}</td>
               <td className="py-2 pr-3 mono">{formatScore(result.faithfulness)}</td>
               <td className="py-2 pr-3 mono">{formatScore(result.citation_precision)}</td>
-              <td className="py-2 pr-3 mono">
-                {formatPercent(result.unsupported_claim_rate)}
-              </td>
+              <td className="py-2 pr-3 mono">{formatPercent(result.unsupported_claim_rate)}</td>
               <td className="py-2 pr-3 mono">{formatLatency(result.average_latency_ms)}</td>
               <td className="py-2 pr-3 mono">{formatCost(result.total_estimated_cost_usd)}</td>
             </tr>
@@ -709,8 +704,7 @@ function bestGroundTruthScore(results: GroundTruthEvaluationSummary[]) {
 function averageGroundTruthUnsupportedRate(results: GroundTruthEvaluationSummary[]) {
   if (results.length === 0) return null;
   return (
-    results.reduce((total, result) => total + result.unsupported_claim_rate, 0) /
-    results.length
+    results.reduce((total, result) => total + result.unsupported_claim_rate, 0) / results.length
   );
 }
 
