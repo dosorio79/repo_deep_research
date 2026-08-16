@@ -13,7 +13,7 @@ from repo_research import runtime
 from repo_research.answer_evaluation import (
     AnswerEvaluationCandidate,
     audit_evaluation_records,
-    dataset_candidates,
+    evaluate_dataset_answer_candidates,
     judge_answer_candidates,
     monitored_answer_candidates,
     write_persisted_answer_evaluation_report,
@@ -119,6 +119,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
     )
     answer_eval.add_argument("--limit", type=int, default=None)
+    answer_eval.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="bounded parallel workers for direct dataset answers and judging",
+    )
     answer_eval.add_argument(
         "--source",
         choices=["dataset", "monitored-runs"],
@@ -395,6 +401,7 @@ def _run_unified_answer_evaluation(
         else settings.retrieval_mode
     )
     limit = arguments.limit or settings.answer_evaluation_limit
+    workers = arguments.workers or settings.answer_evaluation_workers
     source_type = (
         EvaluationSourceType.MONITORED_RUNS
         if arguments.source == "monitored-runs"
@@ -406,21 +413,6 @@ def _run_unified_answer_evaluation(
         _report_step(
             f"loaded {audit.record_count} evaluation records across "
             f"{audit.question_type_counts}"
-        )
-        candidates = dataset_candidates(
-            direct_service=direct_service,
-            research_service=runtime.create_bounded_research_service(
-                settings=settings,
-                database=database,
-                agent=runtime.create_research_agent(settings),
-            )
-            if arguments.approach in {"agentic", "both"}
-            else None,
-            repository=repository,
-            records=records,
-            retrieval_mode=retrieval_mode,
-            limit=limit,
-            approaches=_evaluation_approaches(arguments.approach),
         )
         source_label = arguments.dataset.as_posix()
     else:
@@ -447,11 +439,35 @@ def _run_unified_answer_evaluation(
             evaluation_run.model_copy(update={"status": EvaluationRunStatus.RUNNING})
         )
     try:
-        results = judge_answer_candidates(
-            candidates=candidates,
-            judge=judge,
-            evaluation_run_id=evaluation_run.evaluation_run_id,
-        )
+        if source_type is EvaluationSourceType.DATASET:
+            checkpoint_path = arguments.output.with_suffix(".jsonl")
+            _report_step(f"checkpointing dataset results to {checkpoint_path}")
+            results = evaluate_dataset_answer_candidates(
+                direct_service=direct_service,
+                research_service=runtime.create_bounded_research_service(
+                    settings=settings,
+                    database=database,
+                    agent=runtime.create_research_agent(settings),
+                )
+                if arguments.approach in {"agentic", "both"}
+                else None,
+                judge=judge,
+                repository=repository,
+                records=records,
+                retrieval_mode=retrieval_mode,
+                limit=limit,
+                approaches=_evaluation_approaches(arguments.approach),
+                evaluation_run_id=evaluation_run.evaluation_run_id,
+                workers=workers,
+                checkpoint_path=checkpoint_path,
+            )
+        else:
+            results = judge_answer_candidates(
+                candidates=candidates,
+                judge=judge,
+                evaluation_run_id=evaluation_run.evaluation_run_id,
+                workers=workers,
+            )
         if evaluation_store is not None:
             for result in results:
                 evaluation_store.record_evaluation_result(result)
@@ -540,6 +556,7 @@ def _judge_and_optionally_persist_answer_candidates(
             candidates=candidates,
             judge=judge,
             evaluation_run_id=evaluation_run.evaluation_run_id,
+            workers=settings.answer_evaluation_workers,
         )
         if evaluation_store is not None:
             for result in results:

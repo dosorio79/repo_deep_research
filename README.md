@@ -197,6 +197,7 @@ Important settings:
 | `RDR_RETRIEVAL_LIMIT` | Default retrieved evidence limit. |
 | `RDR_OPENAI_ANSWER_MODEL` | Model used for direct RAG and agentic answers. |
 | `RDR_OPENAI_JUDGE_MODEL` | Model used for answer evaluation. |
+| `RDR_ANSWER_EVALUATION_WORKERS` | Bounded parallel workers for direct dataset answer generation and answer judging. |
 | `RDR_POSTGRES_DSN` | PostgreSQL DSN for monitoring, feedback, and evaluation data. |
 | `RDR_TELEMETRY_ENABLED` | Enables persisted recording when PostgreSQL is configured. |
 | `RDR_CORS_ALLOWED_ORIGINS` | Browser origins allowed to call FastAPI. |

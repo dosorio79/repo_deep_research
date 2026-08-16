@@ -112,6 +112,7 @@ Dataset evaluation can compare direct RAG against bounded agentic research:
 uv run repo-research evaluate-answers --source dataset \
   --path /home/daniel/code/dosorio79/datapeek \
   --dataset eval/held_out.json --approach both \
+  --workers 6 \
   --output eval/results/answer-held-out-both.json
 ```
 
@@ -182,6 +183,7 @@ uv run repo-research evaluate-answers \
   --dataset eval/held_out.json \
   --approach both \
   --retrieval-mode dense \
+  --workers 6 \
   --output eval/results/answer-held-out-both.json
 ```
 
@@ -202,6 +204,12 @@ question type, or find no meaningful quality preference. Latency, token usage,
 estimated cost, and tool calls are secondary operational considerations when
 quality is comparable; they should not be mixed into the ground-truth quality
 score or used to change routing defaults solely for rubric purposes.
+
+Dataset answer evaluation runs direct-RAG answer generation and answer judging
+with bounded parallel workers. Shared-agent research generation remains
+serialized to preserve tool/evidence validation state. Use `--workers` or
+`RDR_ANSWER_EVALUATION_WORKERS` to tune throughput within the available OpenAI
+rate limits.
 
 When `--persist` is supplied, dataset evaluations write `evaluation_results`
 with the dataset `record_id` and no `request_id`, because generated dataset

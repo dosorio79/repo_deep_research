@@ -115,6 +115,8 @@ def test_cli_parses_answer_evaluation_request() -> None:
             "dataset",
             "--approach",
             "both",
+            "--workers",
+            "6",
             "--persist",
         ]
     )
@@ -124,6 +126,7 @@ def test_cli_parses_answer_evaluation_request() -> None:
     assert arguments.limit == 3
     assert arguments.source == "dataset"
     assert arguments.approach == "both"
+    assert arguments.workers == 6
     assert arguments.persist is True
 
 
