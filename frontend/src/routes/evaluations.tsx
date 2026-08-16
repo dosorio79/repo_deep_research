@@ -338,9 +338,7 @@ function SearchEvaluationHighlights({
   results: RetrievalEvaluationSummary[];
   loading: boolean;
 }) {
-  const heldOutResults = results.filter((item) =>
-    item.dataset.toLowerCase().includes("held-out"),
-  );
+  const heldOutResults = results.filter((item) => item.dataset.toLowerCase().includes("held-out"));
   const visibleResults = heldOutResults.length ? heldOutResults : results;
   const selected = visibleResults.find((item) => item.selected) ?? visibleResults[0];
   return (
