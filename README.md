@@ -67,14 +67,14 @@ reviewable local runbook.
 |---|---|
 | Problem description | The README introduction and [architecture guide](docs/architecture.md) define evidence-grounded research for Python repositories. |
 | Retrieval flow | [docs/architecture.md](docs/architecture.md) traces ingestion, Qdrant dense/sparse/hybrid search, direct RAG, and bounded agentic research. |
-| Retrieval evaluation | [docs/evaluation.md](docs/evaluation.md) reports dense, sparse, and hybrid evaluation over versioned records in [eval/development.json](eval/development.json) and [eval/held_out.json](eval/held_out.json). |
-| LLM evaluation | [docs/evaluation.md](docs/evaluation.md) documents the existing direct-vs-agentic ground-truth evaluator and monitored-answer evidence audit. |
+| Retrieval evaluation | [docs/evaluation.md](docs/evaluation.md) reports dense, sparse, and hybrid evaluation over versioned records in [eval/development.json](eval/development.json) and [eval/held_out.json](eval/held_out.json), including refreshed Datapeek held-out measurements. |
+| LLM evaluation | [docs/evaluation.md](docs/evaluation.md) reports the completed Datapeek direct-vs-agentic held-out answer comparison and documents the monitored-answer evidence audit. |
 | Interface | The app exposes a React UI, FastAPI routes, Swagger at `/docs`, and a CLI; see [docs/usage.md](docs/usage.md). |
 | Ingestion pipeline | `POST /repositories/ingest` and `repo-research ingest` run an automated application-owned Python pipeline: repository selection, local access or public GitHub clone, parse, chunk, embed, and Qdrant index. This is not a Kestra/dlt/Airflow/Prefect pipeline. |
 | Monitoring | PostgreSQL-backed feedback and at least five dashboard panels are documented in [docs/monitoring.md](docs/monitoring.md). |
 | Containerization | [docker-compose.yml](docker-compose.yml) runs frontend, API, Qdrant, and PostgreSQL for the Local Alpha. |
 | Reproducibility | [docs/setup.md](docs/setup.md), [docs/usage.md](docs/usage.md), pinned Python dependencies, and `frontend/package-lock.json` provide repeatable local setup. |
-| Hybrid search | Dense, sparse, and Qdrant RRF-hybrid retrieval are implemented and evaluated; dense remains the measured default in [docs/evaluation.md](docs/evaluation.md). |
+| Hybrid search | Dense, sparse, and Qdrant RRF-hybrid retrieval are implemented and evaluated; dense remains the measured default because it has stronger held-out rank, precision, recall, and symbol-hit metrics in [docs/evaluation.md](docs/evaluation.md). |
 
 ## Requirements
 

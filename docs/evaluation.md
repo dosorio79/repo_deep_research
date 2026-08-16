@@ -40,6 +40,20 @@ uv run repo-research evaluate-retrieval \
   --output eval/results/retrieval-held-out-datapeek.json
 ```
 
+To persist a refreshed retrieval run into the PostgreSQL-backed evaluation
+dashboard, add `--persist` plus a readable source label:
+
+```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
+uv run repo-research evaluate-retrieval \
+  --path /home/daniel/code/dosorio79/datapeek \
+  --dataset eval/held_out.json \
+  --output eval/results/retrieval-held-out-datapeek.json \
+  --persist \
+  --source-label "datapeek held-out retrieval" \
+  --selected-mode dense
+```
+
 Generated reports under `eval/results/` are ignored. Copy only curated summary
 measurements into documentation.
 
@@ -67,30 +81,29 @@ rewriting and reranking are intentionally not part of this comparison.
 
 The `/evaluations` dashboard can show read-only retrieval highlights so a local
 alpha user can see retrieval quality before any answer-judge results have been
-persisted. The seeded highlights are historical local-alpha measurements until
-the external Datapeek held-out run is regenerated and persisted. Full
-search-evaluation reports still come from the CLI and remain reproducible
-through the versioned datasets and `make evaluate-retrieval`.
+persisted. Full search-evaluation reports still come from the CLI and remain
+reproducible through the versioned datasets and `make evaluate-retrieval`.
 
-## Previous Measured Retrieval Baseline
+## Current Measured Retrieval Baseline
 
-On 2026-08-13, before the external Datapeek held-out refresh, the local alpha
-branch was re-ingested into a local `repo_chunks_v2` collection and evaluated
-at five results per question. The generated reports were intentionally not
-committed; the audited historical measurements were:
+On 2026-08-14, the local alpha branch was evaluated at five results per
+question against both the development self-repo dataset and the external
+Datapeek held-out dataset. The generated reports remain ignored under
+`eval/results/`; the curated measurements were:
 
 | Dataset | Mode | File Hit Rate | File MRR | File Recall | File Precision | Symbol Hit Rate |
 |---|---:|---:|---:|---:|---:|---:|
-| Development | dense | 0.400 | 0.236 | 0.272 | 0.090 | 0.357 |
-| Development | sparse | 0.067 | 0.033 | 0.067 | 0.013 | 0.071 |
-| Development | hybrid | 0.333 | 0.163 | 0.250 | 0.077 | 0.357 |
-| Held-out | dense | 0.467 | 0.313 | 0.311 | 0.200 | 0.400 |
-| Held-out | sparse | 0.133 | 0.080 | 0.100 | 0.030 | 0.267 |
-| Held-out | hybrid | 0.400 | 0.261 | 0.278 | 0.103 | 0.333 |
+| Development | dense | 0.733 | 0.528 | 0.339 | 0.240 | 0.267 |
+| Development | sparse | 0.133 | 0.036 | 0.089 | 0.030 | 0.000 |
+| Development | hybrid | 0.600 | 0.383 | 0.228 | 0.157 | 0.267 |
+| Datapeek held-out | dense | 0.800 | 0.602 | 0.542 | 0.319 | 0.600 |
+| Datapeek held-out | sparse | 0.667 | 0.393 | 0.382 | 0.213 | 0.467 |
+| Datapeek held-out | hybrid | 0.867 | 0.544 | 0.529 | 0.277 | 0.533 |
 
-Dense retrieval remains the production default (`RDR_RETRIEVAL_MODE=dense`)
-from the previous local-alpha measurement. Regenerate this section after
-ingesting Datapeek and running the external demo held-out dataset.
+Dense retrieval remains the production default (`RDR_RETRIEVAL_MODE=dense`).
+Hybrid finds at least one expected file slightly more often on Datapeek, but
+dense has the stronger held-out rank, precision, recall, and symbol-hit
+profile, so the default still favors the more precise evidence set.
 
 ## Answer Evaluation
 
@@ -188,22 +201,35 @@ uv run repo-research evaluate-answers \
 ```
 
 Generated answer reports remain under ignored `eval/results/`. Commit only
-curated summary measurements, not transient local report files. When the report
-is available, summarize direct and agentic averages for answer correctness,
-faithfulness, citation precision, reference coverage, answer relevance,
-presentation quality, unsupported claim count, and available operational fields
-such as latency, estimated cost, and any linked token-usage or tool-call
-telemetry. Add locate/flow/change-impact breakdowns by joining results to
-`eval/held_out.json` through `record_id` if the existing result records support
-it cleanly; do not change the evaluation framework only to create that
-breakdown.
+curated summary measurements, not transient local report files.
 
-Interpretation should follow the evidence. A valid conclusion may prefer direct
-RAG overall, prefer agentic research overall, recommend different approaches by
-question type, or find no meaningful quality preference. Latency, token usage,
-estimated cost, and tool calls are secondary operational considerations when
-quality is comparable; they should not be mixed into the ground-truth quality
-score or used to change routing defaults solely for rubric purposes.
+The completed 2026-08-16 Datapeek held-out run contains 30 judged rows: 15
+direct and 15 agentic. Both approaches used dense retrieval. Scores are on the
+0-5 judge scale unless otherwise noted.
+
+| Approach | Count | Correctness | Faithfulness | Citation Precision | Reference Coverage | Relevance | Presentation | Unsupported Claims | Rows With Unsupported Claims | Avg Latency | Total Cost |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Direct RAG | 15 | 2.667 | 4.300 | 4.667 | 2.267 | 4.167 | 4.133 | 20 | 73.3% | 16.6s | $0.0518 |
+| Agentic research | 15 | 3.867 | 4.700 | 4.733 | 3.667 | 4.400 | 4.267 | 12 | 53.3% | 116.7s | $0.1400 |
+
+Breakdown by held-out question type:
+
+| Approach | Type | Count | Correctness | Faithfulness | Citation Precision | Reference Coverage | Unsupported Claims | Avg Latency | Total Cost |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Direct RAG | locate | 5 | 2.800 | 4.200 | 4.600 | 2.800 | 4 | 10.0s | $0.0101 |
+| Direct RAG | flow | 5 | 2.800 | 4.700 | 4.800 | 2.000 | 7 | 13.4s | $0.0165 |
+| Direct RAG | change | 5 | 2.400 | 4.000 | 4.600 | 2.000 | 9 | 26.3s | $0.0252 |
+| Agentic research | locate | 5 | 5.000 | 5.000 | 5.000 | 5.000 | 0 | 28.4s | $0.0377 |
+| Agentic research | flow | 5 | 3.800 | 5.000 | 5.000 | 3.200 | 4 | 168.1s | $0.0451 |
+| Agentic research | change | 5 | 2.800 | 4.100 | 4.200 | 2.800 | 8 | 153.7s | $0.0572 |
+
+Interpretation: agentic research is the better quality path on this held-out
+set, especially for locate questions where it found all expected evidence and
+introduced no unsupported claims. The advantage is smaller and less consistent
+on change-impact questions, where both approaches under-cover the manually
+verified change set. Direct RAG remains much faster and cheaper, so it is still
+useful for quick locate or exploratory questions; agentic research is the
+preferred path when completeness and citation quality matter more than latency.
 
 Dataset answer evaluation runs direct-RAG answer generation and answer judging
 with bounded parallel workers. Shared-agent research generation remains

@@ -69,8 +69,12 @@ class FakeDirectService:
 class FakeResearchService:
     """Return an agentic answer run for dataset evaluation tests."""
 
-    def __init__(self, *, delay_seconds: float = 0.0) -> None:
+    def __init__(
+        self, *, delay_seconds: float = 0.0, fail_on_call: int | None = None
+    ) -> None:
         self.delay_seconds = delay_seconds
+        self.fail_on_call = fail_on_call
+        self.call_count = 0
         self.active_calls = 0
         self.max_active_calls = 0
         self._lock = Lock()
@@ -82,9 +86,13 @@ class FakeResearchService:
         request: ResearchRequest,
     ) -> ResearchRunResult:
         with self._lock:
+            self.call_count += 1
+            call_count = self.call_count
             self.active_calls += 1
             self.max_active_calls = max(self.max_active_calls, self.active_calls)
         try:
+            if self.fail_on_call == call_count:
+                raise ValueError(f"research failed on call {call_count}")
             if self.delay_seconds:
                 time.sleep(self.delay_seconds)
             return ResearchRunResult(
@@ -458,6 +466,32 @@ def test_dataset_answer_evaluation_checkpoints_each_judged_result(
     assert [result.record_id for result in results] == ["locate_001", "flow_001"]
     assert {result.evaluation_run_id for result in results} == {"eval-run-2"}
     assert checkpoint_path.read_text(encoding="utf-8").count("\n") == 2
+
+
+def test_dataset_answer_evaluation_checkpoints_agentic_before_later_failure(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    records = [_record("locate_001", "locate"), _record("flow_001", "flow")]
+    checkpoint_path = tmp_path / "answer-held-out-both.jsonl"
+
+    with pytest.raises(ValueError, match="research failed on call 2"):
+        evaluate_dataset_answer_candidates(
+            direct_service=FakeDirectService(),
+            research_service=FakeResearchService(fail_on_call=2),
+            judge=FakeJudge(),
+            repository=repository,
+            records=records,
+            retrieval_mode=RetrievalMode.DENSE,
+            limit=5,
+            approaches=[RunKind.AGENTIC],
+            evaluation_run_id="eval-run-1",
+            workers=6,
+            checkpoint_path=checkpoint_path,
+        )
+
+    assert checkpoint_path.read_text(encoding="utf-8").count("\n") == 1
+    assert "locate_001" in checkpoint_path.read_text(encoding="utf-8")
 
 
 def test_judge_candidates_nulls_ground_truth_metrics_for_monitored_answers() -> None:

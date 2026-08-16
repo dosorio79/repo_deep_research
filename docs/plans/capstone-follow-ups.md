@@ -164,6 +164,17 @@ Acceptance checks:
 - Generated outputs remain ignored unless intentionally promoted to a stable
   summary artifact.
 
+Current evidence:
+
+- 2026-08-16 Datapeek held-out answer evaluation completed with 30 judged rows
+  in ignored local output `eval/results/answer-held-out-both.json`: 15 direct
+  and 15 agentic.
+- `docs/evaluation.md` and README now publish curated direct-vs-agentic
+  summary metrics instead of raw generated reports.
+- `evaluate-retrieval --persist` can publish refreshed retrieval metrics into
+  the PostgreSQL-backed dashboard via the existing
+  `retrieval_evaluation_results` table.
+
 ### v0.5.7c: Evaluation dashboard
 
 Goal: make evaluation inspectable from the browser rather than only from CLI
