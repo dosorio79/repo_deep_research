@@ -125,6 +125,45 @@ const resultList: EvaluationResultList = {
         },
       ],
     },
+    {
+      result_id: "result-2",
+      evaluation_run_id: "eval-run-1",
+      source_type: "monitored_runs",
+      source_label: "monitored-runs",
+      context_label: "repo_deep_research",
+      repository_name: "repo_deep_research",
+      branch: "dev",
+      commit_hash: "abc123",
+      record_id: null,
+      request_id: "request-2",
+      run_kind: "direct",
+      question: "Where are answer snapshots stored?",
+      answer_correctness: null,
+      faithfulness: 4,
+      citation_precision: 4,
+      reference_coverage: null,
+      answer_relevance: 4,
+      presentation_quality: 4,
+      average_score: 4,
+      unsupported_claim_count: 0,
+      feedback_useful: 0,
+      feedback_not_useful: 0,
+      latency_ms_total: 1200,
+      total_estimated_cost_usd: "0.006",
+      notes: "Older snapshot without captured content.",
+      created_at: "2026-08-11T12:03:00Z",
+      answer_evidence: [
+        {
+          evidence_id: "E7",
+          path: "src/repo_research/recording_store.py",
+          start_line: 620,
+          end_line: 648,
+          symbol: null,
+          score: 0.84,
+          reason: "Defines persisted answer snapshot storage.",
+        },
+      ],
+    },
   ],
 };
 
@@ -288,7 +327,7 @@ describe("Evaluations route", () => {
     expect(screen.getAllByText("repo_deep_research").length).toBeGreaterThan(0);
     expect(screen.getByText("Answer reviews")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Ground Truth Assessments (2)" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Post-hoc LLM Review (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Post-hoc LLM Review (2)" })).toBeInTheDocument();
     expect(screen.getAllByText("eval/held_out.json").length).toBe(2);
     expect(screen.getByText("agentic")).toBeInTheDocument();
     expect(screen.getByText("direct")).toBeInTheDocument();
@@ -307,11 +346,13 @@ describe("Evaluations route", () => {
     renderEvaluationsRoute();
 
     expect((await screen.findAllByText("eval/held_out.json")).length).toBe(2);
-    await user.click(screen.getByRole("tab", { name: "Post-hoc LLM Review (1)" }));
+    await user.click(screen.getByRole("tab", { name: "Post-hoc LLM Review (2)" }));
 
     expect(screen.getByText("Which modules changed for answer evaluation?")).toBeInTheDocument();
     expect(screen.queryAllByText("eval/held_out.json")).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Open evidence E29" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open evidence E7" })).toBeInTheDocument();
+    expect(screen.getByText("metadata only")).toBeInTheDocument();
   });
 
   it("opens evidence details from an evaluation result evidence id", async () => {
@@ -323,12 +364,31 @@ describe("Evaluations route", () => {
 
     renderEvaluationsRoute();
 
-    await user.click(await screen.findByRole("tab", { name: "Post-hoc LLM Review (1)" }));
+    await user.click(await screen.findByRole("tab", { name: "Post-hoc LLM Review (2)" }));
     await user.click(await screen.findByRole("button", { name: "Open evidence E29" }));
 
     expect(screen.getByRole("dialog", { name: "Evidence detail" })).toBeInTheDocument();
     expect(screen.getByText("app/services/file_reader.py")).toBeInTheDocument();
     expect(screen.getByText("_file_type_from_filename")).toBeInTheDocument();
     expect(screen.getByText("def _file_type_from_filename(filename): ...")).toBeInTheDocument();
+  });
+
+  it("opens metadata-only evidence details for older monitored snapshots", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getEvaluationSummary).mockResolvedValue(populatedSummary);
+    vi.mocked(getEvaluationRuns).mockResolvedValue(runList);
+    vi.mocked(getEvaluationResults).mockResolvedValue(resultList);
+    vi.mocked(getGroundTruthEvaluationResults).mockResolvedValue(groundTruthEvaluationList);
+
+    renderEvaluationsRoute();
+
+    await user.click(await screen.findByRole("tab", { name: "Post-hoc LLM Review (2)" }));
+    await user.click(await screen.findByRole("button", { name: "Open evidence E7" }));
+
+    expect(screen.getByRole("dialog", { name: "Evidence detail" })).toBeInTheDocument();
+    expect(screen.getByText("src/repo_research/recording_store.py")).toBeInTheDocument();
+    expect(
+      screen.getByText("No content snippet captured for this older recorded answer."),
+    ).toBeInTheDocument();
   });
 });

@@ -971,7 +971,16 @@ function EvidenceHighlights({
           {items.slice(0, 3).map((item) => (
             <div key={item.evidence_id} className="rounded-md border border-border p-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="path-text mono text-[12px] font-medium">{item.path}</p>
+                <div className="min-w-0">
+                  <p className="path-text mono text-[12px] font-medium">{item.path}</p>
+                  <div className="mt-1">
+                    <EvidenceReferences
+                      evidenceIds={[item.evidence_id]}
+                      evidence={items}
+                      prefix=""
+                    />
+                  </div>
+                </div>
                 <span className="mono text-[11px] text-muted-foreground">
                   {item.start_line}-{item.end_line}
                 </span>

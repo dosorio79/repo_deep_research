@@ -596,11 +596,19 @@ function EvaluationResultTable({
               <td className="py-2 pr-3 mono">{result.unsupported_claim_count}</td>
               <td className="max-w-[180px] py-2 pr-3">
                 {result.answer_evidence?.length ? (
-                  <EvidenceReferences
-                    evidenceIds={result.answer_evidence.map((item) => item.evidence_id)}
-                    evidence={result.answer_evidence}
-                    prefix=""
-                  />
+                  <div className="space-y-1">
+                    <EvidenceReferences
+                      evidenceIds={result.answer_evidence.map((item) => item.evidence_id)}
+                      evidence={result.answer_evidence}
+                      prefix=""
+                      contentUnavailableLabel="No content snippet captured for this older recorded answer."
+                    />
+                    {result.answer_evidence.some((item) => !item.content) ? (
+                      <span className="inline-flex rounded-sm border border-border bg-secondary/40 px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                        metadata only
+                      </span>
+                    ) : null}
+                  </div>
                 ) : (
                   <span className="text-muted-foreground">n/a</span>
                 )}
