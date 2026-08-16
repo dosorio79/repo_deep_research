@@ -315,6 +315,28 @@ export interface RetrievalEvaluationList {
   results: RetrievalEvaluationSummary[];
 }
 
+export interface GroundTruthEvaluationSummary {
+  dataset: string;
+  source_label: string;
+  run_kind: ResearchKind;
+  record_count: number;
+  answer_correctness: number | null;
+  faithfulness: number;
+  citation_precision: number;
+  reference_coverage: number | null;
+  answer_relevance: number;
+  presentation_quality: number;
+  unsupported_claim_count: number;
+  unsupported_claim_rate: number;
+  average_latency_ms: number | null;
+  total_estimated_cost_usd: number | string | null;
+  measured_at: string;
+}
+
+export interface GroundTruthEvaluationList {
+  results: GroundTruthEvaluationSummary[];
+}
+
 export interface EvaluationRunSummary {
   evaluation_run_id: string;
   source_type: EvaluationSourceType;

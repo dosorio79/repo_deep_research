@@ -13,6 +13,7 @@ import {
   getEvaluationResults,
   getEvaluationRuns,
   getEvaluationSummary,
+  getGroundTruthEvaluationResults,
   getRetrievalEvaluationResults,
 } from "@/lib/rag-client";
 import type {
@@ -20,6 +21,7 @@ import type {
   EvaluationDashboardSummary,
   EvaluationResultSummary,
   EvaluationRunSummary,
+  GroundTruthEvaluationSummary,
   RetrievalEvaluationSummary,
 } from "@/lib/rag-types";
 
@@ -59,9 +61,20 @@ function EvaluationsView() {
   });
   const resultsQuery = useQuery({
     queryKey: ["evaluation-results", DEFAULT_API_BASE_URL],
-    queryFn: ({ signal }) => getEvaluationResults(DEFAULT_API_BASE_URL, { limit: 50 }, signal),
+    queryFn: ({ signal }) =>
+      getEvaluationResults(
+        DEFAULT_API_BASE_URL,
+        { limit: 50, source_type: "monitored_runs" },
+        signal,
+      ),
     retry: false,
     staleTime: 5_000,
+  });
+  const groundTruthQuery = useQuery({
+    queryKey: ["ground-truth-evaluation-results", DEFAULT_API_BASE_URL],
+    queryFn: ({ signal }) => getGroundTruthEvaluationResults(DEFAULT_API_BASE_URL, signal),
+    retry: false,
+    staleTime: 30_000,
   });
   const retrievalQuery = useQuery({
     queryKey: ["retrieval-evaluation-results", DEFAULT_API_BASE_URL],
@@ -80,6 +93,9 @@ function EvaluationsView() {
       {resultsQuery.error ? (
         <ApiError error={resultsQuery.error as unknown as ApiErrorShape} />
       ) : null}
+      {groundTruthQuery.error ? (
+        <ApiError error={groundTruthQuery.error as unknown as ApiErrorShape} />
+      ) : null}
       {retrievalQuery.error ? (
         <ApiError error={retrievalQuery.error as unknown as ApiErrorShape} />
       ) : null}
@@ -88,9 +104,11 @@ function EvaluationsView() {
           summary={summaryQuery.data}
           runs={runsQuery.data?.runs ?? []}
           results={resultsQuery.data?.results ?? []}
+          groundTruthResults={groundTruthQuery.data?.results ?? []}
           retrievalResults={retrievalQuery.data?.results ?? []}
           loadingRuns={runsQuery.isLoading}
           loadingResults={resultsQuery.isLoading}
+          loadingGroundTruthResults={groundTruthQuery.isLoading}
           loadingRetrievalResults={retrievalQuery.isLoading}
           selectedContext={contextLabel}
           onContextChange={setContextLabel}
@@ -126,9 +144,11 @@ function EvaluationDashboard({
   summary,
   runs,
   results,
+  groundTruthResults,
   retrievalResults,
   loadingRuns,
   loadingResults,
+  loadingGroundTruthResults,
   loadingRetrievalResults,
   selectedContext,
   onContextChange,
@@ -136,15 +156,17 @@ function EvaluationDashboard({
   summary: EvaluationDashboardSummary;
   runs: EvaluationRunSummary[];
   results: EvaluationResultSummary[];
+  groundTruthResults: GroundTruthEvaluationSummary[];
   retrievalResults: RetrievalEvaluationSummary[];
   loadingRuns: boolean;
   loadingResults: boolean;
+  loadingGroundTruthResults: boolean;
   loadingRetrievalResults: boolean;
   selectedContext: string;
   onContextChange: (value: string) => void;
 }) {
   const contextOptions = useMemo(() => evaluationContextOptions(results), [results]);
-  if (summary.total_results === 0)
+  if (summary.total_results === 0 && groundTruthResults.length === 0)
     return (
       <div className="space-y-3">
         <SearchEvaluationHighlights results={retrievalResults} loading={loadingRetrievalResults} />
@@ -162,7 +184,6 @@ function EvaluationDashboard({
       ? 0
       : visibleResults.filter((result) => result.unsupported_claim_count > 0).length /
         visibleResults.length;
-  const groundTruthResults = visibleResults.filter((result) => result.source_type === "dataset");
   const postHocResults = visibleResults.filter((result) => result.source_type === "monitored_runs");
 
   return (
@@ -283,15 +304,16 @@ function EvaluationDashboard({
         <Tabs defaultValue="ground-truth" className="grid gap-3">
           <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
             <TabsTrigger value="ground-truth">
-              Ground Truth Review ({groundTruthResults.length})
+              Ground Truth Assessments ({groundTruthResults.length})
             </TabsTrigger>
-            <TabsTrigger value="post-hoc">Post-hoc Review ({postHocResults.length})</TabsTrigger>
+            <TabsTrigger value="post-hoc">
+              Post-hoc LLM Review ({postHocResults.length})
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="ground-truth" className="mt-0">
-            <ReviewTabPanel
-              title="Dataset questions with expected files and symbols."
-              results={lowestScoringResults(groundTruthResults)}
-              loading={loadingResults}
+            <GroundTruthAssessmentPanel
+              results={groundTruthResults}
+              loading={loadingGroundTruthResults}
             />
           </TabsContent>
           <TabsContent value="post-hoc" className="mt-0">
@@ -385,6 +407,84 @@ function ReviewTabPanel({
       </div>
       <p className="text-[12px] text-muted-foreground">{title}</p>
       <EvaluationResultTable results={results} loading={loading} />
+    </div>
+  );
+}
+
+function GroundTruthAssessmentPanel({
+  results,
+  loading,
+}: {
+  results: GroundTruthEvaluationSummary[];
+  loading: boolean;
+}) {
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-2 md:grid-cols-3">
+        <Field label="Assessment rows">{results.length.toLocaleString()}</Field>
+        <Field label="Best correctness">{formatScore(bestGroundTruthScore(results))}</Field>
+        <Field label="Unsupported rows">
+          {formatPercent(averageGroundTruthUnsupportedRate(results))}
+        </Field>
+      </div>
+      <p className="text-[12px] text-muted-foreground">
+        Offline dataset assessments summarize judged answers against versioned expected files and
+        symbols.
+      </p>
+      <GroundTruthAssessmentTable results={results} loading={loading} />
+    </div>
+  );
+}
+
+function GroundTruthAssessmentTable({
+  results,
+  loading,
+}: {
+  results: GroundTruthEvaluationSummary[];
+  loading: boolean;
+}) {
+  if (loading) return <EmptyLine>Loading ground-truth assessments.</EmptyLine>;
+  if (results.length === 0)
+    return <EmptyLine>No persisted ground-truth assessments are available.</EmptyLine>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[980px] text-left text-[12px]">
+        <thead className="border-b border-border text-muted-foreground">
+          <tr>
+            <th className="py-2 pr-3 font-medium">Dataset</th>
+            <th className="py-2 pr-3 font-medium">Approach</th>
+            <th className="py-2 pr-3 font-medium">Records</th>
+            <th className="py-2 pr-3 font-medium">Correct</th>
+            <th className="py-2 pr-3 font-medium">Coverage</th>
+            <th className="py-2 pr-3 font-medium">Faithful</th>
+            <th className="py-2 pr-3 font-medium">Citations</th>
+            <th className="py-2 pr-3 font-medium">Unsupported rows</th>
+            <th className="py-2 pr-3 font-medium">Avg latency</th>
+            <th className="py-2 pr-3 font-medium">Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          {results.map((result) => (
+            <tr
+              key={`${result.dataset}-${result.run_kind}`}
+              className="border-b border-border/60"
+            >
+              <td className="max-w-[260px] break-words py-2 pr-3">{result.dataset}</td>
+              <td className="py-2 pr-3">{result.run_kind}</td>
+              <td className="py-2 pr-3 mono">{result.record_count}</td>
+              <td className="py-2 pr-3 mono">{formatScore(result.answer_correctness)}</td>
+              <td className="py-2 pr-3 mono">{formatScore(result.reference_coverage)}</td>
+              <td className="py-2 pr-3 mono">{formatScore(result.faithfulness)}</td>
+              <td className="py-2 pr-3 mono">{formatScore(result.citation_precision)}</td>
+              <td className="py-2 pr-3 mono">
+                {formatPercent(result.unsupported_claim_rate)}
+              </td>
+              <td className="py-2 pr-3 mono">{formatLatency(result.average_latency_ms)}</td>
+              <td className="py-2 pr-3 mono">{formatCost(result.total_estimated_cost_usd)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -596,6 +696,22 @@ function countFeedbackLinked(results: EvaluationResultSummary[]) {
 function unsupportedClaimRate(results: EvaluationResultSummary[]) {
   if (results.length === 0) return null;
   return results.filter((result) => result.unsupported_claim_count > 0).length / results.length;
+}
+
+function bestGroundTruthScore(results: GroundTruthEvaluationSummary[]) {
+  const scores = results
+    .map((result) => result.answer_correctness)
+    .filter((value): value is number => typeof value === "number");
+  if (scores.length === 0) return null;
+  return Math.max(...scores);
+}
+
+function averageGroundTruthUnsupportedRate(results: GroundTruthEvaluationSummary[]) {
+  if (results.length === 0) return null;
+  return (
+    results.reduce((total, result) => total + result.unsupported_claim_rate, 0) /
+    results.length
+  );
 }
 
 function averageLatency(results: EvaluationResultSummary[]) {

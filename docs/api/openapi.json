@@ -794,6 +794,148 @@
         "title": "FeedbackUsefulSummary",
         "type": "object"
       },
+      "GroundTruthEvaluationList": {
+        "description": "Persisted offline ground-truth answer assessment summaries.",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/GroundTruthEvaluationSummary"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "title": "GroundTruthEvaluationList",
+        "type": "object"
+      },
+      "GroundTruthEvaluationSummary": {
+        "description": "Persisted offline ground-truth answer assessment summary.",
+        "properties": {
+          "answer_correctness": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Correctness"
+          },
+          "answer_relevance": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Answer Relevance",
+            "type": "number"
+          },
+          "average_latency_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Latency Ms"
+          },
+          "citation_precision": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Citation Precision",
+            "type": "number"
+          },
+          "dataset": {
+            "minLength": 1,
+            "title": "Dataset",
+            "type": "string"
+          },
+          "faithfulness": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Faithfulness",
+            "type": "number"
+          },
+          "measured_at": {
+            "format": "date-time",
+            "title": "Measured At",
+            "type": "string"
+          },
+          "presentation_quality": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Presentation Quality",
+            "type": "number"
+          },
+          "record_count": {
+            "minimum": 0.0,
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "reference_coverage": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Coverage"
+          },
+          "run_kind": {
+            "$ref": "#/components/schemas/RunKind"
+          },
+          "source_label": {
+            "minLength": 1,
+            "title": "Source Label",
+            "type": "string"
+          },
+          "total_estimated_cost_usd": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Estimated Cost Usd"
+          },
+          "unsupported_claim_count": {
+            "minimum": 0.0,
+            "title": "Unsupported Claim Count",
+            "type": "integer"
+          },
+          "unsupported_claim_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Unsupported Claim Rate",
+            "type": "number"
+          }
+        },
+        "required": [
+          "dataset",
+          "source_label",
+          "run_kind",
+          "record_count",
+          "faithfulness",
+          "citation_precision",
+          "answer_relevance",
+          "presentation_quality",
+          "unsupported_claim_count",
+          "unsupported_claim_rate",
+          "measured_at"
+        ],
+        "title": "GroundTruthEvaluationSummary",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2309,6 +2451,27 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/evaluations/ground-truth": {
+      "get": {
+        "operationId": "list_ground_truth_evaluation_results",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroundTruthEvaluationList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List ground-truth evaluation metrics",
+        "tags": [
+          "evaluations"
+        ]
+      }
+    },
     "/evaluations/results": {
       "get": {
         "operationId": "list_evaluation_results",

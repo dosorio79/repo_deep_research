@@ -16,6 +16,7 @@ from repo_research.answer_evaluation import (
     evaluate_dataset_answer_candidates,
     judge_answer_candidates,
     monitored_answer_candidates,
+    summarize_ground_truth_evaluation_results,
     write_persisted_answer_evaluation_report,
 )
 from repo_research.config import Settings
@@ -530,6 +531,14 @@ def _run_unified_answer_evaluation(
         if evaluation_store is not None:
             for result in results:
                 evaluation_store.record_evaluation_result(result)
+            if source_type is EvaluationSourceType.DATASET:
+                for summary in summarize_ground_truth_evaluation_results(
+                    results,
+                    dataset=arguments.dataset.as_posix(),
+                    source_label=source_label,
+                    measured_at=datetime.now(UTC),
+                ):
+                    evaluation_store.record_ground_truth_evaluation_result(summary)
             evaluation_store.record_evaluation_run(
                 evaluation_run.model_copy(
                     update={

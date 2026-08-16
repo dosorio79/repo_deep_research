@@ -17,6 +17,7 @@ from repo_research.answer_evaluation import (
     judge_answer_candidates,
     monitored_answer_candidates,
     persist_evaluation_batch,
+    summarize_ground_truth_evaluation_results,
 )
 from repo_research.models import (
     AnswerEvaluationResult,
@@ -26,6 +27,7 @@ from repo_research.models import (
     EvaluationRunStatus,
     EvaluationSourceType,
     EvidenceItem,
+    GroundTruthEvaluationSummary,
     PersistedEvaluationResult,
     RagAnswer,
     RagMode,
@@ -193,6 +195,7 @@ class FakeEvaluationStore:
         self.fail_result = fail_result
         self.runs: list[EvaluationRunRecord] = []
         self.results: list[PersistedEvaluationResult] = []
+        self.ground_truth_results: list[GroundTruthEvaluationSummary] = []
 
     def record_evaluation_run(self, evaluation_run: EvaluationRunRecord) -> None:
         self.runs.append(evaluation_run)
@@ -201,6 +204,11 @@ class FakeEvaluationStore:
         if self.fail_result:
             raise ValueError("postgres unavailable")
         self.results.append(result)
+
+    def record_ground_truth_evaluation_result(
+        self, result: GroundTruthEvaluationSummary
+    ) -> None:
+        self.ground_truth_results.append(result)
 
 
 def test_dataset_audit_counts_records_and_question_types() -> None:
@@ -613,6 +621,94 @@ def test_persist_evaluation_batch_records_running_results_and_completed() -> Non
     assert store.results == [result]
     assert completed.status is EvaluationRunStatus.COMPLETED
     assert completed.completed_at is not None
+
+
+def test_summarize_ground_truth_evaluation_results_groups_dataset_metrics() -> None:
+    measured_at = datetime(2026, 8, 16, 10, tzinfo=UTC)
+    results = [
+        PersistedEvaluationResult(
+            evaluation_run_id="eval-run-1",
+            record_id="locate_001",
+            run_kind=RunKind.DIRECT,
+            question="Where is target?",
+            answer_correctness=4,
+            faithfulness=5,
+            citation_precision=5,
+            reference_coverage=3,
+            answer_relevance=4,
+            presentation_quality=5,
+            unsupported_claim_count=0,
+            latency_ms_total=1000,
+            total_estimated_cost_usd=Decimal("0.010"),
+            created_at=measured_at,
+        ),
+        PersistedEvaluationResult(
+            evaluation_run_id="eval-run-1",
+            record_id="flow_001",
+            run_kind=RunKind.DIRECT,
+            question="How does target flow?",
+            answer_correctness=2,
+            faithfulness=3,
+            citation_precision=4,
+            reference_coverage=1,
+            answer_relevance=4,
+            presentation_quality=3,
+            unsupported_claim_count=2,
+            latency_ms_total=3000,
+            total_estimated_cost_usd=Decimal("0.015"),
+            created_at=measured_at,
+        ),
+        PersistedEvaluationResult(
+            evaluation_run_id="eval-run-1",
+            record_id="locate_001",
+            run_kind=RunKind.AGENTIC,
+            question="Where is target?",
+            answer_correctness=5,
+            faithfulness=5,
+            citation_precision=5,
+            reference_coverage=4,
+            answer_relevance=5,
+            presentation_quality=4,
+            unsupported_claim_count=1,
+            latency_ms_total=None,
+            total_estimated_cost_usd=None,
+            created_at=measured_at,
+        ),
+        PersistedEvaluationResult(
+            evaluation_run_id="eval-run-2",
+            request_id="request-1",
+            run_kind=RunKind.DIRECT,
+            question="Live answer?",
+            answer_correctness=None,
+            faithfulness=5,
+            citation_precision=5,
+            reference_coverage=None,
+            answer_relevance=5,
+            presentation_quality=5,
+            unsupported_claim_count=0,
+            created_at=measured_at,
+        ),
+    ]
+
+    summaries = summarize_ground_truth_evaluation_results(
+        results,
+        dataset="eval/held_out.json",
+        source_label="held-out answer evaluation",
+        measured_at=measured_at,
+    )
+
+    direct = next(item for item in summaries if item.run_kind is RunKind.DIRECT)
+    agentic = next(item for item in summaries if item.run_kind is RunKind.AGENTIC)
+    assert direct.record_count == 2
+    assert direct.answer_correctness == 3
+    assert direct.faithfulness == 4
+    assert direct.unsupported_claim_count == 2
+    assert direct.unsupported_claim_rate == 0.5
+    assert direct.average_latency_ms == 2000
+    assert direct.total_estimated_cost_usd == Decimal("0.025")
+    assert agentic.record_count == 1
+    assert agentic.average_latency_ms is None
+    assert agentic.total_estimated_cost_usd is None
 
 
 def test_persist_evaluation_batch_marks_failed_when_result_write_fails() -> None:
