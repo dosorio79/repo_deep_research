@@ -122,6 +122,13 @@ repo-research CLI / FastAPI -- JSON evidence and grounded answers
 frontend/ -- browser research UI, feedback, and admin monitoring dashboard
 ```
 
+Ingestion is request-driven because the repository is selected by the user at
+runtime. The application-owned Python lifecycle is:
+repository selection -> local access or GitHub clone -> parse -> chunk -> embed
+-> Qdrant index. This keeps Local Alpha simple and reproducible without adding
+Kestra, dlt, Airflow, Prefect, or another orchestration framework solely for
+batch scheduling.
+
 `ParsedChunk` is the boundary between parsing and storage. It carries repository
 and commit identity, path, symbol, parent symbol, line range, content,
 contextual metadata, and deterministic content/point IDs. Qdrant persists that
@@ -208,3 +215,12 @@ frontend     React TypeScript frontend (Node 22, Vite)
 
 All services have health checks. The API depends on healthy Qdrant and
 PostgreSQL; the frontend depends on a healthy API.
+
+FastEmbed models are cached outside source-controlled files. Local CLI runs can
+set `RDR_FASTEMBED_CACHE_PATH`; `.env.example` uses `.cache/fastembed`, while an
+unset app setting lets FastEmbed reuse its own `FASTEMBED_CACHE_PATH` or
+`/tmp/fastembed_cache` fallback. Docker Compose sets the API cache to
+`/root/.cache/fastembed` and persists it in the `fastembed_cache` volume so
+container restarts do not redownload the model. When the selected cache already
+has files, the embedder tries FastEmbed local-files-only loading before falling
+back to normal download behavior.

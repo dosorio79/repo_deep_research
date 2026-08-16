@@ -8,16 +8,20 @@ project.
 
 Datasets:
 
-- `eval/development.json` contains 15 records for iteration against this
-  repository.
+- `eval/development.json` contains 15 records for iteration against the Repo
+  Deep Research repository.
 - `eval/held_out.json` contains 15 records for external demo held-out reporting
-  against `/home/daniel/code/dosorio79/datapeek`.
+  against the separate Datapeek repository at
+  `/home/daniel/code/dosorio79/datapeek`.
 
 Together they contain ten locate, ten flow, and ten change-impact questions.
 Each record names expected files, expected symbols where applicable, and a
 human-verification note. The held-out set is intentionally a small public-demo
-repository, not a broad benchmark. Before running a dataset, ingest the
-repository that the dataset targets.
+repository, not a broad benchmark. Because the development set targets this
+capstone repository and the held-out set targets Datapeek, held-out results are
+cross-repository generalization evidence rather than only unseen questions from
+the same repository. Before running a dataset, ingest the repository that the
+dataset targets and pass that repository path to the evaluation command.
 
 After starting services, run the development dataset against this repository:
 
@@ -30,7 +34,9 @@ Run the external demo held-out dataset after ingesting Datapeek:
 
 ```bash
 uv run repo-research ingest /home/daniel/code/dosorio79/datapeek
-uv run repo-research evaluate-retrieval --dataset eval/held_out.json \
+uv run repo-research evaluate-retrieval \
+  --path /home/daniel/code/dosorio79/datapeek \
+  --dataset eval/held_out.json \
   --output eval/results/retrieval-held-out-datapeek.json
 ```
 
@@ -94,7 +100,9 @@ command evaluates the direct-RAG dataset baseline:
 ```bash
 uv run repo-research evaluate-answers --dataset eval/development.json \
   --output eval/results/answer-development.json
-uv run repo-research evaluate-answers --dataset eval/held_out.json \
+uv run repo-research evaluate-answers \
+  --path /home/daniel/code/dosorio79/datapeek \
+  --dataset eval/held_out.json \
   --output eval/results/answer-held-out.json
 ```
 
@@ -102,6 +110,7 @@ Dataset evaluation can compare direct RAG against bounded agentic research:
 
 ```bash
 uv run repo-research evaluate-answers --source dataset \
+  --path /home/daniel/code/dosorio79/datapeek \
   --dataset eval/held_out.json --approach both \
   --output eval/results/answer-held-out-both.json
 ```
@@ -125,13 +134,15 @@ uv run repo-research evaluate-answers --source monitored-runs \
   --persist --output eval/results/answer-monitored-selected.json
 ```
 
-Answer evaluation uses two related rubrics:
+The project already has two complementary answer-evaluation mechanisms:
 
-- Ground Truth evaluation applies to versioned datasets with manually verified
-  expected files, expected symbols, and human notes.
-- Evidence Audit evaluation applies to persisted monitored answers. It judges
-  the recorded answer against its returned evidence only; it is not a held-out
-  correctness measurement.
+- Offline Ground Truth evaluation is the controlled benchmark against versioned
+  datasets with manually verified expected files, expected symbols, and human
+  notes.
+- Post-hoc monitored-run Evidence Audit evaluation judges real `/rag` and
+  `/research` answers that were already persisted by the application. It checks
+  the recorded answer against its returned evidence and supports operational
+  quality review; it is not an independent held-out correctness measurement.
 
 The judge scores answer correctness, faithfulness, citation precision,
 reference coverage, answer relevance, presentation quality, and unsupported
@@ -158,14 +169,45 @@ both modes: faithfulness, citation precision, answer relevance, and
 presentation quality. Ground-truth-only fields remain visible in the table but
 are not part of the cross-mode average.
 
+## Held-out Direct-vs-Agentic Comparison
+
+The final held-out answer comparison uses the existing Ground Truth evaluator
+against Datapeek:
+
+```bash
+uv run repo-research ingest /home/daniel/code/dosorio79/datapeek
+uv run repo-research evaluate-answers \
+  --path /home/daniel/code/dosorio79/datapeek \
+  --source dataset \
+  --dataset eval/held_out.json \
+  --approach both \
+  --retrieval-mode dense \
+  --output eval/results/answer-held-out-both.json
+```
+
+Generated answer reports remain under ignored `eval/results/`. Commit only
+curated summary measurements, not transient local report files. When the report
+is available, summarize direct and agentic averages for answer correctness,
+faithfulness, citation precision, reference coverage, answer relevance,
+presentation quality, unsupported claim count, and available operational fields
+such as latency, estimated cost, and any linked token-usage or tool-call
+telemetry. Add locate/flow/change-impact breakdowns by joining results to
+`eval/held_out.json` through `record_id` if the existing result records support
+it cleanly; do not change the evaluation framework only to create that
+breakdown.
+
+Interpretation should follow the evidence. A valid conclusion may prefer direct
+RAG overall, prefer agentic research overall, recommend different approaches by
+question type, or find no meaningful quality preference. Latency, token usage,
+estimated cost, and tool calls are secondary operational considerations when
+quality is comparable; they should not be mixed into the ground-truth quality
+score or used to change routing defaults solely for rubric purposes.
+
 When `--persist` is supplied, dataset evaluations write `evaluation_results`
 with the dataset `record_id` and no `request_id`, because generated dataset
 answers are not stored in `answer_snapshots`. Monitored-run evaluations keep the
 snapshot `request_id`, linking each result back to the original `/rag` or
 `/research` answer returned by the UI or API.
-
-Generated answer reports remain under ignored `eval/results/`. Commit only
-curated summary measurements, not transient local report files.
 
 ## Evaluation Dashboard
 
@@ -187,6 +229,9 @@ evaluations are specific to the JSON dataset used for the run, and monitored-run
 evaluations are specific to the repository that produced the original answer
 snapshot. The dashboard exposes this as a repository-or-dataset context so users
 can compare scores within the same source instead of mixing unrelated questions.
+Where comparable or same-question direct and agentic runs have been persisted,
+the dashboard lets an operator inspect those approaches side by side without
+regenerating answers.
 
 Run answer evaluation from the CLI with `--persist` to populate the dashboard.
 Files under `eval/results/` remain optional exports for reproducible batch runs.

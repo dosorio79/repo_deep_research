@@ -151,7 +151,9 @@ For the external Datapeek demo held-out dataset, ingest Datapeek first:
 
 ```bash
 uv run repo-research ingest /home/daniel/code/dosorio79/datapeek
-uv run repo-research evaluate-retrieval --dataset eval/held_out.json \
+uv run repo-research evaluate-retrieval \
+  --path /home/daniel/code/dosorio79/datapeek \
+  --dataset eval/held_out.json \
   --output eval/results/retrieval-held-out-datapeek.json
 ```
 
@@ -173,6 +175,7 @@ Compare direct and agentic answers on a curated dataset:
 
 ```bash
 uv run repo-research evaluate-answers --source dataset \
+  --path /home/daniel/code/dosorio79/datapeek \
   --dataset eval/held_out.json --approach both \
   --output eval/results/answer-held-out-both.json
 ```
@@ -215,3 +218,11 @@ Ingestion indexes `.py`, `.md`, `.yaml`, `.yml`, `.toml`, and `.json` files. It
 skips Git metadata, virtual environments, caches, build outputs, `node_modules`,
 binary files, root `.gitignore` matches, and files above
 `RDR_MAX_FILE_SIZE_BYTES`.
+
+Ingestion is request-driven and application-owned. The user selects a repository,
+the backend accesses a local path or clones a public GitHub URL into
+`RDR_REPOSITORY_CACHE_DIR`, supported files are parsed into typed chunks, local
+FastEmbed dense and sparse embeddings are computed, and Qdrant is updated for
+that repository commit. The Local Alpha does not use Kestra, dlt, Airflow, or
+Prefect; scheduled ingestion is not the natural fit for arbitrary repositories
+selected at request time.
