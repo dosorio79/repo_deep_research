@@ -103,6 +103,16 @@ class Settings(BaseSettings):
             "RDR_ANSWER_EVAL_LIMIT",
         ),
     )
+    answer_evaluation_workers: int = Field(
+        default=4,
+        ge=1,
+        le=16,
+        validation_alias=AliasChoices(
+            "answer_evaluation_workers",
+            "RDR_ANSWER_EVALUATION_WORKERS",
+            "RDR_ANSWER_EVAL_WORKERS",
+        ),
+    )
     research_max_searches: int = Field(
         default=5,
         ge=1,

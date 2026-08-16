@@ -177,6 +177,7 @@ Compare direct and agentic answers on a curated dataset:
 uv run repo-research evaluate-answers --source dataset \
   --path /home/daniel/code/dosorio79/datapeek \
   --dataset eval/held_out.json --approach both \
+  --workers 6 \
   --output eval/results/answer-held-out-both.json
 ```
 
@@ -211,6 +212,12 @@ judged answers.
 
 Generated reports under `eval/results/` are ignored by git. Commit only curated
 summary measurements, not transient local report files.
+
+Dataset answer evaluation can run direct-RAG answer generation and answer
+judging in parallel. Shared-agent research generation remains serialized to
+preserve tool/evidence validation state. Use `--workers` or
+`RDR_ANSWER_EVALUATION_WORKERS` to control the bounded worker count for the
+current OpenAI rate limit.
 
 ## Supported Source
 

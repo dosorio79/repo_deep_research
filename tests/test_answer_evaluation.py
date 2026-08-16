@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from threading import Lock
 
 import pytest
 
 from repo_research.answer_evaluation import (
     audit_evaluation_records,
     dataset_candidates,
+    evaluate_dataset_answer_candidates,
     judge_answer_candidates,
     monitored_answer_candidates,
     persist_evaluation_batch,
@@ -41,12 +44,17 @@ from repo_research.models import (
 class FakeDirectService:
     """Return a direct answer run for dataset evaluation tests."""
 
+    def __init__(self, *, delay_seconds: float = 0.0) -> None:
+        self.delay_seconds = delay_seconds
+
     def run(
         self,
         *,
         repository: RepositoryIdentity,
         request: RagRequest,
     ) -> RagRunResult:
+        if self.delay_seconds:
+            time.sleep(self.delay_seconds)
         return RagRunResult(
             answer=_rag_answer(question=request.question, mode=request.mode),
             trace=_trace(
@@ -61,33 +69,57 @@ class FakeDirectService:
 class FakeResearchService:
     """Return an agentic answer run for dataset evaluation tests."""
 
+    def __init__(self, *, delay_seconds: float = 0.0) -> None:
+        self.delay_seconds = delay_seconds
+        self.active_calls = 0
+        self.max_active_calls = 0
+        self._lock = Lock()
+
     def run(
         self,
         *,
         repository: RepositoryIdentity,
         request: ResearchRequest,
     ) -> ResearchRunResult:
-        return ResearchRunResult(
-            answer=ResearchAnswer(
-                question=request.question,
-                mode=request.mode,
-                summary="Agentic answer.",
-                evidence=[_evidence()],
-                relevant_files=["src/example.py"],
-                relevant_symbols=["target"],
-                confidence=0.8,
-            ),
-            trace=_trace(
-                repository=repository,
-                run_kind=RunKind.AGENTIC,
-                request_id="agentic-request",
-                latency_ms_total=250,
-            ),
-        )
+        with self._lock:
+            self.active_calls += 1
+            self.max_active_calls = max(self.max_active_calls, self.active_calls)
+        try:
+            if self.delay_seconds:
+                time.sleep(self.delay_seconds)
+            return ResearchRunResult(
+                answer=ResearchAnswer(
+                    question=request.question,
+                    mode=request.mode,
+                    summary="Agentic answer.",
+                    evidence=[_evidence()],
+                    relevant_files=["src/example.py"],
+                    relevant_symbols=["target"],
+                    confidence=0.8,
+                ),
+                trace=_trace(
+                    repository=repository,
+                    run_kind=RunKind.AGENTIC,
+                    request_id="agentic-request",
+                    latency_ms_total=250,
+                ),
+            )
+        finally:
+            with self._lock:
+                self.active_calls -= 1
 
 
 class FakeJudge:
     """Return deterministic scores for direct and agentic answers."""
+
+    def __init__(
+        self,
+        *,
+        delay_seconds: float = 0.0,
+        fail_record_ids: set[str] | None = None,
+    ) -> None:
+        self.delay_seconds = delay_seconds
+        self.fail_record_ids = fail_record_ids or set()
 
     def judge_answer(
         self,
@@ -96,6 +128,10 @@ class FakeJudge:
         answer: RagAnswer | ResearchAnswer,
         source_type: EvaluationSourceType = EvaluationSourceType.DATASET,
     ) -> AnswerEvaluationResult:
+        if self.delay_seconds:
+            time.sleep(self.delay_seconds)
+        if record.id in self.fail_record_ids:
+            raise ValueError(f"judge failed for {record.id}")
         answer_correctness = (
             None if source_type is EvaluationSourceType.MONITORED_RUNS else 4
         )
@@ -205,6 +241,66 @@ def test_dataset_candidates_support_direct_and_agentic(tmp_path: Path) -> None:
     assert candidates[1].answer.summary == "Agentic answer."
 
 
+def test_dataset_candidates_parallel_workers_preserve_stable_order(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    records = [
+        _record("locate_001", "locate"),
+        _record("flow_001", "flow"),
+        _record("change_001", "change"),
+    ]
+    started = time.perf_counter()
+
+    candidates = dataset_candidates(
+        direct_service=FakeDirectService(delay_seconds=0.05),
+        research_service=FakeResearchService(),
+        repository=repository,
+        records=records,
+        retrieval_mode=RetrievalMode.DENSE,
+        limit=5,
+        approaches=[RunKind.DIRECT],
+        workers=3,
+    )
+
+    assert time.perf_counter() - started < 0.14
+    assert [candidate.record.id for candidate in candidates] == [
+        "locate_001",
+        "flow_001",
+        "change_001",
+    ]
+
+
+def test_dataset_candidates_serializes_agentic_generation_with_shared_service(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    records = [
+        _record("locate_001", "locate"),
+        _record("flow_001", "flow"),
+        _record("change_001", "change"),
+    ]
+    research_service = FakeResearchService(delay_seconds=0.05)
+
+    candidates = dataset_candidates(
+        direct_service=FakeDirectService(),
+        research_service=research_service,
+        repository=repository,
+        records=records,
+        retrieval_mode=RetrievalMode.DENSE,
+        limit=5,
+        approaches=[RunKind.AGENTIC],
+        workers=3,
+    )
+
+    assert [candidate.record.id for candidate in candidates] == [
+        "locate_001",
+        "flow_001",
+        "change_001",
+    ]
+    assert research_service.max_active_calls == 1
+
+
 def test_monitored_answer_candidates_include_feedback_and_latency(
     tmp_path: Path,
 ) -> None:
@@ -284,6 +380,84 @@ def test_judge_candidates_maps_scores_to_persisted_results(tmp_path: Path) -> No
     assert results[0].answer_correctness == 4
     assert results[0].reference_coverage == 4
     assert results[0].notes == "judged RagAnswer"
+
+
+def test_judge_candidates_parallel_workers_preserve_stable_order(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    candidates = dataset_candidates(
+        direct_service=FakeDirectService(),
+        research_service=None,
+        repository=repository,
+        records=[
+            _record("locate_001", "locate"),
+            _record("flow_001", "flow"),
+            _record("change_001", "change"),
+        ],
+        retrieval_mode=RetrievalMode.DENSE,
+        limit=5,
+        approaches=[RunKind.DIRECT],
+    )
+    started = time.perf_counter()
+
+    results = judge_answer_candidates(
+        candidates=candidates,
+        judge=FakeJudge(delay_seconds=0.05),
+        evaluation_run_id="eval-run-1",
+        workers=3,
+    )
+
+    assert time.perf_counter() - started < 0.14
+    assert [result.record_id for result in results] == [
+        "locate_001",
+        "flow_001",
+        "change_001",
+    ]
+
+
+def test_dataset_answer_evaluation_checkpoints_each_judged_result(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    records = [_record("locate_001", "locate"), _record("flow_001", "flow")]
+    checkpoint_path = tmp_path / "answer-held-out-both.jsonl"
+
+    with pytest.raises(ValueError, match="judge failed for flow_001"):
+        evaluate_dataset_answer_candidates(
+            direct_service=FakeDirectService(),
+            research_service=None,
+            judge=FakeJudge(fail_record_ids={"flow_001"}),
+            repository=repository,
+            records=records,
+            retrieval_mode=RetrievalMode.DENSE,
+            limit=5,
+            approaches=[RunKind.DIRECT],
+            evaluation_run_id="eval-run-1",
+            workers=1,
+            checkpoint_path=checkpoint_path,
+        )
+
+    assert checkpoint_path.read_text(encoding="utf-8").count("\n") == 1
+    assert "locate_001" in checkpoint_path.read_text(encoding="utf-8")
+
+    results = evaluate_dataset_answer_candidates(
+        direct_service=FakeDirectService(),
+        research_service=None,
+        judge=FakeJudge(),
+        repository=repository,
+        records=records,
+        retrieval_mode=RetrievalMode.DENSE,
+        limit=5,
+        approaches=[RunKind.DIRECT],
+        evaluation_run_id="eval-run-2",
+        workers=1,
+        checkpoint_path=checkpoint_path,
+    )
+
+    assert [result.record_id for result in results] == ["locate_001", "flow_001"]
+    assert {result.evaluation_run_id for result in results} == {"eval-run-2"}
+    assert checkpoint_path.read_text(encoding="utf-8").count("\n") == 2
 
 
 def test_judge_candidates_nulls_ground_truth_metrics_for_monitored_answers() -> None:

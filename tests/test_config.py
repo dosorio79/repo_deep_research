@@ -49,6 +49,7 @@ def test_settings_use_local_defaults(
     assert settings.research_limit == 5
     assert settings.answer_evaluation_limit == 5
     assert settings.answer_eval_limit == 5
+    assert settings.answer_evaluation_workers == 4
     assert settings.research_max_searches == 5
     assert settings.research_max_file_reads == 6
     assert settings.research_max_total_tool_calls == 12
@@ -114,6 +115,7 @@ def test_settings_read_grouped_openai_and_limit_names(
     monkeypatch.setenv("RDR_OPENAI_ANSWER_MODEL", "answer-model")
     monkeypatch.setenv("RDR_RETRIEVAL_LIMIT", "7")
     monkeypatch.setenv("RDR_ANSWER_EVALUATION_LIMIT", "3")
+    monkeypatch.setenv("RDR_ANSWER_EVALUATION_WORKERS", "6")
     monkeypatch.setenv("RDR_RESEARCH_MAX_SEARCHES", "2")
     monkeypatch.setenv("RDR_RESEARCH_MAX_FILE_READS", "4")
     monkeypatch.setenv("RDR_RESEARCH_MAX_TOTAL_TOOL_CALLS", "6")
@@ -123,6 +125,7 @@ def test_settings_read_grouped_openai_and_limit_names(
     assert settings.openai_answer_model == "answer-model"
     assert settings.retrieval_limit == 7
     assert settings.answer_evaluation_limit == 3
+    assert settings.answer_evaluation_workers == 6
     assert settings.research_max_searches == 2
     assert settings.research_max_file_reads == 4
     assert settings.research_max_total_tool_calls == 6
@@ -203,6 +206,7 @@ def test_settings_accept_field_name_overrides() -> None:
         openai_answer_model="custom-answer-model",
         retrieval_limit=2,
         answer_evaluation_limit=3,
+        answer_evaluation_workers=2,
         fastembed_cache_path=Path("/tmp/direct-fastembed-cache"),
         cors_allowed_origins=["http://localhost:8080"],
     )
@@ -210,6 +214,7 @@ def test_settings_accept_field_name_overrides() -> None:
     assert settings.openai_answer_model == "custom-answer-model"
     assert settings.retrieval_limit == 2
     assert settings.answer_evaluation_limit == 3
+    assert settings.answer_evaluation_workers == 2
     assert settings.fastembed_cache_path == Path("/tmp/direct-fastembed-cache")
     assert settings.cors_allowed_origins == ["http://localhost:8080"]
 

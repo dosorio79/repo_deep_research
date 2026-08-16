@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 from repo_research.evaluation import load_records
 from repo_research.models import (
@@ -31,6 +32,9 @@ from repo_research.models import (
     RunKind,
 )
 from repo_research.rag import AnswerJudge
+
+T = TypeVar("T")
+U = TypeVar("U")
 
 
 class EvaluationRecordingStore(Protocol):
@@ -131,58 +135,59 @@ def dataset_candidates(
     retrieval_mode: RetrievalMode,
     limit: int,
     approaches: Iterable[RunKind],
+    workers: int = 1,
 ) -> list[AnswerEvaluationCandidate]:
     """Generate answer candidates from curated records."""
     candidates: list[AnswerEvaluationCandidate] = []
+
+    def direct_candidate(record: EvaluationRecord) -> AnswerEvaluationCandidate:
+        mode = _rag_mode_from_question_type(record.question_type)
+        direct_run = direct_service.run(
+            repository=repository,
+            request=RagRequest(
+                question=record.question,
+                mode=mode,
+                retrieval_mode=retrieval_mode,
+                limit=limit,
+            ),
+        )
+        return AnswerEvaluationCandidate(
+            record=record,
+            answer=direct_run.answer,
+            run_kind=RunKind.DIRECT,
+            source_type=EvaluationSourceType.DATASET,
+            latency_ms_total=direct_run.trace.latency_ms_total,
+            total_estimated_cost_usd=direct_run.trace.total_estimated_cost_usd,
+        )
+
+    def agentic_candidate(record: EvaluationRecord) -> AnswerEvaluationCandidate:
+        mode = _rag_mode_from_question_type(record.question_type)
+        assert research_service is not None
+        research_run = research_service.run(
+            repository=repository,
+            request=ResearchRequest(
+                question=record.question,
+                mode=mode,
+                retrieval_mode=retrieval_mode,
+                retrieval_limit=limit,
+            ),
+        )
+        return AnswerEvaluationCandidate(
+            record=record,
+            answer=research_run.answer,
+            run_kind=RunKind.AGENTIC,
+            source_type=EvaluationSourceType.DATASET,
+            latency_ms_total=research_run.trace.latency_ms_total,
+            total_estimated_cost_usd=research_run.trace.total_estimated_cost_usd,
+        )
+
     for approach in approaches:
-        for record in records:
-            mode = _rag_mode_from_question_type(record.question_type)
-            if approach is RunKind.DIRECT:
-                direct_run = direct_service.run(
-                    repository=repository,
-                    request=RagRequest(
-                        question=record.question,
-                        mode=mode,
-                        retrieval_mode=retrieval_mode,
-                        limit=limit,
-                    ),
-                )
-                candidates.append(
-                    AnswerEvaluationCandidate(
-                        record=record,
-                        answer=direct_run.answer,
-                        run_kind=RunKind.DIRECT,
-                        source_type=EvaluationSourceType.DATASET,
-                        latency_ms_total=direct_run.trace.latency_ms_total,
-                        total_estimated_cost_usd=(
-                            direct_run.trace.total_estimated_cost_usd
-                        ),
-                    )
-                )
-                continue
-            if research_service is None:
-                raise ValueError("agentic evaluation requires a research service")
-            research_run = research_service.run(
-                repository=repository,
-                request=ResearchRequest(
-                    question=record.question,
-                    mode=mode,
-                    retrieval_mode=retrieval_mode,
-                    retrieval_limit=limit,
-                ),
-            )
-            candidates.append(
-                AnswerEvaluationCandidate(
-                    record=record,
-                    answer=research_run.answer,
-                    run_kind=RunKind.AGENTIC,
-                    source_type=EvaluationSourceType.DATASET,
-                    latency_ms_total=research_run.trace.latency_ms_total,
-                    total_estimated_cost_usd=(
-                        research_run.trace.total_estimated_cost_usd
-                    ),
-                )
-            )
+        if approach is RunKind.DIRECT:
+            candidates.extend(_map_stably(direct_candidate, records, workers=workers))
+            continue
+        if research_service is None:
+            raise ValueError("agentic evaluation requires a research service")
+        candidates.extend(_map_stably(agentic_candidate, records, workers=1))
     return candidates
 
 
@@ -222,25 +227,84 @@ def judge_answer_candidates(
     candidates: list[AnswerEvaluationCandidate],
     judge: AnswerJudge,
     evaluation_run_id: str,
+    workers: int = 1,
 ) -> list[PersistedEvaluationResult]:
     """Judge candidates and map scores to persisted result records."""
     created_at = datetime.now(UTC)
-    results: list[PersistedEvaluationResult] = []
-    for candidate in candidates:
-        judged = judge.judge_answer(
-            record=candidate.record,
-            answer=candidate.answer,
-            source_type=candidate.source_type,
+
+    def result_for(candidate: AnswerEvaluationCandidate) -> PersistedEvaluationResult:
+        return _judge_candidate(
+            candidate=candidate,
+            judge=judge,
+            evaluation_run_id=evaluation_run_id,
+            created_at=created_at,
         )
-        results.append(
-            _persisted_result_from_judgement(
+
+    return _map_stably(result_for, candidates, workers=workers)
+
+
+def evaluate_dataset_answer_candidates(
+    *,
+    direct_service: DirectAnswerService,
+    research_service: ResearchAnswerService | None,
+    judge: AnswerJudge,
+    repository: RepositoryIdentity,
+    records: list[EvaluationRecord],
+    retrieval_mode: RetrievalMode,
+    limit: int,
+    approaches: Iterable[RunKind],
+    evaluation_run_id: str,
+    workers: int = 1,
+    checkpoint_path: Path | None = None,
+) -> list[PersistedEvaluationResult]:
+    """Generate, judge, and checkpoint dataset answer results."""
+    approach_list = list(approaches)
+    expected_keys = [
+        (record.id, approach) for approach in approach_list for record in records
+    ]
+    results_by_key = _load_checkpointed_results(
+        checkpoint_path=checkpoint_path,
+        evaluation_run_id=evaluation_run_id,
+    )
+
+    def generate_candidates(
+        *, approach: RunKind, pending_records: list[EvaluationRecord]
+    ) -> list[AnswerEvaluationCandidate]:
+        return dataset_candidates(
+            direct_service=direct_service,
+            research_service=research_service,
+            repository=repository,
+            records=pending_records,
+            retrieval_mode=retrieval_mode,
+            limit=limit,
+            approaches=[approach],
+            workers=workers,
+        )
+
+    for approach in approach_list:
+        pending_records = [
+            record for record in records if (record.id, approach) not in results_by_key
+        ]
+        if not pending_records:
+            continue
+        candidates = generate_candidates(
+            approach=approach,
+            pending_records=pending_records,
+        )
+        for result in _iter_map_stably(
+            lambda candidate: _judge_candidate(
                 candidate=candidate,
-                judgement=judged,
+                judge=judge,
                 evaluation_run_id=evaluation_run_id,
-                created_at=created_at,
-            )
-        )
-    return results
+                created_at=datetime.now(UTC),
+            ),
+            candidates,
+            workers=workers,
+        ):
+            results_by_key[_result_key(result)] = result
+            _append_checkpoint_result(checkpoint_path=checkpoint_path, result=result)
+
+    return [results_by_key[key] for key in expected_keys if key in results_by_key]
 
 
 def persist_evaluation_batch(
@@ -319,6 +383,26 @@ def _record_from_snapshot(snapshot: EvaluatableAnswerSnapshot) -> EvaluationReco
     )
 
 
+def _judge_candidate(
+    *,
+    candidate: AnswerEvaluationCandidate,
+    judge: AnswerJudge,
+    evaluation_run_id: str,
+    created_at: datetime,
+) -> PersistedEvaluationResult:
+    judged = judge.judge_answer(
+        record=candidate.record,
+        answer=candidate.answer,
+        source_type=candidate.source_type,
+    )
+    return _persisted_result_from_judgement(
+        candidate=candidate,
+        judgement=judged,
+        evaluation_run_id=evaluation_run_id,
+        created_at=created_at,
+    )
+
+
 def _persisted_result_from_judgement(
     *,
     candidate: AnswerEvaluationCandidate,
@@ -363,3 +447,64 @@ def _rag_mode_from_question_type(question_type: str) -> RagMode:
         "change": RagMode.CHANGE,
     }
     return mapping.get(question_type, RagMode.AUTO)
+
+
+def _load_checkpointed_results(
+    *,
+    checkpoint_path: Path | None,
+    evaluation_run_id: str,
+) -> dict[tuple[str, RunKind], PersistedEvaluationResult]:
+    if checkpoint_path is None or not checkpoint_path.exists():
+        return {}
+    results: dict[tuple[str, RunKind], PersistedEvaluationResult] = {}
+    for raw_line in checkpoint_path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        result = PersistedEvaluationResult.model_validate_json(raw_line).model_copy(
+            update={"evaluation_run_id": evaluation_run_id}
+        )
+        results[_result_key(result)] = result
+    return results
+
+
+def _append_checkpoint_result(
+    *,
+    checkpoint_path: Path | None,
+    result: PersistedEvaluationResult,
+) -> None:
+    if checkpoint_path is None:
+        return
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    with checkpoint_path.open("a", encoding="utf-8") as handle:
+        handle.write(result.model_dump_json() + "\n")
+
+
+def _result_key(result: PersistedEvaluationResult) -> tuple[str, RunKind]:
+    if result.record_id is None or result.run_kind is None:
+        raise ValueError(
+            "dataset evaluation checkpoints require record_id and run_kind"
+        )
+    return result.record_id, result.run_kind
+
+
+def _map_stably(
+    func: Callable[[T], U],
+    items: list[T],
+    *,
+    workers: int,
+) -> list[U]:
+    return list(_iter_map_stably(func, items, workers=workers))
+
+
+def _iter_map_stably(
+    func: Callable[[T], U],
+    items: list[T],
+    *,
+    workers: int,
+) -> Iterable[U]:
+    if workers <= 1 or len(items) <= 1:
+        for item in items:
+            yield func(item)
+        return
+    with ThreadPoolExecutor(max_workers=min(workers, len(items))) as executor:
+        yield from executor.map(func, items)
