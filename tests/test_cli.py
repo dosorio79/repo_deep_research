@@ -12,13 +12,18 @@ from repo_research import cli, runtime
 from repo_research.cli import build_parser
 from repo_research.config import Settings
 from repo_research.models import (
+    EvaluationResult,
     ParsedChunk,
     RagMode,
     RagRequest,
     RagRunResult,
+    RepositoryIdentity,
     ResearchAnswer,
     ResearchRequest,
     ResearchRunResult,
+    RetrievalEvaluationSummary,
+    RetrievalMode,
+    RunKind,
     SearchResult,
 )
 from repo_research.rag import AnswerGenerationResult
@@ -38,12 +43,26 @@ def test_cli_parses_search_request() -> None:
 
 def test_cli_parses_retrieval_evaluation_request() -> None:
     arguments = build_parser().parse_args(
-        ["evaluate-retrieval", "--dataset", "eval/held_out.json", "--limit", "10"]
+        [
+            "evaluate-retrieval",
+            "--dataset",
+            "eval/held_out.json",
+            "--limit",
+            "10",
+            "--persist",
+            "--source-label",
+            "datapeek held-out",
+            "--selected-mode",
+            "hybrid",
+        ]
     )
 
     assert arguments.command == "evaluate-retrieval"
     assert arguments.dataset == Path("eval/held_out.json")
     assert arguments.limit == 10
+    assert arguments.persist is True
+    assert arguments.source_label == "datapeek held-out"
+    assert arguments.selected_mode == "hybrid"
 
 
 def test_cli_parses_rag_request() -> None:
@@ -115,6 +134,8 @@ def test_cli_parses_answer_evaluation_request() -> None:
             "dataset",
             "--approach",
             "both",
+            "--workers",
+            "6",
             "--persist",
         ]
     )
@@ -124,6 +145,7 @@ def test_cli_parses_answer_evaluation_request() -> None:
     assert arguments.limit == 3
     assert arguments.source == "dataset"
     assert arguments.approach == "both"
+    assert arguments.workers == 6
     assert arguments.persist is True
 
 
@@ -152,6 +174,78 @@ def test_cli_parses_monitored_answer_evaluation_request() -> None:
     assert arguments.repository_name == "repo"
     assert arguments.request_id == ["request-1", "request-2"]
     assert arguments.limit == 10
+
+
+def test_cli_persists_retrieval_evaluation_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = FakeRetrievalEvaluationStore()
+    monkeypatch.setattr(runtime, "create_recording_store", lambda _: store)
+    results = [
+        EvaluationResult(
+            dataset="eval/held_out.json",
+            mode=RetrievalMode.DENSE,
+            limit=5,
+            record_count=15,
+            file_hit_rate=0.5,
+            file_mrr=0.4,
+            file_recall=0.3,
+            file_precision=0.2,
+            symbol_hit_rate=0.1,
+        ),
+        EvaluationResult(
+            dataset="eval/held_out.json",
+            mode=RetrievalMode.HYBRID,
+            limit=5,
+            record_count=15,
+            file_hit_rate=0.7,
+            file_mrr=0.6,
+            file_recall=0.5,
+            file_precision=0.4,
+            symbol_hit_rate=0.3,
+        ),
+    ]
+
+    cli._persist_retrieval_evaluation_results(
+        results=results,
+        settings=cast(Settings, FakePostgresSettings()),
+        source_label="datapeek held-out",
+        selected_mode=RetrievalMode.HYBRID,
+    )
+
+    assert [result.source_label for result in store.results] == [
+        "datapeek held-out",
+        "datapeek held-out",
+    ]
+    assert [result.selected for result in store.results] == [False, True]
+
+
+def test_cli_answer_evaluation_checkpoint_context_scopes_resume(
+    tmp_path: Path,
+) -> None:
+    repository = RepositoryIdentity(
+        name="sample",
+        root_path=tmp_path,
+        branch="main",
+        commit_hash="abc123",
+    )
+
+    context = cli._answer_evaluation_checkpoint_context(
+        dataset_path=Path("eval/held_out.json"),
+        repository=repository,
+        retrieval_mode=RetrievalMode.DENSE,
+        limit=5,
+        approaches=[RunKind.DIRECT, RunKind.AGENTIC],
+    )
+
+    assert json.loads(context) == {
+        "approaches": ["direct", "agentic"],
+        "dataset": "eval/held_out.json",
+        "limit": 5,
+        "repository_id": repository.repository_id,
+        "repository_name": "sample",
+        "retrieval_mode": "dense",
+    }
 
 
 class FakeDatabase:
@@ -218,6 +312,18 @@ class EmptyMonitoredStore:
             }
         )
         return []
+
+
+class FakeRetrievalEvaluationStore:
+    """Capture persisted retrieval-evaluation rows."""
+
+    def __init__(self) -> None:
+        self.results: list[RetrievalEvaluationSummary] = []
+
+    def record_retrieval_evaluation_result(
+        self, result: RetrievalEvaluationSummary
+    ) -> None:
+        self.results.append(result)
 
 
 class FakeOpenAIModel:

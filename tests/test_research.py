@@ -2,8 +2,10 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 
 from repo_research.grounding import canonical_change_targets
 from repo_research.models import (
@@ -23,6 +25,7 @@ from repo_research.models import (
 )
 from repo_research.research import (
     BoundedResearchService,
+    PydanticAIResearchAgent,
     ResearchAgentResult,
     ResearchAgentRunError,
     ResearchBudgetExceeded,
@@ -158,6 +161,13 @@ class FakeEmptyAgentUsage:
         return False
 
 
+class OutputFailingPydanticAgent:
+    """PydanticAI-shaped agent that fails structured output validation."""
+
+    def run_sync(self, *_args: object, **_kwargs: object) -> object:
+        raise UnexpectedModelBehavior("Exceeded maximum output retries")
+
+
 @dataclass
 class ProtocolChangeTarget:
     """Protocol-shaped target that bypasses Pydantic model validation."""
@@ -283,6 +293,29 @@ def test_research_agent_usage_ignores_empty_run_usage() -> None:
     )
 
     assert usage is None
+
+
+def test_pydantic_agent_wraps_unexpected_output_errors(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    tools = ResearchToolContext(
+        database=FakeDatabase([SearchResult(chunk=_chunk(repository), score=0.9)]),
+        repository=repository,
+        root_path=tmp_path,
+        request=ResearchRequest(question="How does parsing flow?"),
+    )
+    agent = object.__new__(PydanticAIResearchAgent)
+    agent._agent = cast(Any, OutputFailingPydanticAgent())
+    agent._provider = "openai"
+    agent._model_name = "gpt-5-mini"
+
+    with pytest.raises(ResearchAgentRunError) as exc_info:
+        agent.run_research(
+            request=ResearchRequest(question="How does parsing flow?"),
+            tools=tools,
+        )
+
+    assert "Exceeded maximum output retries" in str(exc_info.value)
+    assert exc_info.value.error_type == "UnexpectedModelBehavior"
 
 
 def test_research_service_preserves_model_usage_on_agent_error(tmp_path: Path) -> None:

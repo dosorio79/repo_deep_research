@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 from datetime import UTC, datetime
+from decimal import Decimal
 from importlib.metadata import version
 from pathlib import Path
 
@@ -28,6 +29,8 @@ from repo_research.models import (
     EvaluationSourceType,
     EvidenceItem,
     FeedbackEvent,
+    GroundTruthEvaluationList,
+    GroundTruthEvaluationSummary,
     MonitoringRunDetail,
     MonitoringRunList,
     MonitoringRunSummary,
@@ -164,6 +167,7 @@ class FakeRecordingStore:
         self.evaluation_run_list = EvaluationRunList()
         self.evaluation_result_list = EvaluationResultList()
         self.retrieval_evaluation_list = RetrievalEvaluationList()
+        self.ground_truth_evaluation_list = GroundTruthEvaluationList()
 
     def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
         self.runs.append((run_kind, trace))
@@ -196,6 +200,9 @@ class FakeRecordingStore:
 
     def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
         return self.retrieval_evaluation_list
+
+    def list_ground_truth_evaluation_results(self) -> GroundTruthEvaluationList:
+        return self.ground_truth_evaluation_list
 
 
 def test_record_completed_answer_persists_agentic_snapshot() -> None:
@@ -1041,6 +1048,51 @@ async def test_retrieval_evaluation_results_returns_recorder_rows() -> None:
     assert result["mode"] == "dense"
     assert result["selected"] is True
     assert result["file_hit_rate"] == 0.467
+
+
+@pytest.mark.anyio
+async def test_ground_truth_evaluation_results_returns_recorder_rows() -> None:
+    recording_store = FakeRecordingStore()
+    recording_store.ground_truth_evaluation_list = GroundTruthEvaluationList(
+        results=[
+            GroundTruthEvaluationSummary(
+                dataset="eval/held_out.json",
+                source_label="datapeek held-out answer comparison",
+                run_kind=RunKind.AGENTIC,
+                record_count=15,
+                answer_correctness=3.867,
+                faithfulness=4.7,
+                citation_precision=4.733,
+                reference_coverage=3.667,
+                answer_relevance=4.4,
+                presentation_quality=4.267,
+                unsupported_claim_count=12,
+                unsupported_claim_rate=0.533,
+                average_latency_ms=116_700,
+                total_estimated_cost_usd=Decimal("0.1400"),
+                measured_at=datetime(2026, 8, 16, tzinfo=UTC),
+            )
+        ]
+    )
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=recording_store,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get("/evaluations/ground-truth")
+
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert result["dataset"] == "eval/held_out.json"
+    assert result["run_kind"] == "agentic"
+    assert result["answer_correctness"] == 3.867
 
 
 @pytest.mark.anyio

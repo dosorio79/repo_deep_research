@@ -13,15 +13,22 @@ from repo_research import runtime
 from repo_research.answer_evaluation import (
     AnswerEvaluationCandidate,
     audit_evaluation_records,
-    dataset_candidates,
+    evaluate_dataset_answer_candidates,
     judge_answer_candidates,
     monitored_answer_candidates,
+    summarize_ground_truth_evaluation_results,
     write_persisted_answer_evaluation_report,
 )
 from repo_research.config import Settings
-from repo_research.evaluation import evaluate_records, load_records, write_report
+from repo_research.evaluation import (
+    evaluate_records,
+    load_records,
+    summarize_retrieval_results,
+    write_report,
+)
 from repo_research.ingestion import discover_repository, ingest_repository_if_needed
 from repo_research.models import (
+    EvaluationResult,
     EvaluationRunRecord,
     EvaluationRunStatus,
     EvaluationSourceType,
@@ -76,6 +83,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--output", type=Path, default=Path("eval/results/retrieval-development.json")
     )
     evaluate.add_argument("--limit", type=int, default=5)
+    evaluate.add_argument(
+        "--persist",
+        action="store_true",
+        help="persist retrieval-evaluation metric rows to PostgreSQL",
+    )
+    evaluate.add_argument(
+        "--source-label",
+        default=None,
+        help="human-readable context label for persisted retrieval metrics",
+    )
+    evaluate.add_argument(
+        "--selected-mode",
+        choices=[mode.value for mode in RetrievalMode],
+        default=None,
+        help="mark one persisted retrieval mode as the selected production baseline",
+    )
     rag = subparsers.add_parser("rag", help="answer with grounded direct RAG")
     rag.add_argument("question")
     rag.add_argument("--path", type=Path, default=None)
@@ -119,6 +142,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
     )
     answer_eval.add_argument("--limit", type=int, default=None)
+    answer_eval.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="bounded parallel workers for direct dataset answers and judging",
+    )
     answer_eval.add_argument(
         "--source",
         choices=["dataset", "monitored-runs"],
@@ -259,6 +288,16 @@ def main() -> None:
             limit=arguments.limit,
         )
         write_report(evaluation_results, arguments.output)
+        if arguments.persist:
+            _persist_retrieval_evaluation_results(
+                results=evaluation_results,
+                settings=settings,
+                source_label=arguments.source_label
+                or f"{repository.name} retrieval evaluation",
+                selected_mode=RetrievalMode(arguments.selected_mode)
+                if arguments.selected_mode
+                else None,
+            )
         print(
             json.dumps(
                 [result.model_dump(mode="json") for result in evaluation_results],
@@ -319,6 +358,25 @@ def main() -> None:
         )
     )
     print(json.dumps([result.model_dump(mode="json") for result in results], indent=2))
+
+
+def _persist_retrieval_evaluation_results(
+    *,
+    results: list[EvaluationResult],
+    settings: Settings,
+    source_label: str,
+    selected_mode: RetrievalMode | None,
+) -> None:
+    store = runtime.create_recording_store(settings)
+    measured_at = datetime.now(UTC)
+    for result in summarize_retrieval_results(
+        results,
+        source_label=source_label,
+        selected_mode=selected_mode,
+        measured_at=measured_at,
+    ):
+        store.record_retrieval_evaluation_result(result)
+    _report_step(f"persisted {len(results)} retrieval evaluation results")
 
 
 def _run_direct_rag(
@@ -395,6 +453,7 @@ def _run_unified_answer_evaluation(
         else settings.retrieval_mode
     )
     limit = arguments.limit or settings.answer_evaluation_limit
+    workers = arguments.workers or settings.answer_evaluation_workers
     source_type = (
         EvaluationSourceType.MONITORED_RUNS
         if arguments.source == "monitored-runs"
@@ -407,22 +466,8 @@ def _run_unified_answer_evaluation(
             f"loaded {audit.record_count} evaluation records across "
             f"{audit.question_type_counts}"
         )
-        candidates = dataset_candidates(
-            direct_service=direct_service,
-            research_service=runtime.create_bounded_research_service(
-                settings=settings,
-                database=database,
-                agent=runtime.create_research_agent(settings),
-            )
-            if arguments.approach in {"agentic", "both"}
-            else None,
-            repository=repository,
-            records=records,
-            retrieval_mode=retrieval_mode,
-            limit=limit,
-            approaches=_evaluation_approaches(arguments.approach),
-        )
         source_label = arguments.dataset.as_posix()
+        approaches = _evaluation_approaches(arguments.approach)
     else:
         recording_store = runtime.create_recording_store(settings)
         candidates = monitored_answer_candidates(
@@ -447,14 +492,53 @@ def _run_unified_answer_evaluation(
             evaluation_run.model_copy(update={"status": EvaluationRunStatus.RUNNING})
         )
     try:
-        results = judge_answer_candidates(
-            candidates=candidates,
-            judge=judge,
-            evaluation_run_id=evaluation_run.evaluation_run_id,
-        )
+        if source_type is EvaluationSourceType.DATASET:
+            checkpoint_path = arguments.output.with_suffix(".jsonl")
+            _report_step(f"checkpointing dataset results to {checkpoint_path}")
+            results = evaluate_dataset_answer_candidates(
+                direct_service=direct_service,
+                research_service=runtime.create_bounded_research_service(
+                    settings=settings,
+                    database=database,
+                    agent=runtime.create_research_agent(settings),
+                )
+                if arguments.approach in {"agentic", "both"}
+                else None,
+                judge=judge,
+                repository=repository,
+                records=records,
+                retrieval_mode=retrieval_mode,
+                limit=limit,
+                approaches=approaches,
+                evaluation_run_id=evaluation_run.evaluation_run_id,
+                workers=workers,
+                checkpoint_path=checkpoint_path,
+                checkpoint_context=_answer_evaluation_checkpoint_context(
+                    dataset_path=arguments.dataset,
+                    repository=repository,
+                    retrieval_mode=retrieval_mode,
+                    limit=limit,
+                    approaches=approaches,
+                ),
+            )
+        else:
+            results = judge_answer_candidates(
+                candidates=candidates,
+                judge=judge,
+                evaluation_run_id=evaluation_run.evaluation_run_id,
+                workers=workers,
+            )
         if evaluation_store is not None:
             for result in results:
                 evaluation_store.record_evaluation_result(result)
+            if source_type is EvaluationSourceType.DATASET:
+                for summary in summarize_ground_truth_evaluation_results(
+                    results,
+                    dataset=arguments.dataset.as_posix(),
+                    source_label=source_label,
+                    measured_at=datetime.now(UTC),
+                ):
+                    evaluation_store.record_ground_truth_evaluation_result(summary)
             evaluation_store.record_evaluation_run(
                 evaluation_run.model_copy(
                     update={
@@ -540,6 +624,7 @@ def _judge_and_optionally_persist_answer_candidates(
             candidates=candidates,
             judge=judge,
             evaluation_run_id=evaluation_run.evaluation_run_id,
+            workers=settings.answer_evaluation_workers,
         )
         if evaluation_store is not None:
             for result in results:
@@ -567,6 +652,27 @@ def _judge_and_optionally_persist_answer_candidates(
             )
         raise
     return results
+
+
+def _answer_evaluation_checkpoint_context(
+    *,
+    dataset_path: Path,
+    repository: RepositoryIdentity,
+    retrieval_mode: RetrievalMode,
+    limit: int,
+    approaches: list[RunKind],
+) -> str:
+    return json.dumps(
+        {
+            "approaches": [approach.value for approach in approaches],
+            "dataset": dataset_path.as_posix(),
+            "limit": limit,
+            "repository_id": repository.repository_id,
+            "repository_name": repository.name,
+            "retrieval_mode": retrieval_mode.value,
+        },
+        sort_keys=True,
+    )
 
 
 def _evaluation_approaches(value: str) -> list[RunKind]:

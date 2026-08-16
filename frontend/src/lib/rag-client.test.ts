@@ -4,6 +4,7 @@ import {
   getEvaluationResults,
   getEvaluationRuns,
   getEvaluationSummary,
+  getGroundTruthEvaluationResults,
   getMonitoringRunDetail,
   getMonitoringRuns,
   getMonitoringSummary,
@@ -16,6 +17,7 @@ import type {
   EvaluationDashboardSummary,
   EvaluationResultList,
   EvaluationRunList,
+  GroundTruthEvaluationList,
   IngestSummary,
   MonitoringRunDetail,
   MonitoringRunList,
@@ -241,6 +243,28 @@ const evaluationResults: EvaluationResultList = {
           content: "def evaluate_answers(): ...",
         },
       ],
+    },
+  ],
+};
+
+const groundTruthEvaluationResults: GroundTruthEvaluationList = {
+  results: [
+    {
+      dataset: "eval/held_out.json",
+      source_label: "datapeek held-out answer comparison",
+      run_kind: "agentic",
+      record_count: 15,
+      answer_correctness: 3.867,
+      faithfulness: 4.7,
+      citation_precision: 4.733,
+      reference_coverage: 3.667,
+      answer_relevance: 4.4,
+      presentation_quality: 4.267,
+      unsupported_claim_count: 12,
+      unsupported_claim_rate: 0.533,
+      average_latency_ms: 116700,
+      total_estimated_cost_usd: "0.1400",
+      measured_at: "2026-08-16T00:00:00Z",
     },
   ],
 };
@@ -545,6 +569,25 @@ describe("runRagQuery", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/evaluations/results?limit=25&run_kind=agentic&source_type=monitored_runs&context_label=repo_deep_research",
+      expect.objectContaining({ signal: null }),
+    );
+  });
+
+  it("loads ground-truth evaluation summaries", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(groundTruthEvaluationResults), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getGroundTruthEvaluationResults("http://localhost:8000///")).resolves.toEqual(
+      groundTruthEvaluationResults,
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/evaluations/ground-truth",
       expect.objectContaining({ signal: null }),
     );
   });

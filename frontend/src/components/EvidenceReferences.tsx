@@ -20,10 +20,12 @@ function EvidenceDetailDialog({
   item,
   open,
   onOpenChange,
+  contentUnavailableLabel,
 }: {
   item: EvidenceItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  contentUnavailableLabel: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -49,7 +51,7 @@ function EvidenceDetailDialog({
                   {item.content}
                 </pre>
               ) : (
-                <EmptyLine>No content snippet returned for this evidence item.</EmptyLine>
+                <EmptyLine>{contentUnavailableLabel}</EmptyLine>
               )}
             </div>
           </div>
@@ -65,10 +67,12 @@ export function EvidenceReferences({
   evidenceIds,
   evidence,
   prefix = "evidence:",
+  contentUnavailableLabel = "No content snippet returned by this response.",
 }: {
   evidenceIds: string[];
   evidence?: EvidenceItem[] | null | undefined;
   prefix?: string;
+  contentUnavailableLabel?: string;
 }) {
   const lookup = useMemo(() => evidenceById(evidence), [evidence]);
   const [selected, setSelected] = useState<EvidenceItem | null>(null);
@@ -104,6 +108,7 @@ export function EvidenceReferences({
         onOpenChange={(open) => {
           if (!open) setSelected(null);
         }}
+        contentUnavailableLabel={contentUnavailableLabel}
       />
     </>
   );

@@ -27,6 +27,7 @@ from repo_research.models import (
     EvaluationSourceType,
     FeedbackEvent,
     FeedbackRequest,
+    GroundTruthEvaluationList,
     IngestSummary,
     MonitoringFeedbackFilter,
     MonitoringRunDetail,
@@ -155,6 +156,9 @@ class RecordingStore(Protocol):
 
     def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
         """Return persisted retrieval-evaluation metrics."""
+
+    def list_ground_truth_evaluation_results(self) -> GroundTruthEvaluationList:
+        """Return persisted offline ground-truth answer assessments."""
 
 
 def package_version() -> str:
@@ -486,6 +490,16 @@ def create_app(
     )
     async def retrieval_evaluation_results() -> RetrievalEvaluationList:
         return get_recording_store().list_retrieval_evaluation_results()
+
+    @app.get(
+        "/evaluations/ground-truth",
+        response_model=GroundTruthEvaluationList,
+        tags=["evaluations"],
+        summary="List ground-truth evaluation metrics",
+        operation_id="list_ground_truth_evaluation_results",
+    )
+    async def ground_truth_evaluation_results() -> GroundTruthEvaluationList:
+        return get_recording_store().list_ground_truth_evaluation_results()
 
     return app
 

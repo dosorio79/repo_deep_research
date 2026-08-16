@@ -15,6 +15,7 @@ from repo_research.models import (
     EvaluationSourceType,
     EvidenceItem,
     FeedbackEvent,
+    GroundTruthEvaluationSummary,
     ModelUsage,
     MonitoringFeedbackFilter,
     PersistedEvaluationResult,
@@ -22,6 +23,7 @@ from repo_research.models import (
     RagMode,
     RagRunTrace,
     ResearchAnswer,
+    RetrievalEvaluationSummary,
     RetrievalMode,
     RunKind,
 )
@@ -50,6 +52,7 @@ class FakeConnection:
         evaluation_run_rows: list[dict[str, Any]] | None = None,
         evaluation_result_rows: list[dict[str, Any]] | None = None,
         retrieval_evaluation_rows: list[dict[str, Any]] | None = None,
+        ground_truth_evaluation_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self.run_rows = run_rows or []
         self.feedback_rows = feedback_rows or []
@@ -57,6 +60,7 @@ class FakeConnection:
         self.evaluation_run_rows = evaluation_run_rows or []
         self.evaluation_result_rows = evaluation_result_rows or []
         self.retrieval_evaluation_rows = retrieval_evaluation_rows or []
+        self.ground_truth_evaluation_rows = ground_truth_evaluation_rows or []
         self.executed: list[tuple[str, dict[str, Any] | None]] = []
 
     def __enter__(self) -> FakeConnection:
@@ -73,6 +77,8 @@ class FakeConnection:
             return FakeCursor(self.answer_snapshot_rows)
         if "FROM retrieval_evaluation_results" in statement:
             return FakeCursor(self.retrieval_evaluation_rows)
+        if "FROM ground_truth_evaluation_results" in statement:
+            return FakeCursor(self.ground_truth_evaluation_rows)
         if "FROM evaluation_results" in statement:
             return FakeCursor(self.evaluation_result_rows)
         if "FROM evaluation_runs" in statement:
@@ -117,6 +123,10 @@ def test_recording_store_initializes_postgres_schema() -> None:
         "CREATE TABLE IF NOT EXISTS evaluation_runs" in sql for sql in statements
     )
     assert any(
+        "CREATE TABLE IF NOT EXISTS ground_truth_evaluation_results" in sql
+        for sql in statements
+    )
+    assert any(
         "CREATE TABLE IF NOT EXISTS evaluation_results" in sql for sql in statements
     )
     assert any(
@@ -124,6 +134,9 @@ def test_recording_store_initializes_postgres_schema() -> None:
         for sql in statements
     )
     assert any("INSERT INTO retrieval_evaluation_results" in sql for sql in statements)
+    assert any(
+        "INSERT INTO ground_truth_evaluation_results" in sql for sql in statements
+    )
     assert any("monitoring_runs_session_id_idx" in sql for sql in statements)
     assert any("monitoring_runs_completed_at_idx" in sql for sql in statements)
     assert any("feedback_events_session_id_idx" in sql for sql in statements)
@@ -443,6 +456,133 @@ def test_recording_store_returns_retrieval_evaluation_results() -> None:
     ]
     assert results.results[0].selected is True
     assert results.results[0].file_hit_rate == 0.467
+
+
+def test_recording_store_persists_retrieval_evaluation_result() -> None:
+    connection = FakeConnection()
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+    measured_at = datetime(2026, 8, 16, tzinfo=UTC)
+    result = RetrievalEvaluationSummary(
+        dataset="eval/held_out.json",
+        mode=RetrievalMode.HYBRID,
+        source_label="datapeek held-out",
+        limit=5,
+        record_count=15,
+        file_hit_rate=0.7,
+        file_mrr=0.6,
+        file_recall=0.5,
+        file_precision=0.4,
+        symbol_hit_rate=0.3,
+        selected=True,
+        measured_at=measured_at,
+    )
+
+    store.record_retrieval_evaluation_result(result)
+
+    statement, params = connection.executed[-1]
+    assert "INSERT INTO retrieval_evaluation_results" in statement
+    assert params == {
+        "dataset": "eval/held_out.json",
+        "mode": "hybrid",
+        "source_label": "datapeek held-out",
+        "limit_value": 5,
+        "record_count": 15,
+        "file_hit_rate": 0.7,
+        "file_mrr": 0.6,
+        "file_recall": 0.5,
+        "file_precision": 0.4,
+        "symbol_hit_rate": 0.3,
+        "selected": True,
+        "measured_at": measured_at,
+    }
+
+
+def test_recording_store_persists_ground_truth_evaluation_result() -> None:
+    connection = FakeConnection()
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+    measured_at = datetime(2026, 8, 16, tzinfo=UTC)
+    result = GroundTruthEvaluationSummary(
+        dataset="eval/held_out.json",
+        source_label="datapeek held-out answer comparison",
+        run_kind=RunKind.AGENTIC,
+        record_count=15,
+        answer_correctness=3.8,
+        faithfulness=4.7,
+        citation_precision=4.8,
+        reference_coverage=3.6,
+        answer_relevance=4.4,
+        presentation_quality=4.2,
+        unsupported_claim_count=12,
+        unsupported_claim_rate=0.53,
+        average_latency_ms=116_700,
+        total_estimated_cost_usd=Decimal("0.1400"),
+        measured_at=measured_at,
+    )
+
+    store.record_ground_truth_evaluation_result(result)
+
+    statement, params = connection.executed[-1]
+    assert "INSERT INTO ground_truth_evaluation_results" in statement
+    assert params == {
+        "dataset": "eval/held_out.json",
+        "source_label": "datapeek held-out answer comparison",
+        "run_kind": "agentic",
+        "record_count": 15,
+        "answer_correctness": 3.8,
+        "faithfulness": 4.7,
+        "citation_precision": 4.8,
+        "reference_coverage": 3.6,
+        "answer_relevance": 4.4,
+        "presentation_quality": 4.2,
+        "unsupported_claim_count": 12,
+        "unsupported_claim_rate": 0.53,
+        "average_latency_ms": 116_700,
+        "total_estimated_cost_usd": Decimal("0.1400"),
+        "measured_at": measured_at,
+    }
+
+
+def test_recording_store_lists_ground_truth_evaluation_results() -> None:
+    measured_at = datetime(2026, 8, 16, tzinfo=UTC)
+    connection = FakeConnection(
+        ground_truth_evaluation_rows=[
+            {
+                "dataset": "eval/held_out.json",
+                "source_label": "datapeek held-out answer comparison",
+                "run_kind": "direct",
+                "record_count": 15,
+                "answer_correctness": Decimal("2.667"),
+                "faithfulness": Decimal("4.300"),
+                "citation_precision": Decimal("4.667"),
+                "reference_coverage": Decimal("2.267"),
+                "answer_relevance": Decimal("4.167"),
+                "presentation_quality": Decimal("4.133"),
+                "unsupported_claim_count": 20,
+                "unsupported_claim_rate": Decimal("0.733"),
+                "average_latency_ms": Decimal("16600"),
+                "total_estimated_cost_usd": Decimal("0.0518"),
+                "measured_at": measured_at,
+            }
+        ]
+    )
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    results = store.list_ground_truth_evaluation_results()
+
+    assert len(results.results) == 1
+    result = results.results[0]
+    assert result.dataset == "eval/held_out.json"
+    assert result.run_kind is RunKind.DIRECT
+    assert result.record_count == 15
+    assert result.answer_correctness == 2.667
+    assert result.average_latency_ms == 16600
+    assert result.total_estimated_cost_usd == Decimal("0.0518")
 
 
 def test_recording_store_returns_monitoring_summary() -> None:

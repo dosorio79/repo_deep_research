@@ -8,6 +8,7 @@ import type {
   EvaluationRunListParams,
   FeedbackEvent,
   FeedbackRequest,
+  GroundTruthEvaluationList,
   IngestSummary,
   MonitoringRunDetail,
   MonitoringRunList,
@@ -234,6 +235,13 @@ export async function getRetrievalEvaluationResults(
   signal?: AbortSignal,
 ): Promise<RetrievalEvaluationList> {
   return getJson<RetrievalEvaluationList>(baseUrl, "/evaluations/retrieval", signal);
+}
+
+export async function getGroundTruthEvaluationResults(
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<GroundTruthEvaluationList> {
+  return getJson<GroundTruthEvaluationList>(baseUrl, "/evaluations/ground-truth", signal);
 }
 
 export async function ingestRepository(

@@ -1,14 +1,22 @@
 """Tests for deterministic retrieval-evaluation records and metrics."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from repo_research.answer_evaluation import audit_evaluation_records
-from repo_research.evaluation import evaluate_records, load_records, write_report
+from repo_research.evaluation import (
+    evaluate_records,
+    load_records,
+    summarize_retrieval_results,
+    write_report,
+)
 from repo_research.models import (
     EvaluationRecord,
+    EvaluationResult,
     ParsedChunk,
     RepositoryIdentity,
+    RetrievalMode,
     SearchResult,
 )
 
@@ -77,6 +85,48 @@ def test_evaluation_calculates_metrics_and_writes_stable_report(tmp_path: Path) 
         json.loads(report_path.read_text(encoding="utf-8"))[0]["dataset"]
         == "development"
     )
+
+
+def test_summarize_retrieval_results_adds_persistence_context() -> None:
+    measured_at = datetime(2026, 8, 16, tzinfo=UTC)
+    results = [
+        EvaluationResult(
+            dataset="eval/held_out.json",
+            mode=RetrievalMode.DENSE,
+            limit=5,
+            record_count=15,
+            file_hit_rate=0.5,
+            file_mrr=0.4,
+            file_recall=0.3,
+            file_precision=0.2,
+            symbol_hit_rate=0.1,
+        ),
+        EvaluationResult(
+            dataset="eval/held_out.json",
+            mode=RetrievalMode.HYBRID,
+            limit=5,
+            record_count=15,
+            file_hit_rate=0.7,
+            file_mrr=0.6,
+            file_recall=0.5,
+            file_precision=0.4,
+            symbol_hit_rate=0.3,
+        ),
+    ]
+
+    summaries = summarize_retrieval_results(
+        results,
+        source_label="datapeek held-out",
+        selected_mode=RetrievalMode.HYBRID,
+        measured_at=measured_at,
+    )
+
+    assert [summary.source_label for summary in summaries] == [
+        "datapeek held-out",
+        "datapeek held-out",
+    ]
+    assert [summary.selected for summary in summaries] == [False, True]
+    assert [summary.measured_at for summary in summaries] == [measured_at, measured_at]
 
 
 def test_versioned_ground_truth_sets_are_complete_disjoint_and_current() -> None:

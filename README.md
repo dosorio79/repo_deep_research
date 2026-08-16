@@ -46,16 +46,45 @@ flowchart LR
 
 ## Release Status
 
-The current release is `v0.5.8 Local Alpha`: a local-first,
-bring-your-own-key release for technical
-users who can run Docker Compose and provide their own OpenAI API key.
-The alpha release handoff is documented in
-[docs/releases/v0.5.8-local-alpha.md](docs/releases/v0.5.8-local-alpha.md).
+The current release is `v0.5.9 Evaluation Evidence`: a local-first capstone
+review release for technical users who can run Docker Compose. Live answer
+generation remains bring-your-own-key, while seeded offline evaluation evidence
+is available without an OpenAI key. The release handoff is documented in
+[docs/releases/v0.5.9-evaluation-evidence.md](docs/releases/v0.5.9-evaluation-evidence.md).
 
 Cloud deployment is intentionally out of scope for the Local Alpha. The stack
 includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
 user-provided model credentials, which is too much moving infrastructure for a
 free hosted demo target such as Render.
+
+## LLM Zoomcamp Capstone
+
+This project is built for the LLM Zoomcamp capstone rubric using a non-course
+repository corpus, local vector search, an LLM answer layer, monitoring, and a
+reviewable local runbook.
+
+Reviewer shortcut:
+
+- Start the stack with `make stack-up` and open `http://localhost:3000`.
+- Open `http://localhost:3000/evaluations` to inspect seeded offline retrieval
+  and ground-truth answer metrics without an OpenAI key.
+- Open `docs/evaluation.md` for the exact dataset semantics, metric
+  definitions, and current direct-vs-agentic held-out comparison.
+- Add `OPENAI_API_KEY` only if you want to regenerate live answers or rerun the
+  LLM judge locally.
+
+| Criterion | Repository evidence |
+|---|---|
+| Problem description | The README introduction and [architecture guide](docs/architecture.md) define evidence-grounded research for Python repositories. |
+| Retrieval flow | [docs/architecture.md](docs/architecture.md) traces ingestion, Qdrant dense/sparse/hybrid search, direct RAG, and bounded agentic research. |
+| Retrieval evaluation | [docs/evaluation.md](docs/evaluation.md) reports dense, sparse, and hybrid evaluation over versioned records in [eval/development.json](eval/development.json) and [eval/held_out.json](eval/held_out.json), including refreshed Datapeek held-out measurements. |
+| LLM evaluation | [docs/evaluation.md](docs/evaluation.md) reports the completed Datapeek direct-vs-agentic held-out answer comparison and documents the monitored-answer evidence audit. |
+| Interface | The app exposes a React UI, FastAPI routes, Swagger at `/docs`, and a CLI; see [docs/usage.md](docs/usage.md). |
+| Ingestion pipeline | `POST /repositories/ingest` and `repo-research ingest` run an automated application-owned Python pipeline: repository selection, local access or public GitHub clone, parse, chunk, embed, and Qdrant index. This is not a Kestra/dlt/Airflow/Prefect pipeline. |
+| Monitoring | PostgreSQL-backed feedback and at least five dashboard panels are documented in [docs/monitoring.md](docs/monitoring.md). |
+| Containerization | [docker-compose.yml](docker-compose.yml) runs frontend, API, Qdrant, and PostgreSQL for the Local Alpha. |
+| Reproducibility | [docs/setup.md](docs/setup.md), [docs/usage.md](docs/usage.md), pinned Python dependencies, and `frontend/package-lock.json` provide repeatable local setup. |
+| Hybrid search | Dense, sparse, and Qdrant RRF-hybrid retrieval are implemented and evaluated; dense remains the measured default because it has stronger held-out rank, precision, recall, and symbol-hit metrics in [docs/evaluation.md](docs/evaluation.md). |
 
 ## Requirements
 
@@ -78,6 +107,10 @@ make rag QUESTION="where is configuration validated?"
 Set `OPENAI_API_KEY` in `.env.local` before running live RAG, agentic research,
 or answer evaluation.
 
+For a keyless review, skip `make rag` and live judging. The versioned datasets
+in `eval/`, the curated measurements in [docs/evaluation.md](docs/evaluation.md),
+and the seeded `/evaluations` dashboard are available without paid model calls.
+
 For the full Local Alpha path, use the container stack:
 
 ```bash
@@ -90,6 +123,11 @@ dashboards.
 Opening `http://localhost:8000` redirects to the FastAPI Swagger UI at
 `http://localhost:8000/docs`; the versioned OpenAPI contract is stored at
 [docs/api/openapi.json](docs/api/openapi.json).
+
+Container startup does not call OpenAI by itself. PostgreSQL schema creation
+seeds curated retrieval and offline ground-truth evaluation summaries, so
+`/evaluations` remains useful before the reviewer supplies a key or persists new
+local runs.
 
 ## Main Commands
 
@@ -173,10 +211,12 @@ Important settings:
 | `RDR_QDRANT_URL` | Qdrant HTTP endpoint. |
 | `RDR_QDRANT_COLLECTION` | Qdrant collection for repository chunks. |
 | `RDR_REPOSITORY_ROOT` | Default repository path for CLI commands. |
+| `RDR_FASTEMBED_CACHE_PATH` | Optional persistent FastEmbed model cache; `.env.example` uses `.cache/fastembed`, and Docker maps this to `/root/.cache/fastembed`. |
 | `RDR_RETRIEVAL_MODE` | Default retrieval mode: `dense`, `sparse`, or `hybrid`. |
 | `RDR_RETRIEVAL_LIMIT` | Default retrieved evidence limit. |
 | `RDR_OPENAI_ANSWER_MODEL` | Model used for direct RAG and agentic answers. |
 | `RDR_OPENAI_JUDGE_MODEL` | Model used for answer evaluation. |
+| `RDR_ANSWER_EVALUATION_WORKERS` | Bounded parallel workers for direct dataset answer generation and answer judging. |
 | `RDR_POSTGRES_DSN` | PostgreSQL DSN for monitoring, feedback, and evaluation data. |
 | `RDR_TELEMETRY_ENABLED` | Enables persisted recording when PostgreSQL is configured. |
 | `RDR_CORS_ALLOWED_ORIGINS` | Browser origins allowed to call FastAPI. |
@@ -192,6 +232,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Architecture](docs/architecture.md) including the Local Alpha stack diagram
 - [Evaluation](docs/evaluation.md)
 - [Monitoring KPIs](docs/monitoring.md)
+- [v0.5.9 Evaluation Evidence release notes](docs/releases/v0.5.9-evaluation-evidence.md)
 - [v0.5.8 Local Alpha release notes](docs/releases/v0.5.8-local-alpha.md)
 - [OpenAPI contract](docs/api/openapi.json)
 - [Implementation history](docs/plans/)
@@ -202,7 +243,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
 Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current user-ready
-local alpha stack is released as `v0.5.8`.
+capstone review release is `v0.5.9`.
 
 ## Local Alpha Scope
 
