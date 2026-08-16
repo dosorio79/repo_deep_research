@@ -185,6 +185,7 @@ function EvaluationDashboard({
       : visibleResults.filter((result) => result.unsupported_claim_count > 0).length /
         visibleResults.length;
   const postHocResults = visibleResults.filter((result) => result.source_type === "monitored_runs");
+  const displayedPostHocResults = lowestScoringResults(postHocResults);
 
   return (
     <div className="space-y-3">
@@ -307,7 +308,8 @@ function EvaluationDashboard({
               Ground Truth Assessments ({groundTruthResults.length})
             </TabsTrigger>
             <TabsTrigger value="post-hoc">
-              Post-hoc LLM Review ({postHocResults.length})
+              Post-hoc LLM Review (lowest {displayedPostHocResults.length} of{" "}
+              {postHocResults.length})
             </TabsTrigger>
           </TabsList>
           <TabsContent value="ground-truth" className="mt-0">
@@ -319,7 +321,7 @@ function EvaluationDashboard({
           <TabsContent value="post-hoc" className="mt-0">
             <ReviewTabPanel
               title="Persisted live answers judged against their returned evidence."
-              results={lowestScoringResults(postHocResults)}
+              results={displayedPostHocResults}
               loading={loadingResults}
             />
           </TabsContent>
@@ -336,7 +338,9 @@ function SearchEvaluationHighlights({
   results: RetrievalEvaluationSummary[];
   loading: boolean;
 }) {
-  const heldOutResults = results.filter((item) => item.dataset.toLowerCase() === "held-out");
+  const heldOutResults = results.filter((item) =>
+    item.dataset.toLowerCase().includes("held-out"),
+  );
   const visibleResults = heldOutResults.length ? heldOutResults : results;
   const selected = visibleResults.find((item) => item.selected) ?? visibleResults[0];
   return (

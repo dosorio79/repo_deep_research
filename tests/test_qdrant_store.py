@@ -267,6 +267,16 @@ def test_local_fastembed_factory_falls_back_when_populated_cache_is_unusable(
     assert local_only_calls == [True, False]
 
 
+def test_local_fastembed_cache_path_must_be_directory(tmp_path: Path) -> None:
+    cache_path = tmp_path / "fastembed-cache"
+    cache_path.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError, match="RDR_FASTEMBED_CACHE_PATH must point to a directory"
+    ):
+        qdrant_store.local_embedder("dense-model", 7, cache_path)
+
+
 def test_create_database_passes_settings_fastembed_cache_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -209,46 +209,60 @@ const groundTruthEvaluationList: GroundTruthEvaluationList = {
 const retrievalEvaluationList: RetrievalEvaluationList = {
   results: [
     {
-      dataset: "Held-out",
+      dataset: "Development",
       mode: "dense",
-      source_label: "legacy self-repo held-out smoke",
+      source_label: "repo_deep_research development retrieval",
       limit: 5,
       record_count: 15,
-      file_hit_rate: 0.467,
-      file_mrr: 0.313,
-      file_recall: 0.311,
-      file_precision: 0.2,
-      symbol_hit_rate: 0.4,
-      selected: true,
-      measured_at: "2026-08-13T00:00:00Z",
-    },
-    {
-      dataset: "Held-out",
-      mode: "hybrid",
-      source_label: "legacy self-repo held-out smoke",
-      limit: 5,
-      record_count: 15,
-      file_hit_rate: 0.4,
-      file_mrr: 0.261,
-      file_recall: 0.278,
-      file_precision: 0.103,
-      symbol_hit_rate: 0.333,
-      selected: false,
-      measured_at: "2026-08-13T00:00:00Z",
-    },
-    {
-      dataset: "Held-out",
-      mode: "sparse",
-      source_label: "legacy self-repo held-out smoke",
-      limit: 5,
-      record_count: 15,
-      file_hit_rate: 0.133,
-      file_mrr: 0.08,
-      file_recall: 0.1,
-      file_precision: 0.03,
+      file_hit_rate: 0.733,
+      file_mrr: 0.528,
+      file_recall: 0.339,
+      file_precision: 0.24,
       symbol_hit_rate: 0.267,
+      selected: true,
+      measured_at: "2026-08-14T00:00:00Z",
+    },
+    {
+      dataset: "Datapeek held-out",
+      mode: "dense",
+      source_label: "datapeek held-out retrieval",
+      limit: 5,
+      record_count: 15,
+      file_hit_rate: 0.8,
+      file_mrr: 0.602,
+      file_recall: 0.542,
+      file_precision: 0.319,
+      symbol_hit_rate: 0.6,
+      selected: true,
+      measured_at: "2026-08-14T00:00:00Z",
+    },
+    {
+      dataset: "Datapeek held-out",
+      mode: "hybrid",
+      source_label: "datapeek held-out retrieval",
+      limit: 5,
+      record_count: 15,
+      file_hit_rate: 0.867,
+      file_mrr: 0.544,
+      file_recall: 0.529,
+      file_precision: 0.277,
+      symbol_hit_rate: 0.533,
       selected: false,
-      measured_at: "2026-08-13T00:00:00Z",
+      measured_at: "2026-08-14T00:00:00Z",
+    },
+    {
+      dataset: "Datapeek held-out",
+      mode: "sparse",
+      source_label: "datapeek held-out retrieval",
+      limit: 5,
+      record_count: 15,
+      file_hit_rate: 0.667,
+      file_mrr: 0.393,
+      file_recall: 0.382,
+      file_precision: 0.213,
+      symbol_hit_rate: 0.467,
+      selected: false,
+      measured_at: "2026-08-14T00:00:00Z",
     },
   ],
 };
@@ -283,7 +297,7 @@ describe("Evaluations route", () => {
     expect(await screen.findByText("Search evaluation highlights")).toBeInTheDocument();
     expect(screen.getByText("Selected retrieval mode")).toBeInTheDocument();
     expect(screen.getByText("Held-out file hit rate")).toBeInTheDocument();
-    expect(screen.getAllByText("47%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("80%").length).toBeGreaterThan(0);
     expect(screen.getByText(/No persisted evaluation results are available/)).toBeInTheDocument();
   });
 
@@ -327,7 +341,9 @@ describe("Evaluations route", () => {
     expect(screen.getAllByText("repo_deep_research").length).toBeGreaterThan(0);
     expect(screen.getByText("Answer reviews")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Ground Truth Assessments (2)" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Post-hoc LLM Review (2)" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "Post-hoc LLM Review (lowest 2 of 2)" }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("eval/held_out.json").length).toBe(2);
     expect(screen.getByText("agentic")).toBeInTheDocument();
     expect(screen.getByText("direct")).toBeInTheDocument();
@@ -346,7 +362,7 @@ describe("Evaluations route", () => {
     renderEvaluationsRoute();
 
     expect((await screen.findAllByText("eval/held_out.json")).length).toBe(2);
-    await user.click(screen.getByRole("tab", { name: "Post-hoc LLM Review (2)" }));
+    await user.click(screen.getByRole("tab", { name: "Post-hoc LLM Review (lowest 2 of 2)" }));
 
     expect(screen.getByText("Which modules changed for answer evaluation?")).toBeInTheDocument();
     expect(screen.queryAllByText("eval/held_out.json")).toHaveLength(0);
@@ -364,7 +380,9 @@ describe("Evaluations route", () => {
 
     renderEvaluationsRoute();
 
-    await user.click(await screen.findByRole("tab", { name: "Post-hoc LLM Review (2)" }));
+    await user.click(
+      await screen.findByRole("tab", { name: "Post-hoc LLM Review (lowest 2 of 2)" }),
+    );
     await user.click(await screen.findByRole("button", { name: "Open evidence E29" }));
 
     expect(screen.getByRole("dialog", { name: "Evidence detail" })).toBeInTheDocument();
@@ -382,7 +400,9 @@ describe("Evaluations route", () => {
 
     renderEvaluationsRoute();
 
-    await user.click(await screen.findByRole("tab", { name: "Post-hoc LLM Review (2)" }));
+    await user.click(
+      await screen.findByRole("tab", { name: "Post-hoc LLM Review (lowest 2 of 2)" }),
+    );
     await user.click(await screen.findByRole("button", { name: "Open evidence E7" }));
 
     expect(screen.getByRole("dialog", { name: "Evidence detail" })).toBeInTheDocument();

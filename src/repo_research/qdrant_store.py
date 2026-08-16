@@ -59,6 +59,11 @@ def local_sparse_embedder(
 def _prepare_fastembed_cache_dir(cache_path: Path | None) -> str | None:
     if cache_path is None:
         return None
+    if cache_path.exists() and not cache_path.is_dir():
+        raise ValueError(
+            "RDR_FASTEMBED_CACHE_PATH must point to a directory, "
+            f"but {cache_path} exists and is not a directory"
+        )
     cache_path.mkdir(parents=True, exist_ok=True)
     return str(cache_path)
 
