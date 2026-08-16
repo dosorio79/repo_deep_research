@@ -29,6 +29,8 @@ from repo_research.models import (
     EvidenceItem,
     FeedbackEvent,
     FeedbackUsefulSummary,
+    GroundTruthEvaluationList,
+    GroundTruthEvaluationSummary,
     LatencyByRunKind,
     ModelUsageSummary,
     MonitoringFeedbackFilter,
@@ -85,6 +87,12 @@ class NoOpRecordingStore:
         """Accept retrieval-evaluation metrics without persisting them."""
         del result
 
+    def record_ground_truth_evaluation_result(
+        self, result: GroundTruthEvaluationSummary
+    ) -> None:
+        """Accept ground-truth evaluation metrics without persisting them."""
+        del result
+
     def list_answer_snapshots_for_evaluation(
         self,
         *,
@@ -133,6 +141,10 @@ class NoOpRecordingStore:
     def list_retrieval_evaluation_results(self) -> RetrievalEvaluationList:
         """Return no retrieval-evaluation rows when persistence is disabled."""
         return RetrievalEvaluationList()
+
+    def list_ground_truth_evaluation_results(self) -> GroundTruthEvaluationList:
+        """Return no ground-truth evaluation rows when persistence is disabled."""
+        return GroundTruthEvaluationList()
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return an empty dashboard summary."""
@@ -314,6 +326,32 @@ class PostgresRecordingStore:
                 },
             )
 
+    def record_ground_truth_evaluation_result(
+        self, result: GroundTruthEvaluationSummary
+    ) -> None:
+        """Persist one offline ground-truth answer assessment row."""
+        with self._connect() as connection:
+            connection.execute(
+                _UPSERT_GROUND_TRUTH_EVALUATION_RESULT,
+                {
+                    "dataset": result.dataset,
+                    "source_label": result.source_label,
+                    "run_kind": result.run_kind.value,
+                    "record_count": result.record_count,
+                    "answer_correctness": result.answer_correctness,
+                    "faithfulness": result.faithfulness,
+                    "citation_precision": result.citation_precision,
+                    "reference_coverage": result.reference_coverage,
+                    "answer_relevance": result.answer_relevance,
+                    "presentation_quality": result.presentation_quality,
+                    "unsupported_claim_count": result.unsupported_claim_count,
+                    "unsupported_claim_rate": result.unsupported_claim_rate,
+                    "average_latency_ms": result.average_latency_ms,
+                    "total_estimated_cost_usd": result.total_estimated_cost_usd,
+                    "measured_at": result.measured_at,
+                },
+            )
+
     def list_answer_snapshots_for_evaluation(
         self,
         *,
@@ -424,6 +462,26 @@ class PostgresRecordingStore:
             )
         ]
         return RetrievalEvaluationList(results=results)
+
+    def list_ground_truth_evaluation_results(self) -> GroundTruthEvaluationList:
+        """Return persisted offline ground-truth answer assessments."""
+        with self._connect() as connection:
+            rows = list(
+                connection.execute(
+                    _SELECT_GROUND_TRUTH_EVALUATION_RESULT_ROWS
+                ).fetchall()
+            )
+        results = [
+            _ground_truth_evaluation_summary_from_row(row)
+            for row in sorted(
+                rows,
+                key=lambda item: (
+                    str(item["dataset"]).lower(),
+                    str(item["run_kind"]),
+                ),
+            )
+        ]
+        return GroundTruthEvaluationList(results=results)
 
     def monitoring_summary(self) -> MonitoringSummary:
         """Return dashboard aggregates from persisted monitoring and feedback."""
@@ -727,6 +785,36 @@ def _retrieval_evaluation_summary_from_row(
         selected=bool(row["selected"]),
         measured_at=row["measured_at"],
     )
+
+
+def _ground_truth_evaluation_summary_from_row(
+    row: dict[str, Any],
+) -> GroundTruthEvaluationSummary:
+    return GroundTruthEvaluationSummary(
+        dataset=str(row["dataset"]),
+        source_label=str(row["source_label"]),
+        run_kind=RunKind(str(row["run_kind"])),
+        record_count=int(row["record_count"]),
+        answer_correctness=_optional_float(row["answer_correctness"]),
+        faithfulness=float(row["faithfulness"]),
+        citation_precision=float(row["citation_precision"]),
+        reference_coverage=_optional_float(row["reference_coverage"]),
+        answer_relevance=float(row["answer_relevance"]),
+        presentation_quality=float(row["presentation_quality"]),
+        unsupported_claim_count=int(row["unsupported_claim_count"]),
+        unsupported_claim_rate=float(row["unsupported_claim_rate"]),
+        average_latency_ms=_optional_float(row["average_latency_ms"]),
+        total_estimated_cost_usd=row.get("total_estimated_cost_usd"),
+        measured_at=row["measured_at"],
+    )
+
+
+def _optional_float(value: object) -> float | None:
+    if value is None:
+        return None
+    if not isinstance(value, str | int | float | Decimal):
+        raise TypeError(f"expected numeric database value, got {type(value).__name__}")
+    return float(value)
 
 
 def _average_result_score(row: dict[str, Any]) -> float:
@@ -1233,6 +1321,110 @@ _SCHEMA_STATEMENTS = (
         selected = EXCLUDED.selected,
         measured_at = EXCLUDED.measured_at
     """,
+    """
+    CREATE TABLE IF NOT EXISTS ground_truth_evaluation_results (
+        dataset TEXT NOT NULL CHECK (length(dataset) > 0),
+        source_label TEXT NOT NULL CHECK (length(source_label) > 0),
+        run_kind TEXT NOT NULL CHECK (run_kind IN ('direct', 'agentic')),
+        record_count INTEGER NOT NULL CHECK (record_count >= 0),
+        answer_correctness NUMERIC CHECK (
+            answer_correctness >= 0 AND answer_correctness <= 5
+        ),
+        faithfulness NUMERIC NOT NULL CHECK (
+            faithfulness >= 0 AND faithfulness <= 5
+        ),
+        citation_precision NUMERIC NOT NULL CHECK (
+            citation_precision >= 0 AND citation_precision <= 5
+        ),
+        reference_coverage NUMERIC CHECK (
+            reference_coverage >= 0 AND reference_coverage <= 5
+        ),
+        answer_relevance NUMERIC NOT NULL CHECK (
+            answer_relevance >= 0 AND answer_relevance <= 5
+        ),
+        presentation_quality NUMERIC NOT NULL CHECK (
+            presentation_quality >= 0 AND presentation_quality <= 5
+        ),
+        unsupported_claim_count INTEGER NOT NULL CHECK (
+            unsupported_claim_count >= 0
+        ),
+        unsupported_claim_rate NUMERIC NOT NULL CHECK (
+            unsupported_claim_rate >= 0 AND unsupported_claim_rate <= 1
+        ),
+        average_latency_ms NUMERIC CHECK (average_latency_ms >= 0),
+        total_estimated_cost_usd NUMERIC CHECK (total_estimated_cost_usd >= 0),
+        measured_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (dataset, run_kind)
+    )
+    """,
+    """
+    INSERT INTO ground_truth_evaluation_results (
+        dataset,
+        source_label,
+        run_kind,
+        record_count,
+        answer_correctness,
+        faithfulness,
+        citation_precision,
+        reference_coverage,
+        answer_relevance,
+        presentation_quality,
+        unsupported_claim_count,
+        unsupported_claim_rate,
+        average_latency_ms,
+        total_estimated_cost_usd,
+        measured_at
+    ) VALUES
+        (
+            'eval/held_out.json',
+            'datapeek held-out answer comparison',
+            'direct',
+            15,
+            2.667,
+            4.300,
+            4.667,
+            2.267,
+            4.167,
+            4.133,
+            20,
+            0.733,
+            16600,
+            0.0518,
+            '2026-08-16T00:00:00Z'
+        ),
+        (
+            'eval/held_out.json',
+            'datapeek held-out answer comparison',
+            'agentic',
+            15,
+            3.867,
+            4.700,
+            4.733,
+            3.667,
+            4.400,
+            4.267,
+            12,
+            0.533,
+            116700,
+            0.1400,
+            '2026-08-16T00:00:00Z'
+        )
+    ON CONFLICT (dataset, run_kind) DO UPDATE SET
+        source_label = EXCLUDED.source_label,
+        record_count = EXCLUDED.record_count,
+        answer_correctness = EXCLUDED.answer_correctness,
+        faithfulness = EXCLUDED.faithfulness,
+        citation_precision = EXCLUDED.citation_precision,
+        reference_coverage = EXCLUDED.reference_coverage,
+        answer_relevance = EXCLUDED.answer_relevance,
+        presentation_quality = EXCLUDED.presentation_quality,
+        unsupported_claim_count = EXCLUDED.unsupported_claim_count,
+        unsupported_claim_rate = EXCLUDED.unsupported_claim_rate,
+        average_latency_ms = EXCLUDED.average_latency_ms,
+        total_estimated_cost_usd = EXCLUDED.total_estimated_cost_usd,
+        measured_at = EXCLUDED.measured_at
+    """,
 )
 
 _UPSERT_MONITORING_RUN = """
@@ -1506,6 +1698,56 @@ ON CONFLICT (dataset, mode) DO UPDATE SET
     measured_at = EXCLUDED.measured_at
 """
 
+_UPSERT_GROUND_TRUTH_EVALUATION_RESULT = """
+INSERT INTO ground_truth_evaluation_results (
+    dataset,
+    source_label,
+    run_kind,
+    record_count,
+    answer_correctness,
+    faithfulness,
+    citation_precision,
+    reference_coverage,
+    answer_relevance,
+    presentation_quality,
+    unsupported_claim_count,
+    unsupported_claim_rate,
+    average_latency_ms,
+    total_estimated_cost_usd,
+    measured_at
+) VALUES (
+    %(dataset)s,
+    %(source_label)s,
+    %(run_kind)s,
+    %(record_count)s,
+    %(answer_correctness)s,
+    %(faithfulness)s,
+    %(citation_precision)s,
+    %(reference_coverage)s,
+    %(answer_relevance)s,
+    %(presentation_quality)s,
+    %(unsupported_claim_count)s,
+    %(unsupported_claim_rate)s,
+    %(average_latency_ms)s,
+    %(total_estimated_cost_usd)s,
+    %(measured_at)s
+)
+ON CONFLICT (dataset, run_kind) DO UPDATE SET
+    source_label = EXCLUDED.source_label,
+    record_count = EXCLUDED.record_count,
+    answer_correctness = EXCLUDED.answer_correctness,
+    faithfulness = EXCLUDED.faithfulness,
+    citation_precision = EXCLUDED.citation_precision,
+    reference_coverage = EXCLUDED.reference_coverage,
+    answer_relevance = EXCLUDED.answer_relevance,
+    presentation_quality = EXCLUDED.presentation_quality,
+    unsupported_claim_count = EXCLUDED.unsupported_claim_count,
+    unsupported_claim_rate = EXCLUDED.unsupported_claim_rate,
+    average_latency_ms = EXCLUDED.average_latency_ms,
+    total_estimated_cost_usd = EXCLUDED.total_estimated_cost_usd,
+    measured_at = EXCLUDED.measured_at
+"""
+
 _SELECT_MONITORING_ROWS = """
 SELECT
     run_kind,
@@ -1645,6 +1887,26 @@ SELECT
     selected,
     measured_at
 FROM retrieval_evaluation_results
+"""
+
+_SELECT_GROUND_TRUTH_EVALUATION_RESULT_ROWS = """
+SELECT
+    dataset,
+    source_label,
+    run_kind,
+    record_count,
+    answer_correctness,
+    faithfulness,
+    citation_precision,
+    reference_coverage,
+    answer_relevance,
+    presentation_quality,
+    unsupported_claim_count,
+    unsupported_claim_rate,
+    average_latency_ms,
+    total_estimated_cost_usd,
+    measured_at
+FROM ground_truth_evaluation_results
 """
 
 _SELECT_MONITORING_RUN_HISTORY = """

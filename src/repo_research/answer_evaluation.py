@@ -19,6 +19,7 @@ from repo_research.models import (
     EvaluationRunRecord,
     EvaluationRunStatus,
     EvaluationSourceType,
+    GroundTruthEvaluationSummary,
     PersistedEvaluationResult,
     RagAnswer,
     RagMode,
@@ -45,6 +46,11 @@ class EvaluationRecordingStore(Protocol):
 
     def record_evaluation_result(self, result: PersistedEvaluationResult) -> None:
         """Persist one judged answer result."""
+
+    def record_ground_truth_evaluation_result(
+        self, result: GroundTruthEvaluationSummary
+    ) -> None:
+        """Persist one offline ground-truth answer-assessment summary."""
 
 
 class MonitoredAnswerSource(Protocol):
@@ -345,6 +351,65 @@ def persist_evaluation_batch(
     return completed
 
 
+def summarize_ground_truth_evaluation_results(
+    results: list[PersistedEvaluationResult],
+    *,
+    dataset: str,
+    source_label: str,
+    measured_at: datetime,
+) -> list[GroundTruthEvaluationSummary]:
+    """Aggregate dataset answer assessments by answer-generation approach."""
+    groups: dict[RunKind, list[PersistedEvaluationResult]] = {}
+    for result in results:
+        if (
+            result.record_id is not None
+            and result.request_id is None
+            and result.run_kind is not None
+        ):
+            groups.setdefault(result.run_kind, []).append(result)
+
+    summaries: list[GroundTruthEvaluationSummary] = []
+    for run_kind, group in sorted(groups.items(), key=lambda item: item[0].value):
+        total_cost = _sum_decimal(result.total_estimated_cost_usd for result in group)
+        summaries.append(
+            GroundTruthEvaluationSummary(
+                dataset=dataset,
+                source_label=source_label,
+                run_kind=run_kind,
+                record_count=len(group),
+                answer_correctness=_average_optional(
+                    result.answer_correctness for result in group
+                ),
+                faithfulness=_average_required(result.faithfulness for result in group),
+                citation_precision=_average_required(
+                    result.citation_precision for result in group
+                ),
+                reference_coverage=_average_optional(
+                    result.reference_coverage for result in group
+                ),
+                answer_relevance=_average_required(
+                    result.answer_relevance for result in group
+                ),
+                presentation_quality=_average_required(
+                    result.presentation_quality for result in group
+                ),
+                unsupported_claim_count=sum(
+                    result.unsupported_claim_count for result in group
+                ),
+                unsupported_claim_rate=sum(
+                    1 for result in group if result.unsupported_claim_count > 0
+                )
+                / len(group),
+                average_latency_ms=_average_optional(
+                    result.latency_ms_total for result in group
+                ),
+                total_estimated_cost_usd=total_cost,
+                measured_at=measured_at,
+            )
+        )
+    return summaries
+
+
 def write_persisted_answer_evaluation_report(
     results: list[PersistedEvaluationResult], path: Path
 ) -> None:
@@ -443,6 +508,28 @@ def _persisted_result_from_judgement(
         notes=judgement.notes,
         created_at=created_at,
     )
+
+
+def _average_required(values: Iterable[float | int]) -> float:
+    numbers = [float(value) for value in values]
+    return sum(numbers) / len(numbers)
+
+
+def _average_optional(values: Iterable[float | int | None]) -> float | None:
+    numbers = [float(value) for value in values if value is not None]
+    if not numbers:
+        return None
+    return sum(numbers) / len(numbers)
+
+
+def _sum_decimal(values: Iterable[Decimal | None]) -> Decimal | None:
+    total = Decimal("0")
+    count = 0
+    for value in values:
+        if value is not None:
+            total += value
+            count += 1
+    return total if count else None
 
 
 def _rag_mode_from_question_type(question_type: str) -> RagMode:

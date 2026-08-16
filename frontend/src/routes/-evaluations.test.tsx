@@ -8,12 +8,14 @@ import {
   getEvaluationResults,
   getEvaluationRuns,
   getEvaluationSummary,
+  getGroundTruthEvaluationResults,
   getRetrievalEvaluationResults,
 } from "@/lib/rag-client";
 import type {
   EvaluationDashboardSummary,
   EvaluationResultList,
   EvaluationRunList,
+  GroundTruthEvaluationList,
   RetrievalEvaluationList,
 } from "@/lib/rag-types";
 
@@ -25,6 +27,7 @@ vi.mock("@/lib/rag-client", () => ({
   getEvaluationResults: vi.fn(),
   getEvaluationRuns: vi.fn(),
   getEvaluationSummary: vi.fn(),
+  getGroundTruthEvaluationResults: vi.fn(),
   getRetrievalEvaluationResults: vi.fn(),
 }));
 
@@ -43,21 +46,15 @@ const populatedSummary: EvaluationDashboardSummary = {
   total_runs: 2,
   completed_runs: 1,
   failed_runs: 1,
-  total_results: 2,
-  average_score: 4.2,
-  unsupported_claim_rate: 0.5,
+  total_results: 1,
+  average_score: 4.8,
+  unsupported_claim_rate: 0,
   average_by_run_kind: [
     {
       run_kind: "agentic",
       average_score: 4.8,
       result_count: 1,
       unsupported_claim_count: 0,
-    },
-    {
-      run_kind: "direct",
-      average_score: 3.6,
-      result_count: 1,
-      unsupported_claim_count: 1,
     },
   ],
   metric_averages: [
@@ -79,9 +76,9 @@ const runList: EvaluationRunList = {
       started_at: "2026-08-11T12:00:00Z",
       completed_at: "2026-08-11T12:01:00Z",
       error_message: null,
-      result_count: 2,
-      average_score: 4.2,
-      unsupported_claim_count: 1,
+      result_count: 1,
+      average_score: 4.8,
+      unsupported_claim_count: 0,
     },
   ],
 };
@@ -128,34 +125,44 @@ const resultList: EvaluationResultList = {
         },
       ],
     },
+  ],
+};
+
+const groundTruthEvaluationList: GroundTruthEvaluationList = {
+  results: [
     {
-      result_id: "result-2",
-      evaluation_run_id: "eval-run-1",
-      source_type: "monitored_runs",
-      source_label: "monitored-runs",
-      context_label: "repo_deep_research",
-      repository_name: "repo_deep_research",
-      branch: "dev",
-      commit_hash: "abc123",
-      record_id: null,
-      request_id: "request-2",
+      dataset: "eval/held_out.json",
+      source_label: "datapeek held-out answer comparison",
       run_kind: "direct",
-      question: "Where is evaluation stored?",
-      answer_correctness: null,
-      faithfulness: 4,
-      citation_precision: 4,
-      reference_coverage: null,
-      answer_relevance: 4,
-      presentation_quality: 3,
-      average_score: 3.6,
-      unsupported_claim_count: 1,
-      feedback_useful: 0,
-      feedback_not_useful: 1,
-      latency_ms_total: 800,
-      total_estimated_cost_usd: "0.006",
-      notes: "Missed one caveat.",
-      created_at: "2026-08-11T12:03:00Z",
-      answer_evidence: [],
+      record_count: 15,
+      answer_correctness: 2.667,
+      faithfulness: 4.3,
+      citation_precision: 4.667,
+      reference_coverage: 2.267,
+      answer_relevance: 4.167,
+      presentation_quality: 4.133,
+      unsupported_claim_count: 20,
+      unsupported_claim_rate: 0.733,
+      average_latency_ms: 16600,
+      total_estimated_cost_usd: "0.0518",
+      measured_at: "2026-08-16T00:00:00Z",
+    },
+    {
+      dataset: "eval/held_out.json",
+      source_label: "datapeek held-out answer comparison",
+      run_kind: "agentic",
+      record_count: 15,
+      answer_correctness: 3.867,
+      faithfulness: 4.7,
+      citation_precision: 4.733,
+      reference_coverage: 3.667,
+      answer_relevance: 4.4,
+      presentation_quality: 4.267,
+      unsupported_claim_count: 12,
+      unsupported_claim_rate: 0.533,
+      average_latency_ms: 116700,
+      total_estimated_cost_usd: "0.1400",
+      measured_at: "2026-08-16T00:00:00Z",
     },
   ],
 };
@@ -221,9 +228,11 @@ describe("Evaluations route", () => {
     vi.mocked(getEvaluationResults).mockReset();
     vi.mocked(getEvaluationRuns).mockReset();
     vi.mocked(getEvaluationSummary).mockReset();
+    vi.mocked(getGroundTruthEvaluationResults).mockReset();
     vi.mocked(getRetrievalEvaluationResults).mockReset();
     vi.mocked(getEvaluationRuns).mockResolvedValue({ runs: [] });
     vi.mocked(getEvaluationResults).mockResolvedValue({ results: [] });
+    vi.mocked(getGroundTruthEvaluationResults).mockResolvedValue({ results: [] });
     vi.mocked(getRetrievalEvaluationResults).mockResolvedValue(retrievalEvaluationList);
   });
 
@@ -257,17 +266,18 @@ describe("Evaluations route", () => {
     vi.mocked(getEvaluationSummary).mockResolvedValue(populatedSummary);
     vi.mocked(getEvaluationRuns).mockResolvedValue(runList);
     vi.mocked(getEvaluationResults).mockResolvedValue(resultList);
+    vi.mocked(getGroundTruthEvaluationResults).mockResolvedValue(groundTruthEvaluationList);
 
     renderEvaluationsRoute();
 
     expect(await screen.findByText("Search evaluation highlights")).toBeInTheDocument();
     expect(screen.getByText("Selected retrieval mode")).toBeInTheDocument();
     expect(screen.getByText("Evaluated answers")).toBeInTheDocument();
-    expect(screen.getAllByText("2").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Average score").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("4.2").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("4.8").length).toBeGreaterThan(0);
     expect(screen.getByText("Unsupported claims")).toBeInTheDocument();
-    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByText("0%")).toBeInTheDocument();
     expect(screen.getByText("Average score by approach")).toBeInTheDocument();
     expect(screen.getByText("Score distribution by metric")).toBeInTheDocument();
     expect(screen.getByText("Recent feedback versus judge scores")).toBeInTheDocument();
@@ -276,10 +286,31 @@ describe("Evaluations route", () => {
     expect(screen.getAllByText("Evidence Audit").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Repository or dataset")).toHaveValue("all");
     expect(screen.getAllByText("repo_deep_research").length).toBeGreaterThan(0);
-    expect(screen.getByText("Lowest-scoring loaded answers")).toBeInTheDocument();
-    expect(screen.getByText("Where is evaluation stored?")).toBeInTheDocument();
+    expect(screen.getByText("Answer reviews")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Ground Truth Assessments (2)" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Post-hoc LLM Review (1)" })).toBeInTheDocument();
+    expect(screen.getAllByText("eval/held_out.json").length).toBe(2);
+    expect(screen.getByText("agentic")).toBeInTheDocument();
+    expect(screen.getByText("direct")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Which modules changed for answer evaluation?"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("switches between ground truth and post-hoc review tables", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getEvaluationSummary).mockResolvedValue(populatedSummary);
+    vi.mocked(getEvaluationRuns).mockResolvedValue(runList);
+    vi.mocked(getEvaluationResults).mockResolvedValue(resultList);
+    vi.mocked(getGroundTruthEvaluationResults).mockResolvedValue(groundTruthEvaluationList);
+
+    renderEvaluationsRoute();
+
+    expect((await screen.findAllByText("eval/held_out.json")).length).toBe(2);
+    await user.click(screen.getByRole("tab", { name: "Post-hoc LLM Review (1)" }));
+
     expect(screen.getByText("Which modules changed for answer evaluation?")).toBeInTheDocument();
-    expect(screen.getAllByText("n/a").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("eval/held_out.json")).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Open evidence E29" })).toBeInTheDocument();
   });
 
@@ -288,9 +319,11 @@ describe("Evaluations route", () => {
     vi.mocked(getEvaluationSummary).mockResolvedValue(populatedSummary);
     vi.mocked(getEvaluationRuns).mockResolvedValue(runList);
     vi.mocked(getEvaluationResults).mockResolvedValue(resultList);
+    vi.mocked(getGroundTruthEvaluationResults).mockResolvedValue(groundTruthEvaluationList);
 
     renderEvaluationsRoute();
 
+    await user.click(await screen.findByRole("tab", { name: "Post-hoc LLM Review (1)" }));
     await user.click(await screen.findByRole("button", { name: "Open evidence E29" }));
 
     expect(screen.getByRole("dialog", { name: "Evidence detail" })).toBeInTheDocument();

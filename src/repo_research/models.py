@@ -526,6 +526,32 @@ class RetrievalEvaluationList(BaseModel):
     results: list[RetrievalEvaluationSummary] = Field(default_factory=list)
 
 
+class GroundTruthEvaluationSummary(BaseModel):
+    """Persisted offline ground-truth answer assessment summary."""
+
+    dataset: str = Field(min_length=1)
+    source_label: str = Field(min_length=1)
+    run_kind: RunKind
+    record_count: int = Field(ge=0)
+    answer_correctness: float | None = Field(default=None, ge=0, le=5)
+    faithfulness: float = Field(ge=0, le=5)
+    citation_precision: float = Field(ge=0, le=5)
+    reference_coverage: float | None = Field(default=None, ge=0, le=5)
+    answer_relevance: float = Field(ge=0, le=5)
+    presentation_quality: float = Field(ge=0, le=5)
+    unsupported_claim_count: int = Field(ge=0)
+    unsupported_claim_rate: float = Field(ge=0, le=1)
+    average_latency_ms: float | None = Field(default=None, ge=0)
+    total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+    measured_at: datetime
+
+
+class GroundTruthEvaluationList(BaseModel):
+    """Persisted offline ground-truth answer assessment summaries."""
+
+    results: list[GroundTruthEvaluationSummary] = Field(default_factory=list)
+
+
 class AnswerEvaluationResult(BaseModel):
     """LLM-judge scores for one grounded repository answer."""
 
