@@ -157,6 +157,20 @@ uv run repo-research evaluate-retrieval \
   --output eval/results/retrieval-held-out-datapeek.json
 ```
 
+To also publish those metrics into the PostgreSQL-backed evaluation dashboard,
+enable telemetry persistence and add `--persist`:
+
+```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
+uv run repo-research evaluate-retrieval \
+  --path /home/daniel/code/dosorio79/datapeek \
+  --dataset eval/held_out.json \
+  --output eval/results/retrieval-held-out-datapeek.json \
+  --persist \
+  --source-label "datapeek held-out retrieval" \
+  --selected-mode dense
+```
+
 The output reports file Hit Rate, MRR, Recall, Precision, and symbol Hit Rate
 for each mode. The Datapeek held-out set is a small public-demo repository, not
 a broad benchmark. See `docs/evaluation.md` for dataset semantics and recorded

@@ -22,6 +22,7 @@ from repo_research.models import (
     RagMode,
     RagRunTrace,
     ResearchAnswer,
+    RetrievalEvaluationSummary,
     RetrievalMode,
     RunKind,
 )
@@ -443,6 +444,47 @@ def test_recording_store_returns_retrieval_evaluation_results() -> None:
     ]
     assert results.results[0].selected is True
     assert results.results[0].file_hit_rate == 0.467
+
+
+def test_recording_store_persists_retrieval_evaluation_result() -> None:
+    connection = FakeConnection()
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+    measured_at = datetime(2026, 8, 16, tzinfo=UTC)
+    result = RetrievalEvaluationSummary(
+        dataset="eval/held_out.json",
+        mode=RetrievalMode.HYBRID,
+        source_label="datapeek held-out",
+        limit=5,
+        record_count=15,
+        file_hit_rate=0.7,
+        file_mrr=0.6,
+        file_recall=0.5,
+        file_precision=0.4,
+        symbol_hit_rate=0.3,
+        selected=True,
+        measured_at=measured_at,
+    )
+
+    store.record_retrieval_evaluation_result(result)
+
+    statement, params = connection.executed[-1]
+    assert "INSERT INTO retrieval_evaluation_results" in statement
+    assert params == {
+        "dataset": "eval/held_out.json",
+        "mode": "hybrid",
+        "source_label": "datapeek held-out",
+        "limit_value": 5,
+        "record_count": 15,
+        "file_hit_rate": 0.7,
+        "file_mrr": 0.6,
+        "file_recall": 0.5,
+        "file_precision": 0.4,
+        "symbol_hit_rate": 0.3,
+        "selected": True,
+        "measured_at": measured_at,
+    }
 
 
 def test_recording_store_returns_monitoring_summary() -> None:

@@ -19,9 +19,15 @@ from repo_research.answer_evaluation import (
     write_persisted_answer_evaluation_report,
 )
 from repo_research.config import Settings
-from repo_research.evaluation import evaluate_records, load_records, write_report
+from repo_research.evaluation import (
+    evaluate_records,
+    load_records,
+    summarize_retrieval_results,
+    write_report,
+)
 from repo_research.ingestion import discover_repository, ingest_repository_if_needed
 from repo_research.models import (
+    EvaluationResult,
     EvaluationRunRecord,
     EvaluationRunStatus,
     EvaluationSourceType,
@@ -76,6 +82,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--output", type=Path, default=Path("eval/results/retrieval-development.json")
     )
     evaluate.add_argument("--limit", type=int, default=5)
+    evaluate.add_argument(
+        "--persist",
+        action="store_true",
+        help="persist retrieval-evaluation metric rows to PostgreSQL",
+    )
+    evaluate.add_argument(
+        "--source-label",
+        default=None,
+        help="human-readable context label for persisted retrieval metrics",
+    )
+    evaluate.add_argument(
+        "--selected-mode",
+        choices=[mode.value for mode in RetrievalMode],
+        default=None,
+        help="mark one persisted retrieval mode as the selected production baseline",
+    )
     rag = subparsers.add_parser("rag", help="answer with grounded direct RAG")
     rag.add_argument("question")
     rag.add_argument("--path", type=Path, default=None)
@@ -265,6 +287,16 @@ def main() -> None:
             limit=arguments.limit,
         )
         write_report(evaluation_results, arguments.output)
+        if arguments.persist:
+            _persist_retrieval_evaluation_results(
+                results=evaluation_results,
+                settings=settings,
+                source_label=arguments.source_label
+                or f"{repository.name} retrieval evaluation",
+                selected_mode=RetrievalMode(arguments.selected_mode)
+                if arguments.selected_mode
+                else None,
+            )
         print(
             json.dumps(
                 [result.model_dump(mode="json") for result in evaluation_results],
@@ -325,6 +357,25 @@ def main() -> None:
         )
     )
     print(json.dumps([result.model_dump(mode="json") for result in results], indent=2))
+
+
+def _persist_retrieval_evaluation_results(
+    *,
+    results: list[EvaluationResult],
+    settings: Settings,
+    source_label: str,
+    selected_mode: RetrievalMode | None,
+) -> None:
+    store = runtime.create_recording_store(settings)
+    measured_at = datetime.now(UTC)
+    for result in summarize_retrieval_results(
+        results,
+        source_label=source_label,
+        selected_mode=selected_mode,
+        measured_at=measured_at,
+    ):
+        store.record_retrieval_evaluation_result(result)
+    _report_step(f"persisted {len(results)} retrieval evaluation results")
 
 
 def _run_direct_rag(

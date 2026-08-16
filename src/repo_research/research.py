@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.usage import RunUsage
 
 from repo_research.config import load_dotenv_environment
@@ -557,7 +558,7 @@ class PydanticAIResearchAgent:
                 deps=PydanticResearchDeps(tools=tools),
                 usage=run_usage,
             )
-        except ValueError as error:
+        except (UnexpectedModelBehavior, ValueError) as error:
             raise ResearchAgentRunError(
                 str(error),
                 usage=_model_usage_from_agent_usage(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from pydantic import TypeAdapter
@@ -11,6 +12,7 @@ from repo_research.models import (
     EvaluationRecord,
     EvaluationResult,
     RepositoryIdentity,
+    RetrievalEvaluationSummary,
     RetrievalMode,
     SearchQuery,
 )
@@ -53,6 +55,25 @@ def write_report(results: list[EvaluationResult], path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def summarize_retrieval_results(
+    results: list[EvaluationResult],
+    *,
+    source_label: str,
+    selected_mode: RetrievalMode | None,
+    measured_at: datetime,
+) -> list[RetrievalEvaluationSummary]:
+    """Convert JSON retrieval metrics into persisted dashboard rows."""
+    return [
+        RetrievalEvaluationSummary(
+            **result.model_dump(),
+            source_label=source_label,
+            selected=result.mode is selected_mode,
+            measured_at=measured_at,
+        )
+        for result in results
+    ]
 
 
 def _evaluate_mode(

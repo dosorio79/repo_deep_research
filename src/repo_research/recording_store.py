@@ -79,6 +79,12 @@ class NoOpRecordingStore:
         """Accept evaluation-result metadata without persisting it."""
         del result
 
+    def record_retrieval_evaluation_result(
+        self, result: RetrievalEvaluationSummary
+    ) -> None:
+        """Accept retrieval-evaluation metrics without persisting them."""
+        del result
+
     def list_answer_snapshots_for_evaluation(
         self,
         *,
@@ -282,6 +288,29 @@ class PostgresRecordingStore:
                     "total_estimated_cost_usd": result.total_estimated_cost_usd,
                     "notes": result.notes,
                     "created_at": result.created_at,
+                },
+            )
+
+    def record_retrieval_evaluation_result(
+        self, result: RetrievalEvaluationSummary
+    ) -> None:
+        """Persist one retrieval-evaluation metric row."""
+        with self._connect() as connection:
+            connection.execute(
+                _UPSERT_RETRIEVAL_EVALUATION_RESULT,
+                {
+                    "dataset": result.dataset,
+                    "mode": result.mode.value,
+                    "source_label": result.source_label,
+                    "limit_value": result.limit,
+                    "record_count": result.record_count,
+                    "file_hit_rate": result.file_hit_rate,
+                    "file_mrr": result.file_mrr,
+                    "file_recall": result.file_recall,
+                    "file_precision": result.file_precision,
+                    "symbol_hit_rate": result.symbol_hit_rate,
+                    "selected": result.selected,
+                    "measured_at": result.measured_at,
                 },
             )
 
@@ -1434,6 +1463,47 @@ ON CONFLICT (result_id) DO UPDATE SET
     total_estimated_cost_usd = EXCLUDED.total_estimated_cost_usd,
     notes = EXCLUDED.notes,
     created_at = EXCLUDED.created_at
+"""
+
+_UPSERT_RETRIEVAL_EVALUATION_RESULT = """
+INSERT INTO retrieval_evaluation_results (
+    dataset,
+    mode,
+    source_label,
+    limit_value,
+    record_count,
+    file_hit_rate,
+    file_mrr,
+    file_recall,
+    file_precision,
+    symbol_hit_rate,
+    selected,
+    measured_at
+) VALUES (
+    %(dataset)s,
+    %(mode)s,
+    %(source_label)s,
+    %(limit_value)s,
+    %(record_count)s,
+    %(file_hit_rate)s,
+    %(file_mrr)s,
+    %(file_recall)s,
+    %(file_precision)s,
+    %(symbol_hit_rate)s,
+    %(selected)s,
+    %(measured_at)s
+)
+ON CONFLICT (dataset, mode) DO UPDATE SET
+    source_label = EXCLUDED.source_label,
+    limit_value = EXCLUDED.limit_value,
+    record_count = EXCLUDED.record_count,
+    file_hit_rate = EXCLUDED.file_hit_rate,
+    file_mrr = EXCLUDED.file_mrr,
+    file_recall = EXCLUDED.file_recall,
+    file_precision = EXCLUDED.file_precision,
+    symbol_hit_rate = EXCLUDED.symbol_hit_rate,
+    selected = EXCLUDED.selected,
+    measured_at = EXCLUDED.measured_at
 """
 
 _SELECT_MONITORING_ROWS = """

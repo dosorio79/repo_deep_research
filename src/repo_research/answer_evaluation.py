@@ -267,39 +267,38 @@ def evaluate_dataset_answer_candidates(
         evaluation_run_id=evaluation_run_id,
     )
 
-    def generate_candidates(
-        *, approach: RunKind, pending_records: list[EvaluationRecord]
-    ) -> list[AnswerEvaluationCandidate]:
-        return dataset_candidates(
+    def evaluate_record(
+        task: tuple[RunKind, EvaluationRecord],
+    ) -> PersistedEvaluationResult:
+        approach, record = task
+        candidates = dataset_candidates(
             direct_service=direct_service,
             research_service=research_service,
             repository=repository,
-            records=pending_records,
+            records=[record],
             retrieval_mode=retrieval_mode,
             limit=limit,
             approaches=[approach],
-            workers=workers,
+            workers=1,
+        )
+        return _judge_candidate(
+            candidate=candidates[0],
+            judge=judge,
+            evaluation_run_id=evaluation_run_id,
+            created_at=datetime.now(UTC),
         )
 
     for approach in approach_list:
-        pending_records = [
-            record for record in records if (record.id, approach) not in results_by_key
+        pending_tasks = [
+            (approach, record)
+            for record in records
+            if (record.id, approach) not in results_by_key
         ]
-        if not pending_records:
+        if not pending_tasks:
             continue
-        candidates = generate_candidates(
-            approach=approach,
-            pending_records=pending_records,
-        )
+        approach_workers = workers if approach is RunKind.DIRECT else 1
         for result in _iter_map_stably(
-            lambda candidate: _judge_candidate(
-                candidate=candidate,
-                judge=judge,
-                evaluation_run_id=evaluation_run_id,
-                created_at=datetime.now(UTC),
-            ),
-            candidates,
-            workers=workers,
+            evaluate_record, pending_tasks, workers=approach_workers
         ):
             results_by_key[_result_key(result)] = result
             _append_checkpoint_result(checkpoint_path=checkpoint_path, result=result)
