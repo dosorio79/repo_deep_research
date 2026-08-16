@@ -256,6 +256,7 @@ def evaluate_dataset_answer_candidates(
     evaluation_run_id: str,
     workers: int = 1,
     checkpoint_path: Path | None = None,
+    checkpoint_context: str | None = None,
 ) -> list[PersistedEvaluationResult]:
     """Generate, judge, and checkpoint dataset answer results."""
     approach_list = list(approaches)
@@ -265,6 +266,7 @@ def evaluate_dataset_answer_candidates(
     results_by_key = _load_checkpointed_results(
         checkpoint_path=checkpoint_path,
         evaluation_run_id=evaluation_run_id,
+        checkpoint_context=checkpoint_context,
     )
 
     def evaluate_record(
@@ -301,7 +303,11 @@ def evaluate_dataset_answer_candidates(
             evaluate_record, pending_tasks, workers=approach_workers
         ):
             results_by_key[_result_key(result)] = result
-            _append_checkpoint_result(checkpoint_path=checkpoint_path, result=result)
+            _append_checkpoint_result(
+                checkpoint_path=checkpoint_path,
+                checkpoint_context=checkpoint_context,
+                result=result,
+            )
 
     return [results_by_key[key] for key in expected_keys if key in results_by_key]
 
@@ -452,12 +458,19 @@ def _load_checkpointed_results(
     *,
     checkpoint_path: Path | None,
     evaluation_run_id: str,
+    checkpoint_context: str | None,
 ) -> dict[tuple[str, RunKind], PersistedEvaluationResult]:
     if checkpoint_path is None or not checkpoint_path.exists():
         return {}
+    _validate_checkpoint_context(
+        checkpoint_path=checkpoint_path,
+        checkpoint_context=checkpoint_context,
+    )
     results: dict[tuple[str, RunKind], PersistedEvaluationResult] = {}
     for raw_line in checkpoint_path.read_text(encoding="utf-8").splitlines():
         if not raw_line.strip():
+            continue
+        if raw_line.startswith("# context:"):
             continue
         result = PersistedEvaluationResult.model_validate_json(raw_line).model_copy(
             update={"evaluation_run_id": evaluation_run_id}
@@ -469,13 +482,41 @@ def _load_checkpointed_results(
 def _append_checkpoint_result(
     *,
     checkpoint_path: Path | None,
+    checkpoint_context: str | None,
     result: PersistedEvaluationResult,
 ) -> None:
     if checkpoint_path is None:
         return
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    if not checkpoint_path.exists() and checkpoint_context is not None:
+        checkpoint_path.write_text(
+            f"# context:{checkpoint_context}\n", encoding="utf-8"
+        )
     with checkpoint_path.open("a", encoding="utf-8") as handle:
         handle.write(result.model_dump_json() + "\n")
+
+
+def _validate_checkpoint_context(
+    *,
+    checkpoint_path: Path,
+    checkpoint_context: str | None,
+) -> None:
+    if checkpoint_context is None:
+        return
+    for raw_line in checkpoint_path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        if raw_line == f"# context:{checkpoint_context}":
+            return
+        if raw_line.startswith("# context:"):
+            raise ValueError(
+                f"checkpoint {checkpoint_path} belongs to a different "
+                "evaluation context"
+            )
+        raise ValueError(
+            f"checkpoint {checkpoint_path} has no evaluation context; "
+            "use a new output path"
+        )
 
 
 def _result_key(result: PersistedEvaluationResult) -> tuple[str, RunKind]:

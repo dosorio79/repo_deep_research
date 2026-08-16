@@ -444,9 +444,11 @@ def test_dataset_answer_evaluation_checkpoints_each_judged_result(
             evaluation_run_id="eval-run-1",
             workers=1,
             checkpoint_path=checkpoint_path,
+            checkpoint_context="dataset-a-dense",
         )
 
-    assert checkpoint_path.read_text(encoding="utf-8").count("\n") == 1
+    assert checkpoint_path.read_text(encoding="utf-8").count("\n") == 2
+    assert "# context:dataset-a-dense" in checkpoint_path.read_text(encoding="utf-8")
     assert "locate_001" in checkpoint_path.read_text(encoding="utf-8")
 
     results = evaluate_dataset_answer_candidates(
@@ -461,11 +463,50 @@ def test_dataset_answer_evaluation_checkpoints_each_judged_result(
         evaluation_run_id="eval-run-2",
         workers=1,
         checkpoint_path=checkpoint_path,
+        checkpoint_context="dataset-a-dense",
     )
 
     assert [result.record_id for result in results] == ["locate_001", "flow_001"]
     assert {result.evaluation_run_id for result in results} == {"eval-run-2"}
-    assert checkpoint_path.read_text(encoding="utf-8").count("\n") == 2
+    assert checkpoint_path.read_text(encoding="utf-8").count("\n") == 3
+
+
+def test_dataset_answer_evaluation_rejects_mismatched_checkpoint_context(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    records = [_record("locate_001", "locate")]
+    checkpoint_path = tmp_path / "answer-held-out-both.jsonl"
+    evaluate_dataset_answer_candidates(
+        direct_service=FakeDirectService(),
+        research_service=None,
+        judge=FakeJudge(),
+        repository=repository,
+        records=records,
+        retrieval_mode=RetrievalMode.DENSE,
+        limit=5,
+        approaches=[RunKind.DIRECT],
+        evaluation_run_id="eval-run-1",
+        workers=1,
+        checkpoint_path=checkpoint_path,
+        checkpoint_context="dataset-a-dense",
+    )
+
+    with pytest.raises(ValueError, match="different evaluation context"):
+        evaluate_dataset_answer_candidates(
+            direct_service=FakeDirectService(),
+            research_service=None,
+            judge=FakeJudge(),
+            repository=repository,
+            records=records,
+            retrieval_mode=RetrievalMode.HYBRID,
+            limit=5,
+            approaches=[RunKind.DIRECT],
+            evaluation_run_id="eval-run-2",
+            workers=1,
+            checkpoint_path=checkpoint_path,
+            checkpoint_context="dataset-a-hybrid",
+        )
 
 
 def test_dataset_answer_evaluation_checkpoints_agentic_before_later_failure(
