@@ -32,10 +32,14 @@ def create_database(settings: Settings) -> RepositoryDatabase:
         collection_name=settings.qdrant_collection,
         embedding_dimension=settings.embedding_dimension,
         dense_embed=local_embedder(
-            settings.embedding_model, settings.embedding_batch_size
+            settings.embedding_model,
+            settings.embedding_batch_size,
+            settings.fastembed_cache_path,
         ),
         sparse_embed=local_sparse_embedder(
-            settings.sparse_embedding_model, settings.embedding_batch_size
+            settings.sparse_embedding_model,
+            settings.embedding_batch_size,
+            settings.fastembed_cache_path,
         ),
     )
 

@@ -51,6 +51,16 @@ Qdrant persists data in the Docker-managed `qdrant_storage` volume. Its HTTP
 API and dashboard use port 6333 by default; change the host ports through
 `QDRANT_HTTP_PORT` and `QDRANT_GRPC_PORT` in `.env` if needed.
 
+FastEmbed model files are cached at `RDR_FASTEMBED_CACHE_PATH` when it is set.
+The example local environment uses `.cache/fastembed`, which is ignored by git.
+If the app setting is unset, FastEmbed falls back to its own
+`FASTEMBED_CACHE_PATH` environment variable or `/tmp/fastembed_cache`. Docker
+Compose sets the API container cache path to `/root/.cache/fastembed` and mounts
+the `fastembed_cache` volume there, so downloaded dense and sparse embedding
+models are reused across container restarts. When a cache directory already has
+files, the application tries FastEmbed in local-files-only mode first and falls
+back to normal download behavior only if the cached files cannot load.
+
 PostgreSQL persists data in the Docker-managed `postgres_storage` volume. The
 local DSN in `.env.example` is:
 

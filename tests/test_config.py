@@ -22,6 +22,7 @@ def clear_rdr_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in tuple(os.environ):
         if key.startswith("RDR_"):
             monkeypatch.delenv(key, raising=False)
+    monkeypatch.delenv("FASTEMBED_CACHE_PATH", raising=False)
 
 
 def test_settings_use_local_defaults(
@@ -37,6 +38,7 @@ def test_settings_use_local_defaults(
     assert settings.repository_root == Path(".")
     assert settings.max_file_size_bytes == 1_048_576
     assert settings.embedding_batch_size == 16
+    assert settings.fastembed_cache_path is None
     assert settings.qdrant_collection == "repo_chunks_v2"
     assert settings.sparse_embedding_model == "Qdrant/bm25"
     assert settings.retrieval_mode is RetrievalMode.DENSE
@@ -131,6 +133,22 @@ def test_settings_read_grouped_openai_and_limit_names(
     )
 
 
+def test_settings_read_fastembed_cache_path_aliases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FASTEMBED_CACHE_PATH", "/tmp/fastembed-cache")
+
+    settings = make_settings(_env_file=None)
+
+    assert settings.fastembed_cache_path == Path("/tmp/fastembed-cache")
+
+    monkeypatch.setenv("RDR_FASTEMBED_CACHE_PATH", "/tmp/rdr-fastembed-cache")
+
+    settings = make_settings(_env_file=None)
+
+    assert settings.fastembed_cache_path == Path("/tmp/rdr-fastembed-cache")
+
+
 def test_settings_reject_research_budget_that_exceeds_total_calls() -> None:
     with pytest.raises(ValidationError, match="max_searches"):
         make_settings(
@@ -185,12 +203,14 @@ def test_settings_accept_field_name_overrides() -> None:
         openai_answer_model="custom-answer-model",
         retrieval_limit=2,
         answer_evaluation_limit=3,
+        fastembed_cache_path=Path("/tmp/direct-fastembed-cache"),
         cors_allowed_origins=["http://localhost:8080"],
     )
 
     assert settings.openai_answer_model == "custom-answer-model"
     assert settings.retrieval_limit == 2
     assert settings.answer_evaluation_limit == 3
+    assert settings.fastembed_cache_path == Path("/tmp/direct-fastembed-cache")
     assert settings.cors_allowed_origins == ["http://localhost:8080"]
 
 

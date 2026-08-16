@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
 from fastembed import SparseTextEmbedding, TextEmbedding
 from qdrant_client import QdrantClient, models
@@ -13,9 +17,14 @@ DenseEmbed = Callable[[list[str]], list[list[float]]]
 SparseEmbed = Callable[[list[str]], list[tuple[list[int], list[float]]]]
 
 
-def local_embedder(model_name: str, batch_size: int) -> DenseEmbed:
+def local_embedder(
+    model_name: str, batch_size: int, cache_path: Path | None
+) -> DenseEmbed:
     """Create a local FastEmbed/ONNX embedding function."""
-    model = TextEmbedding(model_name=model_name)
+    cache_dir = _prepare_fastembed_cache_dir(cache_path)
+    model = _create_fastembed_model(
+        TextEmbedding, model_name=model_name, cache_dir=cache_dir, cache_path=cache_path
+    )
 
     def embed(texts: list[str]) -> list[list[float]]:
         return [list(vector) for vector in model.embed(texts, batch_size=batch_size)]
@@ -23,9 +32,17 @@ def local_embedder(model_name: str, batch_size: int) -> DenseEmbed:
     return embed
 
 
-def local_sparse_embedder(model_name: str, batch_size: int) -> SparseEmbed:
+def local_sparse_embedder(
+    model_name: str, batch_size: int, cache_path: Path | None
+) -> SparseEmbed:
     """Create a local FastEmbed sparse encoder compatible with Qdrant."""
-    model = SparseTextEmbedding(model_name=model_name)
+    cache_dir = _prepare_fastembed_cache_dir(cache_path)
+    model = _create_fastembed_model(
+        SparseTextEmbedding,
+        model_name=model_name,
+        cache_dir=cache_dir,
+        cache_path=cache_path,
+    )
 
     def embed(texts: list[str]) -> list[tuple[list[int], list[float]]]:
         return [
@@ -37,6 +54,49 @@ def local_sparse_embedder(model_name: str, batch_size: int) -> SparseEmbed:
         ]
 
     return embed
+
+
+def _prepare_fastembed_cache_dir(cache_path: Path | None) -> str | None:
+    if cache_path is None:
+        return None
+    cache_path.mkdir(parents=True, exist_ok=True)
+    return str(cache_path)
+
+
+def _create_fastembed_model(
+    model_class: type[Any],
+    *,
+    model_name: str,
+    cache_dir: str | None,
+    cache_path: Path | None,
+) -> Any:
+    if _fastembed_cache_is_populated(cache_path):
+        try:
+            return model_class(
+                model_name=model_name,
+                cache_dir=cache_dir,
+                local_files_only=True,
+            )
+        except ValueError:
+            pass
+    return model_class(model_name=model_name, cache_dir=cache_dir)
+
+
+def _fastembed_cache_is_populated(cache_path: Path | None) -> bool:
+    cache_root = _resolve_fastembed_cache_path(cache_path)
+    try:
+        return cache_root.is_dir() and any(cache_root.iterdir())
+    except OSError:
+        return False
+
+
+def _resolve_fastembed_cache_path(cache_path: Path | None) -> Path:
+    if cache_path is not None:
+        return cache_path
+    env_cache_path = os.getenv("FASTEMBED_CACHE_PATH")
+    if env_cache_path:
+        return Path(env_cache_path)
+    return Path(tempfile.gettempdir()) / "fastembed_cache"
 
 
 class RepositoryDatabase:
