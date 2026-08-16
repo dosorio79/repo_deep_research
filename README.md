@@ -57,6 +57,25 @@ includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
 user-provided model credentials, which is too much moving infrastructure for a
 free hosted demo target such as Render.
 
+## LLM Zoomcamp Capstone
+
+This project is built for the LLM Zoomcamp capstone rubric using a non-course
+repository corpus, local vector search, an LLM answer layer, monitoring, and a
+reviewable local runbook.
+
+| Criterion | Repository evidence |
+|---|---|
+| Problem description | The README introduction and [architecture guide](docs/architecture.md) define evidence-grounded research for Python repositories. |
+| Retrieval flow | [docs/architecture.md](docs/architecture.md) traces ingestion, Qdrant dense/sparse/hybrid search, direct RAG, and bounded agentic research. |
+| Retrieval evaluation | [docs/evaluation.md](docs/evaluation.md) reports dense, sparse, and hybrid evaluation over versioned records in [eval/development.json](eval/development.json) and [eval/held_out.json](eval/held_out.json). |
+| LLM evaluation | [docs/evaluation.md](docs/evaluation.md) documents the existing direct-vs-agentic ground-truth evaluator and monitored-answer evidence audit. |
+| Interface | The app exposes a React UI, FastAPI routes, Swagger at `/docs`, and a CLI; see [docs/usage.md](docs/usage.md). |
+| Ingestion pipeline | `POST /repositories/ingest` and `repo-research ingest` run an automated application-owned Python pipeline: repository selection, local access or public GitHub clone, parse, chunk, embed, and Qdrant index. This is not a Kestra/dlt/Airflow/Prefect pipeline. |
+| Monitoring | PostgreSQL-backed feedback and at least five dashboard panels are documented in [docs/monitoring.md](docs/monitoring.md). |
+| Containerization | [docker-compose.yml](docker-compose.yml) runs frontend, API, Qdrant, and PostgreSQL for the Local Alpha. |
+| Reproducibility | [docs/setup.md](docs/setup.md), [docs/usage.md](docs/usage.md), pinned Python dependencies, and `frontend/package-lock.json` provide repeatable local setup. |
+| Hybrid search | Dense, sparse, and Qdrant RRF-hybrid retrieval are implemented and evaluated; dense remains the measured default in [docs/evaluation.md](docs/evaluation.md). |
+
 ## Requirements
 
 - Python 3.12
@@ -173,6 +192,7 @@ Important settings:
 | `RDR_QDRANT_URL` | Qdrant HTTP endpoint. |
 | `RDR_QDRANT_COLLECTION` | Qdrant collection for repository chunks. |
 | `RDR_REPOSITORY_ROOT` | Default repository path for CLI commands. |
+| `RDR_FASTEMBED_CACHE_PATH` | Optional persistent FastEmbed model cache; `.env.example` uses `.cache/fastembed`, and Docker maps this to `/root/.cache/fastembed`. |
 | `RDR_RETRIEVAL_MODE` | Default retrieval mode: `dense`, `sparse`, or `hybrid`. |
 | `RDR_RETRIEVAL_LIMIT` | Default retrieved evidence limit. |
 | `RDR_OPENAI_ANSWER_MODEL` | Model used for direct RAG and agentic answers. |
