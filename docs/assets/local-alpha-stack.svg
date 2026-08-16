@@ -19,7 +19,7 @@
     </marker>
   </defs>
   <rect class="bg" width="960" height="360" rx="18" />
-  <text class="text" x="36" y="42">Repo Deep Research v0.5.8 Local Alpha</text>
+  <text class="text" x="36" y="42">Repo Deep Research v0.5.9 Evaluation Evidence</text>
   <text class="small" x="36" y="66">Local-only BYOK stack for repository research, monitoring, and evaluation evidence.</text>
 
   <rect class="panel" x="38" y="118" width="130" height="82" />
