@@ -131,14 +131,14 @@ const resultList: EvaluationResultList = {
     {
       result_id: "result-2",
       evaluation_run_id: "eval-run-1",
-      source_type: "monitored_runs",
-      source_label: "monitored-runs",
-      context_label: "repo_deep_research",
-      repository_name: "repo_deep_research",
+      source_type: "dataset",
+      source_label: "eval/held_out.json",
+      context_label: "eval/held_out.json",
+      repository_name: null,
       branch: "dev",
       commit_hash: "abc123",
-      record_id: null,
-      request_id: "request-2",
+      record_id: "held_out_001",
+      request_id: null,
       run_kind: "direct",
       question: "Where is evaluation stored?",
       answer_correctness: null,
@@ -276,10 +276,29 @@ describe("Evaluations route", () => {
     expect(screen.getAllByText("Evidence Audit").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Repository or dataset")).toHaveValue("all");
     expect(screen.getAllByText("repo_deep_research").length).toBeGreaterThan(0);
-    expect(screen.getByText("Lowest-scoring loaded answers")).toBeInTheDocument();
+    expect(screen.getByText("Answer reviews")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Ground Truth Review (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Post-hoc Review (1)" })).toBeInTheDocument();
     expect(screen.getByText("Where is evaluation stored?")).toBeInTheDocument();
-    expect(screen.getByText("Which modules changed for answer evaluation?")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Which modules changed for answer evaluation?"),
+    ).not.toBeInTheDocument();
     expect(screen.getAllByText("n/a").length).toBeGreaterThan(0);
+  });
+
+  it("switches between ground truth and post-hoc review tables", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getEvaluationSummary).mockResolvedValue(populatedSummary);
+    vi.mocked(getEvaluationRuns).mockResolvedValue(runList);
+    vi.mocked(getEvaluationResults).mockResolvedValue(resultList);
+
+    renderEvaluationsRoute();
+
+    expect(await screen.findByText("Where is evaluation stored?")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Post-hoc Review (1)" }));
+
+    expect(screen.getByText("Which modules changed for answer evaluation?")).toBeInTheDocument();
+    expect(screen.queryByText("Where is evaluation stored?")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open evidence E29" })).toBeInTheDocument();
   });
 
@@ -291,6 +310,7 @@ describe("Evaluations route", () => {
 
     renderEvaluationsRoute();
 
+    await user.click(await screen.findByRole("tab", { name: "Post-hoc Review (1)" }));
     await user.click(await screen.findByRole("button", { name: "Open evidence E29" }));
 
     expect(screen.getByRole("dialog", { name: "Evidence detail" })).toBeInTheDocument();

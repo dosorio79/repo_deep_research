@@ -8,6 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { EvidenceReferences } from "@/components/EvidenceReferences";
 import { EmptyLine, Field, Panel } from "@/components/primitives";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   getEvaluationResults,
   getEvaluationRuns,
@@ -161,9 +162,8 @@ function EvaluationDashboard({
       ? 0
       : visibleResults.filter((result) => result.unsupported_claim_count > 0).length /
         visibleResults.length;
-  const worstResults = [...visibleResults]
-    .sort((left, right) => left.average_score - right.average_score)
-    .slice(0, 8);
+  const groundTruthResults = visibleResults.filter((result) => result.source_type === "dataset");
+  const postHocResults = visibleResults.filter((result) => result.source_type === "monitored_runs");
 
   return (
     <div className="space-y-3">
@@ -279,8 +279,29 @@ function EvaluationDashboard({
         <EvaluationRunTable runs={runs} loading={loadingRuns} />
       </Panel>
 
-      <Panel title="Lowest-scoring loaded answers">
-        <EvaluationResultTable results={worstResults} loading={loadingResults} />
+      <Panel title="Answer reviews">
+        <Tabs defaultValue="ground-truth" className="grid gap-3">
+          <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+            <TabsTrigger value="ground-truth">
+              Ground Truth Review ({groundTruthResults.length})
+            </TabsTrigger>
+            <TabsTrigger value="post-hoc">Post-hoc Review ({postHocResults.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="ground-truth" className="mt-0">
+            <ReviewTabPanel
+              title="Dataset questions with expected files and symbols."
+              results={lowestScoringResults(groundTruthResults)}
+              loading={loadingResults}
+            />
+          </TabsContent>
+          <TabsContent value="post-hoc" className="mt-0">
+            <ReviewTabPanel
+              title="Persisted live answers judged against their returned evidence."
+              results={lowestScoringResults(postHocResults)}
+              loading={loadingResults}
+            />
+          </TabsContent>
+        </Tabs>
       </Panel>
     </div>
   );
@@ -314,9 +335,9 @@ function SearchEvaluationHighlights({
                 {formatPercent(selected?.symbol_hit_rate ?? null)}
               </Field>
             </div>
-            <div className="grid gap-2 md:hidden">
+            <div className="grid gap-2 md:grid-cols-3">
               {visibleResults.map((item) => (
-                <div key={item.mode} className="border-t border-border pt-2 first:border-t-0">
+                <div key={item.mode} className="rounded-md border border-border p-2">
                   <div className="mb-1 flex items-center justify-between gap-2">
                     <span className="font-medium">{item.mode}</span>
                     {item.selected ? (
@@ -335,41 +356,6 @@ function SearchEvaluationHighlights({
                 </div>
               ))}
             </div>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[640px] text-left text-[12px]">
-                <thead className="border-b border-border text-muted-foreground">
-                  <tr>
-                    <th className="py-2 pr-3 font-medium">Dataset</th>
-                    <th className="py-2 pr-3 font-medium">Mode</th>
-                    <th className="py-2 pr-3 font-medium">File hit</th>
-                    <th className="py-2 pr-3 font-medium">File MRR</th>
-                    <th className="py-2 pr-3 font-medium">Recall</th>
-                    <th className="py-2 pr-3 font-medium">Precision</th>
-                    <th className="py-2 pr-3 font-medium">Symbol hit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleResults.map((item) => (
-                    <tr key={item.mode} className="border-b border-border/60">
-                      <td className="py-2 pr-3">{item.dataset}</td>
-                      <td className="py-2 pr-3">
-                        {item.mode}
-                        {item.selected ? (
-                          <span className="ml-2 rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                            default
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="py-2 pr-3 mono">{formatPercent(item.file_hit_rate)}</td>
-                      <td className="py-2 pr-3 mono">{item.file_mrr.toFixed(3)}</td>
-                      <td className="py-2 pr-3 mono">{formatPercent(item.file_recall)}</td>
-                      <td className="py-2 pr-3 mono">{formatPercent(item.file_precision)}</td>
-                      <td className="py-2 pr-3 mono">{formatPercent(item.symbol_hit_rate)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
           <p className="mt-2 text-[12px] text-muted-foreground">
             Search evaluation is loaded from persisted retrieval metrics produced from versioned
@@ -378,6 +364,28 @@ function SearchEvaluationHighlights({
         </>
       ) : null}
     </Panel>
+  );
+}
+
+function ReviewTabPanel({
+  title,
+  results,
+  loading,
+}: {
+  title: string;
+  results: EvaluationResultSummary[];
+  loading: boolean;
+}) {
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-2 md:grid-cols-3">
+        <Field label="Loaded reviews">{results.length.toLocaleString()}</Field>
+        <Field label="Average score">{formatScore(averageResultScore(results))}</Field>
+        <Field label="Unsupported rate">{formatPercent(unsupportedClaimRate(results))}</Field>
+      </div>
+      <p className="text-[12px] text-muted-foreground">{title}</p>
+      <EvaluationResultTable results={results} loading={loading} />
+    </div>
   );
 }
 
@@ -514,6 +522,10 @@ function EvaluationResultTable({
   );
 }
 
+function lowestScoringResults(results: EvaluationResultSummary[]) {
+  return [...results].sort((left, right) => left.average_score - right.average_score).slice(0, 8);
+}
+
 function runKindChartData(results: EvaluationResultSummary[]) {
   return groupAverage(results, (result) => result.run_kind ?? "unknown");
 }
@@ -579,6 +591,11 @@ function evaluationContextOptions(results: EvaluationResultSummary[]) {
 
 function countFeedbackLinked(results: EvaluationResultSummary[]) {
   return results.filter((result) => result.feedback_useful + result.feedback_not_useful > 0).length;
+}
+
+function unsupportedClaimRate(results: EvaluationResultSummary[]) {
+  if (results.length === 0) return null;
+  return results.filter((result) => result.unsupported_claim_count > 0).length / results.length;
 }
 
 function averageLatency(results: EvaluationResultSummary[]) {
