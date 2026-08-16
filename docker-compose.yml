@@ -46,6 +46,7 @@ services:
       RDR_TELEMETRY_ENABLED: "true"
       RDR_CORS_ALLOWED_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
       RDR_REPOSITORY_ROOT: /repository
+      RDR_FASTEMBED_CACHE_PATH: /root/.cache/fastembed
     volumes:
       - ${REPOSITORY_PATH:-.}:/repository:ro
       - fastembed_cache:/root/.cache/fastembed

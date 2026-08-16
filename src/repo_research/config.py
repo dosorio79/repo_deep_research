@@ -65,6 +65,13 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dimension: int = Field(default=384, gt=0)
     embedding_batch_size: int = Field(default=16, gt=0)
+    fastembed_cache_path: Path | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "RDR_FASTEMBED_CACHE_PATH",
+            "FASTEMBED_CACHE_PATH",
+        ),
+    )
     sparse_embedding_model: str = "Qdrant/bm25"
     retrieval_mode: RetrievalMode = RetrievalMode.DENSE
     openai_answer_model: str = Field(
