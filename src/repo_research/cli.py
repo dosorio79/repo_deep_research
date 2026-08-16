@@ -466,6 +466,7 @@ def _run_unified_answer_evaluation(
             f"{audit.question_type_counts}"
         )
         source_label = arguments.dataset.as_posix()
+        approaches = _evaluation_approaches(arguments.approach)
     else:
         recording_store = runtime.create_recording_store(settings)
         candidates = monitored_answer_candidates(
@@ -507,10 +508,17 @@ def _run_unified_answer_evaluation(
                 records=records,
                 retrieval_mode=retrieval_mode,
                 limit=limit,
-                approaches=_evaluation_approaches(arguments.approach),
+                approaches=approaches,
                 evaluation_run_id=evaluation_run.evaluation_run_id,
                 workers=workers,
                 checkpoint_path=checkpoint_path,
+                checkpoint_context=_answer_evaluation_checkpoint_context(
+                    dataset_path=arguments.dataset,
+                    repository=repository,
+                    retrieval_mode=retrieval_mode,
+                    limit=limit,
+                    approaches=approaches,
+                ),
             )
         else:
             results = judge_answer_candidates(
@@ -635,6 +643,27 @@ def _judge_and_optionally_persist_answer_candidates(
             )
         raise
     return results
+
+
+def _answer_evaluation_checkpoint_context(
+    *,
+    dataset_path: Path,
+    repository: RepositoryIdentity,
+    retrieval_mode: RetrievalMode,
+    limit: int,
+    approaches: list[RunKind],
+) -> str:
+    return json.dumps(
+        {
+            "approaches": [approach.value for approach in approaches],
+            "dataset": dataset_path.as_posix(),
+            "limit": limit,
+            "repository_id": repository.repository_id,
+            "repository_name": repository.name,
+            "retrieval_mode": retrieval_mode.value,
+        },
+        sort_keys=True,
+    )
 
 
 def _evaluation_approaches(value: str) -> list[RunKind]:

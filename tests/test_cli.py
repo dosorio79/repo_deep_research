@@ -17,11 +17,13 @@ from repo_research.models import (
     RagMode,
     RagRequest,
     RagRunResult,
+    RepositoryIdentity,
     ResearchAnswer,
     ResearchRequest,
     ResearchRunResult,
     RetrievalEvaluationSummary,
     RetrievalMode,
+    RunKind,
     SearchResult,
 )
 from repo_research.rag import AnswerGenerationResult
@@ -216,6 +218,34 @@ def test_cli_persists_retrieval_evaluation_results(
         "datapeek held-out",
     ]
     assert [result.selected for result in store.results] == [False, True]
+
+
+def test_cli_answer_evaluation_checkpoint_context_scopes_resume(
+    tmp_path: Path,
+) -> None:
+    repository = RepositoryIdentity(
+        name="sample",
+        root_path=tmp_path,
+        branch="main",
+        commit_hash="abc123",
+    )
+
+    context = cli._answer_evaluation_checkpoint_context(
+        dataset_path=Path("eval/held_out.json"),
+        repository=repository,
+        retrieval_mode=RetrievalMode.DENSE,
+        limit=5,
+        approaches=[RunKind.DIRECT, RunKind.AGENTIC],
+    )
+
+    assert json.loads(context) == {
+        "approaches": ["direct", "agentic"],
+        "dataset": "eval/held_out.json",
+        "limit": 5,
+        "repository_id": repository.repository_id,
+        "repository_name": "sample",
+        "retrieval_mode": "dense",
+    }
 
 
 class FakeDatabase:
