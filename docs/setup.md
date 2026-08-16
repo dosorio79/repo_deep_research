@@ -85,9 +85,15 @@ The default answer model is `RDR_OPENAI_ANSWER_MODEL=gpt-5-mini`; the default
 judge model is `RDR_OPENAI_JUDGE_MODEL=gpt-5.1`. Unit tests use fake model
 adapters and do not require paid model calls.
 
+Reviewers can inspect evaluation evidence without a key. The Docker stack
+initializes PostgreSQL tables and seeds curated retrieval and offline
+ground-truth answer summary rows. Open `http://localhost:3000/evaluations`
+after `make stack-up` to view those seeded metrics. Regenerating direct RAG,
+agentic answers, or LLM-judge rows still requires `OPENAI_API_KEY`.
+
 ## Local Alpha BYOK Mode
 
-`v0.5.8 Local Alpha` is a local-only BYOK release. The expected user
+`v0.5.9 Evaluation Evidence` is a local-only capstone review release. The expected user
 path is:
 
 ```bash
@@ -106,6 +112,25 @@ evidence surfaces:
 - `http://localhost:8000/docs`
 - `http://localhost:3000/monitoring`
 - `http://localhost:3000/evaluations`
+
+For keyless capstone review, leave `OPENAI_API_KEY` blank and use the offline
+evidence path instead:
+
+```bash
+cp .env.example .env
+cp .env.local.example .env.local
+make stack-up
+```
+
+Then inspect:
+
+- `http://localhost:3000/evaluations` for seeded retrieval and offline
+  ground-truth answer metrics.
+- [docs/evaluation.md](evaluation.md) for metric definitions, dataset scope,
+  and the current Datapeek held-out direct-vs-agentic comparison.
+- [eval/development.json](../eval/development.json) and
+  [eval/held_out.json](../eval/held_out.json) for the versioned ground-truth
+  records.
 
 This alpha does not target free hosted deployment. Running the full product
 requires a browser frontend, FastAPI backend, Qdrant, PostgreSQL, local
@@ -188,4 +213,4 @@ The project uses two long-lived branches:
 
 Feature branches start from `dev`. Promote to production with a pull request
 from `dev` to `main`, then tag `main` with the release version. The current
-release is `v0.5.8`.
+release is `v0.5.9`.

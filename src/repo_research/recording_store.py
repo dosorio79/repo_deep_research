@@ -1280,34 +1280,34 @@ _SCHEMA_STATEMENTS = (
         measured_at
     ) VALUES
         (
-            'Development', 'dense', 'legacy self-repo local alpha smoke',
-            5, 15, 0.400, 0.236, 0.272, 0.090, 0.357, false,
-            '2026-08-13T00:00:00Z'
+            'Development', 'dense', 'repo_deep_research development retrieval',
+            5, 15, 0.733, 0.528, 0.339, 0.240, 0.267, true,
+            '2026-08-14T00:00:00Z'
         ),
         (
-            'Development', 'sparse', 'legacy self-repo local alpha smoke',
-            5, 15, 0.067, 0.033, 0.067, 0.013, 0.071, false,
-            '2026-08-13T00:00:00Z'
+            'Development', 'sparse', 'repo_deep_research development retrieval',
+            5, 15, 0.133, 0.036, 0.089, 0.030, 0.000, false,
+            '2026-08-14T00:00:00Z'
         ),
         (
-            'Development', 'hybrid', 'legacy self-repo local alpha smoke',
-            5, 15, 0.333, 0.163, 0.250, 0.077, 0.357, false,
-            '2026-08-13T00:00:00Z'
+            'Development', 'hybrid', 'repo_deep_research development retrieval',
+            5, 15, 0.600, 0.383, 0.228, 0.157, 0.267, false,
+            '2026-08-14T00:00:00Z'
         ),
         (
-            'Held-out', 'dense', 'legacy self-repo held-out smoke',
-            5, 15, 0.467, 0.313, 0.311, 0.200, 0.400, true,
-            '2026-08-13T00:00:00Z'
+            'Datapeek held-out', 'dense', 'datapeek held-out retrieval',
+            5, 15, 0.800, 0.602, 0.542, 0.319, 0.600, true,
+            '2026-08-14T00:00:00Z'
         ),
         (
-            'Held-out', 'sparse', 'legacy self-repo held-out smoke',
-            5, 15, 0.133, 0.080, 0.100, 0.030, 0.267, false,
-            '2026-08-13T00:00:00Z'
+            'Datapeek held-out', 'sparse', 'datapeek held-out retrieval',
+            5, 15, 0.667, 0.393, 0.382, 0.213, 0.467, false,
+            '2026-08-14T00:00:00Z'
         ),
         (
-            'Held-out', 'hybrid', 'legacy self-repo held-out smoke',
-            5, 15, 0.400, 0.261, 0.278, 0.103, 0.333, false,
-            '2026-08-13T00:00:00Z'
+            'Datapeek held-out', 'hybrid', 'datapeek held-out retrieval',
+            5, 15, 0.867, 0.544, 0.529, 0.277, 0.533, false,
+            '2026-08-14T00:00:00Z'
         )
     ON CONFLICT (dataset, mode) DO UPDATE SET
         source_label = EXCLUDED.source_label,

@@ -1,5 +1,21 @@
 # Evaluation
 
+## Reviewer Evidence Paths
+
+Evaluation evidence is available at two levels:
+
+- Keyless review: `make stack-up` starts PostgreSQL and the API. The first
+  evaluation API request initializes the schema and seeds curated retrieval and
+  offline ground-truth answer summary rows, so `http://localhost:3000/evaluations`
+  can be inspected without `OPENAI_API_KEY`.
+- Reproducible reruns: retrieval evaluation can be rerun from the versioned
+  datasets after ingesting the target repository. Answer generation and
+  LLM-judge reruns are opt-in because they call OpenAI.
+
+The committed source of truth for reviewers is this document plus the versioned
+ground-truth records in `eval/development.json` and `eval/held_out.json`.
+Generated raw reports under `eval/results/` are intentionally ignored.
+
 ## Retrieval Evaluation
 
 Retrieval evaluation compares dense, sparse, and Qdrant RRF-hybrid retrieval
@@ -253,10 +269,14 @@ dashboard reads:
 - `GET /evaluations/results` for individual judged answer rows.
 
 Search-evaluation highlights on this page come from PostgreSQL retrieval
-summary rows. The default seeded rows are historical local-alpha measurements;
-rerun retrieval evaluation after ingesting Datapeek before presenting them as
-the current `eval/held_out.json` external demo baseline. Answer-evaluation
-charts and tables reflect persisted PostgreSQL rows.
+summary rows. Fresh PostgreSQL volumes are seeded with the curated 2026-08-14
+retrieval baseline for this repository and Datapeek, plus the curated 2026-08-16
+Datapeek held-out direct-vs-agentic ground-truth answer summaries. Those seed
+rows make the dashboard useful for reviewers who do not want to provide an
+OpenAI key. Rerun retrieval evaluation after ingesting Datapeek when you need
+new measurements for a changed commit. Detailed answer-evaluation run history
+and per-question judge rows appear only after running `evaluate-answers
+--persist`.
 
 Evaluation scores are scoped evidence, not global model scores. Dataset
 evaluations are specific to the JSON dataset used for the run, and monitored-run

@@ -46,11 +46,11 @@ flowchart LR
 
 ## Release Status
 
-The current release is `v0.5.8 Local Alpha`: a local-first,
-bring-your-own-key release for technical
-users who can run Docker Compose and provide their own OpenAI API key.
-The alpha release handoff is documented in
-[docs/releases/v0.5.8-local-alpha.md](docs/releases/v0.5.8-local-alpha.md).
+The current release is `v0.5.9 Evaluation Evidence`: a local-first capstone
+review release for technical users who can run Docker Compose. Live answer
+generation remains bring-your-own-key, while seeded offline evaluation evidence
+is available without an OpenAI key. The release handoff is documented in
+[docs/releases/v0.5.9-evaluation-evidence.md](docs/releases/v0.5.9-evaluation-evidence.md).
 
 Cloud deployment is intentionally out of scope for the Local Alpha. The stack
 includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
@@ -62,6 +62,16 @@ free hosted demo target such as Render.
 This project is built for the LLM Zoomcamp capstone rubric using a non-course
 repository corpus, local vector search, an LLM answer layer, monitoring, and a
 reviewable local runbook.
+
+Reviewer shortcut:
+
+- Start the stack with `make stack-up` and open `http://localhost:3000`.
+- Open `http://localhost:3000/evaluations` to inspect seeded offline retrieval
+  and ground-truth answer metrics without an OpenAI key.
+- Open `docs/evaluation.md` for the exact dataset semantics, metric
+  definitions, and current direct-vs-agentic held-out comparison.
+- Add `OPENAI_API_KEY` only if you want to regenerate live answers or rerun the
+  LLM judge locally.
 
 | Criterion | Repository evidence |
 |---|---|
@@ -97,6 +107,10 @@ make rag QUESTION="where is configuration validated?"
 Set `OPENAI_API_KEY` in `.env.local` before running live RAG, agentic research,
 or answer evaluation.
 
+For a keyless review, skip `make rag` and live judging. The versioned datasets
+in `eval/`, the curated measurements in [docs/evaluation.md](docs/evaluation.md),
+and the seeded `/evaluations` dashboard are available without paid model calls.
+
 For the full Local Alpha path, use the container stack:
 
 ```bash
@@ -109,6 +123,11 @@ dashboards.
 Opening `http://localhost:8000` redirects to the FastAPI Swagger UI at
 `http://localhost:8000/docs`; the versioned OpenAPI contract is stored at
 [docs/api/openapi.json](docs/api/openapi.json).
+
+Container startup does not call OpenAI by itself. PostgreSQL schema creation
+seeds curated retrieval and offline ground-truth evaluation summaries, so
+`/evaluations` remains useful before the reviewer supplies a key or persists new
+local runs.
 
 ## Main Commands
 
@@ -213,6 +232,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Architecture](docs/architecture.md) including the Local Alpha stack diagram
 - [Evaluation](docs/evaluation.md)
 - [Monitoring KPIs](docs/monitoring.md)
+- [v0.5.9 Evaluation Evidence release notes](docs/releases/v0.5.9-evaluation-evidence.md)
 - [v0.5.8 Local Alpha release notes](docs/releases/v0.5.8-local-alpha.md)
 - [OpenAPI contract](docs/api/openapi.json)
 - [Implementation history](docs/plans/)
@@ -223,7 +243,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
 Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current user-ready
-local alpha stack is released as `v0.5.8`.
+capstone review release is `v0.5.9`.
 
 ## Local Alpha Scope
 

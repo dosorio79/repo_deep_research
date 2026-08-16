@@ -178,7 +178,10 @@ measurements.
 
 ## Evaluate Answers
 
-Answer evaluation is live and opt-in because it calls OpenAI:
+The `/evaluations` dashboard includes seeded offline ground-truth answer
+summaries for keyless review. The commands below are only for regenerating or
+persisting new answer-evaluation rows; they are live and opt-in because they
+call OpenAI:
 
 ```bash
 uv run repo-research evaluate-answers --dataset eval/development.json \

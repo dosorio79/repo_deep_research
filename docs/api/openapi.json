@@ -2447,7 +2447,7 @@
     },
     "summary": "Evidence-grounded research for Python repositories.",
     "title": "Repo Deep Research",
-    "version": "0.5.8"
+    "version": "0.5.9"
   },
   "openapi": "3.1.0",
   "paths": {
