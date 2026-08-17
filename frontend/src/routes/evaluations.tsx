@@ -132,7 +132,7 @@ function EvaluationsView() {
 
 function EmptyEvaluations() {
   return (
-    <Panel title="Evaluations">
+    <Panel title="Output quality evaluation">
       <EmptyLine>
         No persisted evaluation results are available. Run evaluate-answers with --persist first.
       </EmptyLine>
@@ -190,6 +190,11 @@ function EvaluationDashboard({
   return (
     <div className="space-y-3">
       <SearchEvaluationHighlights results={retrievalResults} loading={loadingRetrievalResults} />
+
+      <SectionHeader
+        title="Output quality evaluation"
+        description="Answer scores below judge generated responses against their expected answer or returned evidence. These metrics are separate from the search retrieval checks above."
+      />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -331,6 +336,15 @@ function EvaluationDashboard({
   );
 }
 
+function SectionHeader({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="border-t border-border pt-3">
+      <h2 className="text-[14px] font-semibold">{title}</h2>
+      <p className="mt-1 max-w-3xl text-[12px] text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
 function SearchEvaluationHighlights({
   results,
   loading,
@@ -338,9 +352,16 @@ function SearchEvaluationHighlights({
   results: RetrievalEvaluationSummary[];
   loading: boolean;
 }) {
-  const heldOutResults = results.filter((item) => item.dataset.toLowerCase().includes("held-out"));
-  const visibleResults = heldOutResults.length ? heldOutResults : results;
-  const selected = visibleResults.find((item) => item.selected) ?? visibleResults[0];
+  const visibleResults = curatedRetrievalHighlights(results);
+  const heldOutResults = visibleResults.filter((item) =>
+    item.source_label.toLowerCase().includes("datapeek held-out"),
+  );
+  const datasetGroups = groupRetrievalResultsByDataset(visibleResults);
+  const selected =
+    heldOutResults.find((item) => item.selected) ??
+    visibleResults.find((item) => item.selected) ??
+    heldOutResults[0] ??
+    visibleResults[0];
   return (
     <Panel title="Search evaluation highlights">
       {loading ? <EmptyLine>Loading retrieval evaluation metrics.</EmptyLine> : null}
@@ -349,33 +370,34 @@ function SearchEvaluationHighlights({
       ) : null}
       {!loading && visibleResults.length > 0 ? (
         <>
-          <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
-            <div className="grid gap-2">
-              <Field label="Selected retrieval mode">{selected?.mode ?? "dense"}</Field>
-              <Field label="Held-out file hit rate">
-                {formatPercent(selected?.file_hit_rate ?? null)}
-              </Field>
-              <Field label="Held-out symbol hit rate">
-                {formatPercent(selected?.symbol_hit_rate ?? null)}
-              </Field>
+          <div className="grid gap-3 xl:grid-cols-[280px_1fr]">
+            <div className="rounded-md border border-border bg-secondary/20 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Production default
+              </p>
+              <div className="mt-2 grid gap-1">
+                <Field label="Mode">{selected?.mode ?? "dense"}</Field>
+                <Field label="Dataset">{selected?.dataset ?? "Not measured"}</Field>
+                <Field label="File hit">{formatPercent(selected?.file_hit_rate ?? null)}</Field>
+                <Field label="Symbol hit">{formatPercent(selected?.symbol_hit_rate ?? null)}</Field>
+                <Field label="Records">{selected?.record_count ?? "0"}</Field>
+                <Field label="Limit">{selected ? `top ${selected.limit}` : "top 0"}</Field>
+              </div>
             </div>
-            <div className="grid gap-2 md:grid-cols-3">
-              {visibleResults.map((item) => (
-                <div key={item.mode} className="rounded-md border border-border p-2">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="font-medium">{item.mode}</span>
-                    {item.selected ? (
-                      <span className="rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                        default
-                      </span>
-                    ) : null}
+            <div className="space-y-3">
+              {datasetGroups.map(([dataset, datasetResults]) => (
+                <div key={dataset} className="space-y-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="text-[13px] font-semibold">{dataset}</h3>
+                    <span className="text-[11px] text-muted-foreground">
+                      {datasetResults[0]?.record_count ?? 0} questions, top{" "}
+                      {datasetResults[0]?.limit ?? 0} results
+                    </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                    <Field label="File hit">{formatPercent(item.file_hit_rate)}</Field>
-                    <Field label="File MRR">{item.file_mrr.toFixed(3)}</Field>
-                    <Field label="Recall">{formatPercent(item.file_recall)}</Field>
-                    <Field label="Precision">{formatPercent(item.file_precision)}</Field>
-                    <Field label="Symbol hit">{formatPercent(item.symbol_hit_rate)}</Field>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {datasetResults.map((item) => (
+                      <RetrievalModeCard key={`${item.dataset}-${item.mode}`} item={item} />
+                    ))}
                   </div>
                 </div>
               ))}
@@ -388,6 +410,28 @@ function SearchEvaluationHighlights({
         </>
       ) : null}
     </Panel>
+  );
+}
+
+function RetrievalModeCard({ item }: { item: RetrievalEvaluationSummary }) {
+  return (
+    <div className="rounded-md border border-border p-2">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="font-medium">{item.mode}</span>
+        {item.selected ? (
+          <span className="rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+            default
+          </span>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+        <Field label="File hit">{formatPercent(item.file_hit_rate)}</Field>
+        <Field label="File MRR">{item.file_mrr.toFixed(3)}</Field>
+        <Field label="Recall">{formatPercent(item.file_recall)}</Field>
+        <Field label="Precision">{formatPercent(item.file_precision)}</Field>
+        <Field label="Symbol hit">{formatPercent(item.symbol_hit_rate)}</Field>
+      </div>
+    </div>
   );
 }
 
@@ -728,6 +772,37 @@ function averageLatency(results: EvaluationResultSummary[]) {
 
 function totalCost(results: EvaluationResultSummary[]) {
   return results.reduce((total, result) => total + Number(result.total_estimated_cost_usd ?? 0), 0);
+}
+
+function groupRetrievalResultsByDataset(results: RetrievalEvaluationSummary[]) {
+  const groups = new Map<string, RetrievalEvaluationSummary[]>();
+  for (const result of results) {
+    groups.set(result.dataset, [...(groups.get(result.dataset) ?? []), result]);
+  }
+  return [...groups.entries()];
+}
+
+function curatedRetrievalHighlights(results: RetrievalEvaluationSummary[]) {
+  return [
+    ...latestRetrievalContext(results, (result) =>
+      result.source_label.toLowerCase().includes("repo_deep_research development"),
+    ),
+    ...latestRetrievalContext(results, (result) =>
+      result.source_label.toLowerCase().includes("datapeek held-out"),
+    ),
+  ];
+}
+
+function latestRetrievalContext(
+  results: RetrievalEvaluationSummary[],
+  matchesContext: (result: RetrievalEvaluationSummary) => boolean,
+) {
+  const contextResults = results.filter(matchesContext);
+  const newest = [...contextResults].sort((left, right) => {
+    return new Date(right.measured_at).getTime() - new Date(left.measured_at).getTime();
+  })[0];
+  if (!newest) return [];
+  return contextResults.filter((result) => result.source_label === newest.source_label);
 }
 
 function formatScore(value: number | null) {
