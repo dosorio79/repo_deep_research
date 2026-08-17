@@ -209,6 +209,20 @@ const groundTruthEvaluationList: GroundTruthEvaluationList = {
 const retrievalEvaluationList: RetrievalEvaluationList = {
   results: [
     {
+      dataset: "Held-out",
+      mode: "dense",
+      source_label: "legacy self-repo held-out smoke",
+      limit: 5,
+      record_count: 15,
+      file_hit_rate: 0.456,
+      file_mrr: 0.313,
+      file_recall: 0.311,
+      file_precision: 0.2,
+      symbol_hit_rate: 0.4,
+      selected: true,
+      measured_at: "2026-08-13T00:00:00Z",
+    },
+    {
       dataset: "Development",
       mode: "dense",
       source_label: "repo_deep_research development retrieval",
@@ -295,9 +309,12 @@ describe("Evaluations route", () => {
     renderEvaluationsRoute();
 
     expect(await screen.findByText("Search evaluation highlights")).toBeInTheDocument();
-    expect(screen.getByText("Selected retrieval mode")).toBeInTheDocument();
-    expect(screen.getByText("Held-out file hit rate")).toBeInTheDocument();
+    expect(screen.getByText("Production default")).toBeInTheDocument();
+    expect(screen.getAllByText("Datapeek held-out").length).toBeGreaterThan(0);
     expect(screen.getAllByText("80%").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Held-out")).not.toBeInTheDocument();
+    expect(screen.queryByText("46%")).not.toBeInTheDocument();
+    expect(screen.getByText("Output quality evaluation")).toBeInTheDocument();
     expect(screen.getByText(/No persisted evaluation results are available/)).toBeInTheDocument();
   });
 
@@ -324,7 +341,15 @@ describe("Evaluations route", () => {
     renderEvaluationsRoute();
 
     expect(await screen.findByText("Search evaluation highlights")).toBeInTheDocument();
-    expect(screen.getByText("Selected retrieval mode")).toBeInTheDocument();
+    expect(screen.getByText("Production default")).toBeInTheDocument();
+    expect(screen.getByText("Development")).toBeInTheDocument();
+    expect(screen.getAllByText("Datapeek held-out").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Held-out")).not.toBeInTheDocument();
+    expect(screen.queryByText("46%")).not.toBeInTheDocument();
+    expect(screen.getByText("Output quality evaluation")).toBeInTheDocument();
+    expect(
+      screen.getByText(/These metrics are separate from the search retrieval checks above/),
+    ).toBeInTheDocument();
     expect(screen.getByText("Evaluated answers")).toBeInTheDocument();
     expect(screen.getAllByText("1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Average score").length).toBeGreaterThan(0);
