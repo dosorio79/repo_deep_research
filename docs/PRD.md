@@ -22,7 +22,7 @@ The application helps developers answer questions that are difficult to resolve 
 
 The system ingests a repository, creates structured code and documentation chunks, indexes dense and sparse representations in Qdrant, and uses a PydanticAI agent to conduct bounded multi-step research. Answers must cite repository paths, symbols, and line ranges.
 
-The project will demonstrate the main LLM Zoomcamp concepts in one coherent application: ingestion, hybrid retrieval, query rewriting, reranking, agentic tool use, retrieval evaluation, LLM evaluation, monitoring, feedback collection, containerization, and reproducibility.
+The implemented capstone demonstrates ingestion, evaluated dense/sparse/hybrid retrieval, direct RAG, bounded agentic tool use, retrieval evaluation, LLM evaluation, monitoring, feedback collection, containerization, and reproducibility. Query rewriting and reranking remain evaluation-gated roadmap options rather than implemented defaults.
 
 ## 2. Problem statement
 
@@ -493,50 +493,23 @@ Repository path or public GitHub URL
 | Reranking | Local cross-encoder, deferred until baseline works |
 | API | FastAPI |
 | UI | React TypeScript |
-| Monitoring and traces | Logfire |
-| Feedback store | SQLite initially |
-| Evaluation | Python, pytest, pandas |
-| Ingestion orchestration | Kestra or dlt; decide in ADR before implementation |
+| Monitoring and traces | PostgreSQL-backed local dashboards; optional Logfire instrumentation |
+| Feedback store | PostgreSQL |
+| Evaluation | Python and pytest with versioned JSON datasets |
+| Ingestion orchestration | Application-owned Python pipeline exposed through CLI and API |
 | Containers | Docker Compose |
 
 ## 12. Ingestion orchestration decision
 
-The rubric awards full ingestion points for an automated pipeline using a dedicated tool.
+Ingestion is implemented as an application-owned, request-driven Python
+pipeline exposed through the CLI and FastAPI. It accepts a local path or public
+GitHub URL, discovers supported files, parses and chunks content, computes
+embeddings, and atomically updates Qdrant.
 
-Two acceptable options:
-
-### Option A — Kestra
-
-Advantages:
-
-- directly demonstrates course material;
-- clear visual workflow;
-- good screenshot and demo value;
-- explicit stages for clone, parse, embed, and index.
-
-Disadvantages:
-
-- heavier Docker Compose stack;
-- additional workflow definitions and operational overhead.
-
-### Option B — dlt
-
-Advantages:
-
-- Python-native;
-- lower cognitive overhead;
-- easier incremental and idempotent loading patterns.
-
-Disadvantages:
-
-- less visually demonstrable;
-- may require custom handling around Qdrant writes.
-
-### Decision rule
-
-Use Kestra only if a minimal workflow can be added after the ingestion command works reliably.
-
-The implementation must first expose an idempotent Python ingestion command. The orchestration layer calls that command rather than duplicating ingestion logic.
+A scheduled workflow system is not the natural fit for arbitrary repositories
+selected at request time. Kestra, dlt, Airflow, and Prefect are not required
+services. Future orchestration must call the existing idempotent ingestion
+boundary rather than duplicate ingestion logic.
 
 ## 13. Monitoring dashboard
 
@@ -552,7 +525,7 @@ Required panels:
 6. Error rate
 7. Average tool calls per research request
 
-Logfire is the primary observability tool. A separate Grafana stack should only be added if Logfire cannot present the required dashboard clearly for reviewers.
+PostgreSQL is the source of truth for user-visible monitoring, feedback, answer snapshots, and evaluation results. The React monitoring and evaluation routes are the primary local dashboards. Logfire remains optional instrumentation, and Grafana is not required.
 
 ## 14. Evaluation plan
 
