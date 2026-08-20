@@ -6,7 +6,7 @@
 
 ## Status
 
-Initial implementation specification for the LLM Zoomcamp capstone.
+Capstone implementation completed through v0.5.9. This document now preserves the original capstone requirements and defines the approved post-capstone roadmap toward a stronger local developer product.
 
 ## 1. Product summary
 
@@ -891,3 +891,374 @@ The capstone is complete when:
 - all services run through Docker Compose;
 - the project is reproducible from the README;
 - documentation explicitly maps implementation evidence to the Zoomcamp rubric.
+
+## 21. Post-capstone product direction
+
+### Objective
+
+The next four to six weeks of part-time development must balance three goals:
+
+1. improve the product's usefulness for real repository investigation;
+2. strengthen its portfolio value through a clear technical narrative;
+3. demonstrate advanced retrieval and agent techniques with measured evidence.
+
+Every roadmap feature must be independently shippable and measurable. The
+roadmap prioritizes the currently weakest primary use case, change-impact
+analysis, while improving interactive usability and local adoption.
+
+### Current evidence baseline
+
+The 2026-08-16 Datapeek held-out comparison establishes the roadmap baseline:
+
+- agentic locate answers achieved 5.0/5 correctness and reference coverage;
+- agentic change-impact answers achieved 2.8/5 correctness and 2.8/5 reference
+  coverage;
+- agentic change-impact latency averaged approximately 154 seconds;
+- direct RAG remained substantially faster and cheaper than agentic research.
+
+These results indicate that the next release should improve evidence expansion
+around confirmed implementations before adding a general reranker or more
+autonomous orchestration.
+
+### Roadmap principles
+
+- Preserve one bounded PydanticAI research agent.
+- Use deterministic repository relationships to complement semantic retrieval.
+- Keep all automatic execution decisions visible in the research trace.
+- Prefer lifecycle progress streaming over private reasoning or raw
+  chain-of-thought.
+- Preserve explicit direct and agentic modes for evaluation.
+- Require measured improvement before enabling query rewriting or reranking by
+  default.
+- Keep the application local-first and Python-first.
+
+## 22. v0.6 — Relationship-aware change impact
+
+### Goal
+
+Improve change-impact completeness by expanding semantically retrieved evidence
+through an inspectable, versioned repository property graph.
+
+### Architecture
+
+Qdrant remains responsible for dense, sparse, and hybrid evidence retrieval.
+Semantic retrieval identifies the starting evidence. A versioned repository
+graph then expands from confirmed files and symbols to related modules, tests,
+configuration, and statically resolvable references. Expanded nodes must resolve
+back to canonical indexed chunks before they can become answer evidence.
+
+The graph is not a compiler-grade call graph and does not replace semantic
+retrieval.
+
+### Portable graph artifact
+
+Each ingested repository commit produces:
+
+```text
+graphs/<repository-id>/<commit-hash>/
+├── manifest.json
+├── nodes.jsonl
+└── edges.jsonl
+```
+
+The graph follows a portable property-graph contract:
+
+- stable globally unique string node and edge identifiers;
+- separate JSONL node and edge files;
+- Neo4j-friendly node labels and uppercase relationship types;
+- explicit `source` and `target` fields on every edge;
+- scalar properties rather than deeply nested values;
+- deterministic output ordering;
+- a graph schema version independent of the application version.
+
+A later exporter may generate Neo4j bulk-import CSV or Cypher without changing
+the extraction pipeline. JSONL remains canonical because it supports optional
+properties and schema evolution more cleanly than CSV.
+
+The manifest records:
+
+- graph schema version;
+- repository identity, branch, and commit;
+- generation timestamp;
+- node and edge counts by type;
+- extractor versions;
+- skipped files and extraction warnings.
+
+### Initial node labels
+
+- `Repository`
+- `File`
+- `Module`
+- `Symbol`
+- `Class`
+- `Function`
+- `Method`
+- `ConfigKey`
+
+### Initial relationship types
+
+| Type | Meaning | Primary extraction |
+|---|---|---|
+| `CONTAINS` | File or symbol contains another symbol | Python AST |
+| `IMPORTS` | Module imports another module | Python AST |
+| `REFERENCES` | Code or documentation references a symbol | AST where resolvable, otherwise bounded text matching |
+| `CALLS` | Code calls a statically resolvable symbol | Python AST |
+| `INHERITS` | Class inherits from another class | Python AST |
+| `DECORATED_BY` | Symbol uses a decorator | Python AST |
+| `TESTS` | Test file or symbol is associated with production code | Imports, paths, naming, and symbol references |
+| `READS_CONFIG` | Code reads a configuration key | AST and configuration-name matching |
+
+Every derived edge stores its extraction `method` and `confidence`.
+Heuristic relationships must remain distinguishable from AST-confirmed
+relationships.
+
+### Runtime traversal
+
+Load the selected commit's graph into a typed adjacency structure with incoming
+and outgoing indexes. Research may traverse at most two hops and must enforce:
+
+- a relationship-type allowlist based on question mode;
+- configurable node and evidence limits;
+- confidence thresholds;
+- repository and commit scoping;
+- canonical evidence resolution through the indexed chunk store.
+
+The agent gains two bounded capabilities:
+
+- `find_references(symbol)`;
+- `expand_related(evidence_ids)`.
+
+For change-impact questions, the intended sequence is:
+
+1. retrieve the likely authoritative implementation;
+2. expand from confirmed symbols and modules;
+3. inspect related callers, tests, and configuration;
+4. classify change targets as required, likely, or uncertain;
+5. produce a cited answer with explicit limitations.
+
+### Acceptance targets
+
+On the existing Datapeek held-out change-impact records:
+
+- increase agentic correctness from 2.8 to at least 3.5/5;
+- increase reference coverage from 2.8 to at least 3.5/5;
+- do not exceed the current eight unsupported claims across five questions;
+- keep median change-impact latency below 180 seconds.
+
+Automated tests must cover graph determinism, every supported relationship type,
+commit isolation, traversal bounds, confidence filtering, and canonical evidence
+resolution. Research traces must disclose relationship expansion counts and
+types.
+
+## 23. v0.7 — Adaptive research and live progress
+
+### Goal
+
+Select the cheapest adequate execution path and make long-running research
+understandable while it is in progress.
+
+### User-facing strategies
+
+- **Quick:** direct RAG without graph expansion.
+- **Balanced:** deterministic selection of the cheapest adequate path.
+- **Thorough:** bounded agentic research with graph expansion.
+
+Explicit direct and agentic choices remain available under advanced settings
+and in the evaluation CLI.
+
+### Balanced routing policy
+
+| Question or evidence condition | Execution path |
+|---|---|
+| Narrow locate question | Direct RAG |
+| Implementation-flow question | Agentic research with graph expansion |
+| Change-impact question | Agentic research with graph expansion |
+| Broad locate or multiple-symbol question | Agentic research |
+| Insufficient direct evidence | One bounded escalation or an explicit escalation offer |
+
+Routing must initially use auditable application signals such as question mode,
+retrieval scores, evidence diversity, and citation sufficiency. It must not add
+an LLM router.
+
+Every result records:
+
+- selected execution path;
+- selection reason;
+- whether escalation occurred;
+- latency and estimated cost.
+
+### Lifecycle progress stream
+
+Add a server-sent events interface emitting application lifecycle events:
+
+```text
+research_started
+retrieval_completed
+graph_expansion_completed
+file_inspection_completed
+answer_generation_started
+research_completed
+research_failed
+```
+
+Events summarize completed application actions and counts. They must not expose
+private reasoning or raw chain-of-thought. Existing synchronous API endpoints
+and CLI behavior remain supported.
+
+Token-level answer streaming is outside this release because structured output,
+citation validation, and recoverable failure are more important than partially
+rendered prose.
+
+### Acceptance targets
+
+- emit the first progress event within one second of request acceptance;
+- cover every routing rule with deterministic tests;
+- record every automatic choice in the research trace;
+- preserve approximately current direct-locate latency and cost;
+- apply graph expansion to Balanced and Thorough change-impact questions;
+- recover cleanly from stream interruption while retaining completed telemetry;
+- preserve existing synchronous clients and explicit evaluation modes.
+
+## 24. v0.8 — Repository workspace and reusable research
+
+### Goal
+
+Turn isolated research requests into a reusable, commit-aware local workflow.
+
+### Repository registry
+
+Maintain a cache-backed registry describing locally available repository
+sources and their ingestion artifacts:
+
+- repository identity and display name;
+- local path or public GitHub URL;
+- indexed branch and commit;
+- current source commit when detectable;
+- last successful ingestion time;
+- chunk and graph counts;
+- current, stale, unavailable, or failed status.
+
+Repository state remains in the cache because it describes local source and
+ingestion artifacts. It must remain discoverable even if PostgreSQL is
+unavailable or reset.
+
+Refresh behavior must:
+
+1. detect whether the source commit changed;
+2. skip embedding and graph generation when unchanged;
+3. process changed artifacts incrementally where practical;
+4. atomically activate the new Qdrant index and graph manifest;
+5. retain the last successful searchable version if refresh fails.
+
+### PostgreSQL-backed research sessions
+
+Research history is operational user activity and therefore belongs with
+monitoring, feedback, answer snapshots, and evaluations in PostgreSQL.
+
+Add a lightweight `research_sessions` record containing:
+
+```text
+session_id
+title
+repository_id
+created_at
+updated_at
+```
+
+Each answer snapshot belongs to a session and retains:
+
+```text
+session_id
+request_id
+question
+repository_commit
+run_kind
+question_mode
+created_at
+```
+
+A session is an ordered collection of independently grounded research runs, not
+a conversational memory system. Each run retains its own commit, evidence,
+trace, and validated answer.
+
+The UI supports:
+
+- recent sessions grouped by repository;
+- reopening prior answers;
+- filtering by repository, question type, strategy, and date;
+- stale-commit warnings per answer;
+- rerunning a prior question against the current commit.
+
+### Research export
+
+Export one answer or a complete session as deterministic Markdown without an
+additional model call. The export includes:
+
+- question and repository commit;
+- summary and implementation flow;
+- required, likely, and uncertain change targets;
+- related tests and configuration;
+- risks and unresolved questions;
+- evidence paths, symbols, and line ranges;
+- execution strategy, latency, and estimated cost.
+
+### Acceptance targets
+
+- select and refresh a registered repository without re-entering its path;
+- perform no embedding calls for an unchanged commit;
+- retain the last successful index and graph after refresh failure;
+- display the exact repository commit for every historical answer;
+- rerun stale questions against the current commit;
+- preserve citations and provenance in single-answer and full-session exports;
+- keep the complete workflow local and usable without GitHub authentication.
+
+Follow-up conversational memory is outside this release. Reopen, rerun, and
+export provide reusable context without mixing evidence across turns or
+commits.
+
+## 25. Post-capstone storage boundaries
+
+| Storage | Responsibility |
+|---|---|
+| Qdrant | Searchable repository chunks, dense vectors, and sparse vectors |
+| Versioned JSONL graph artifacts | Repository topology for a specific commit |
+| Repository cache and registry | Clone locations, source identity, ingestion manifests, and active graph versions |
+| PostgreSQL | Research sessions, monitoring runs, answer snapshots, feedback, and evaluation results |
+
+These responsibilities must remain explicit. In particular, repository graph
+topology must not be stored in PostgreSQL merely because PostgreSQL already
+exists for monitoring.
+
+## 26. Deferred features
+
+The following work is intentionally deferred until the three releases above
+produce measured evidence:
+
+- cross-encoder reranking;
+- query rewriting as a production default;
+- Neo4j as a required service;
+- multi-language parsing;
+- multi-agent orchestration;
+- conversational memory across research runs;
+- automatic code modification;
+- pull-request generation;
+- production authentication and multi-tenancy;
+- managed cloud hosting.
+
+Query rewriting or reranking may return to the roadmap only when an evaluation
+shows that correct starting evidence is being ranked poorly after v0.6.
+
+## 27. Post-capstone definition of success
+
+The roadmap succeeds when:
+
+- change-impact quality improves against the existing held-out baseline;
+- relationship expansion remains bounded, inspectable, and commit-scoped;
+- users can choose Quick, Balanced, or Thorough research without understanding
+  internal orchestration;
+- long-running research reports useful lifecycle progress;
+- repositories can be refreshed safely;
+- prior research can be reopened, rerun against a newer commit, and exported;
+- each release adds measurable value without introducing another required
+  infrastructure service.
+
