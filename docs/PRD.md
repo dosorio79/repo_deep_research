@@ -905,7 +905,7 @@ autonomous orchestration.
   default.
 - Keep the application local-first and Python-first.
 
-## 22. v0.6 — Relationship-aware change impact
+## 22. v0.6.0 — Relationship-aware change impact
 
 ### Goal
 
@@ -1219,7 +1219,7 @@ produce measured evidence:
 - managed cloud hosting.
 
 Query rewriting or reranking may return to the roadmap only when an evaluation
-shows that correct starting evidence is being ranked poorly after v0.6.
+shows that correct starting evidence is being ranked poorly after v0.6.0.
 
 ## 27. Post-capstone definition of success
 
@@ -1234,4 +1234,3 @@ The roadmap succeeds when:
 - prior research can be reopened, rerun against a newer commit, and exported;
 - each release adds measurable value without introducing another required
   infrastructure service.
-
