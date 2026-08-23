@@ -546,9 +546,13 @@ Use `docs/plans/` for multi-step implementation plans. Plans should be updated a
 ## Git and change discipline
 
 - Keep changes scoped to the requested task or current milestone.
+- Before starting non-trivial implementation, run `git status --short --branch` and confirm the working branch.
+- Do not implement feature, architecture, API, persistence, or multi-file changes directly on `main` or `dev`. Create or switch to a topic branch first, normally branched from current `dev`.
+- If inspection on `dev` reveals existing uncommitted feature work, stop broad edits, create a topic branch preserving that work, and continue there before staging or committing.
 - Do not reformat unrelated files.
 - Do not rename public interfaces without updating all callers and documentation.
 - Prefer small, coherent commits.
+- Commit completed logical slices as work progresses instead of accumulating a large mixed diff. Each commit should be reviewable, buildable where practical, and paired with its relevant tests/docs.
 - Include tests and docs in the same change where appropriate.
 - Do not commit secrets, local databases, model caches, indexed repository content, or generated evaluation outputs unless intentionally versioned.
 - Preserve backwards compatibility unless the task explicitly authorizes a breaking change.
