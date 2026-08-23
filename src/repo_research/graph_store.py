@@ -54,7 +54,10 @@ class GraphArtifactStore:
 
     def load(self, repository_id: str, commit_hash: str) -> RepositoryGraph:
         """Load and validate one repository graph artifact."""
-        return self._load_from_dir(self._artifact_dir(repository_id, commit_hash))
+        try:
+            return self._load_from_dir(self._artifact_dir(repository_id, commit_hash))
+        except OSError as error:
+            raise ValueError("repository graph artifact is missing") from error
 
     def exists(self, repository_id: str, commit_hash: str) -> bool:
         """Return whether a valid graph artifact exists."""

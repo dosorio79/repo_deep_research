@@ -48,6 +48,9 @@ class FakeDirectService:
 
     def __init__(self, *, delay_seconds: float = 0.0) -> None:
         self.delay_seconds = delay_seconds
+        self.active_calls = 0
+        self.max_active_calls = 0
+        self._lock = Lock()
 
     def run(
         self,
@@ -55,17 +58,24 @@ class FakeDirectService:
         repository: RepositoryIdentity,
         request: RagRequest,
     ) -> RagRunResult:
-        if self.delay_seconds:
-            time.sleep(self.delay_seconds)
-        return RagRunResult(
-            answer=_rag_answer(question=request.question, mode=request.mode),
-            trace=_trace(
-                repository=repository,
-                run_kind=RunKind.DIRECT,
-                request_id="direct-request",
-                latency_ms_total=100,
-            ),
-        )
+        with self._lock:
+            self.active_calls += 1
+            self.max_active_calls = max(self.max_active_calls, self.active_calls)
+        try:
+            if self.delay_seconds:
+                time.sleep(self.delay_seconds)
+            return RagRunResult(
+                answer=_rag_answer(question=request.question, mode=request.mode),
+                trace=_trace(
+                    repository=repository,
+                    run_kind=RunKind.DIRECT,
+                    request_id="direct-request",
+                    latency_ms_total=100,
+                ),
+            )
+        finally:
+            with self._lock:
+                self.active_calls -= 1
 
 
 class FakeResearchService:
@@ -266,10 +276,10 @@ def test_dataset_candidates_parallel_workers_preserve_stable_order(
         _record("flow_001", "flow"),
         _record("change_001", "change"),
     ]
-    started = time.perf_counter()
+    direct_service = FakeDirectService(delay_seconds=0.05)
 
     candidates = dataset_candidates(
-        direct_service=FakeDirectService(delay_seconds=0.05),
+        direct_service=direct_service,
         research_service=FakeResearchService(),
         repository=repository,
         records=records,
@@ -279,7 +289,7 @@ def test_dataset_candidates_parallel_workers_preserve_stable_order(
         workers=3,
     )
 
-    assert time.perf_counter() - started < 0.14
+    assert direct_service.max_active_calls > 1
     assert [candidate.record.id for candidate in candidates] == [
         "locate_001",
         "flow_001",

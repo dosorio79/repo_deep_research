@@ -64,6 +64,17 @@ def test_graph_store_rejects_path_escape_identity(tmp_path: Path) -> None:
         store.load("../repo", "abc123")
 
 
+def test_graph_store_reports_missing_artifact_as_unavailable(
+    tmp_path: Path,
+) -> None:
+    store = GraphArtifactStore(tmp_path)
+
+    with pytest.raises(ValueError, match="artifact is missing"):
+        store.load("repo-1", "abc123")
+
+    assert store.exists("repo-1", "abc123") is False
+
+
 def test_graph_store_rejects_manifest_count_mismatch(tmp_path: Path) -> None:
     store = GraphArtifactStore(tmp_path)
     store.write(sample_graph())
