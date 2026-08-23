@@ -121,6 +121,43 @@ Hybrid finds at least one expected file slightly more often on Datapeek, but
 dense has the stronger held-out rank, precision, recall, and symbol-hit
 profile, so the default still favors the more precise evidence set.
 
+## Relationship-Aware Graph Evaluation
+
+The v0.6.0 relationship-aware branch includes a functional harness for checking
+graph readiness and, optionally, answer-quality improvement. The default command
+is offline and does not require an OpenAI key:
+
+```bash
+make evaluate-relationship-graph
+```
+
+It writes `artifacts/eval/relationship-aware/summary.json` plus separate
+ingest and graph summaries. The graph checks fail if the current repository
+artifact has no nodes, no edges, or no relationship counts.
+
+When `OPENAI_API_KEY` is available, run the same harness with answer judging:
+
+```bash
+make evaluate-relationship-graph RUN_ANSWERS=1
+```
+
+That runs agentic `evaluate-answers` over `eval/development.json` with hybrid
+retrieval and writes `answer-agentic-hybrid.json` and `answer-summary.json`.
+To compare against a baseline report generated from `origin/dev`, call the
+script directly:
+
+```bash
+uv run python scripts/evaluate_relationship_graph.py \
+  --run-answers \
+  --baseline-report artifacts/eval/baseline/answer-agentic-hybrid.json
+```
+
+Use the resulting `answer-comparison.json` to inspect candidate-minus-baseline
+deltas for correctness, faithfulness, citation precision, reference coverage,
+answer relevance, presentation quality, and unsupported claims. Retrieval-only
+evaluation is still useful, but it does not measure graph expansion because the
+graph is used after semantic retrieval inside bounded agentic research.
+
 ## Answer Evaluation
 
 Answer evaluation is opt-in because it calls OpenAI for judging. The default
