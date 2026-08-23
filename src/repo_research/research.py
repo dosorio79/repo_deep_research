@@ -19,6 +19,7 @@ from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.usage import RunUsage
 
 from repo_research.config import load_dotenv_environment
+from repo_research.graph_models import GraphNode, RelationshipType, RepositoryGraph
 from repo_research.grounding import canonical_change_targets
 from repo_research.models import (
     ChangeTarget,
@@ -36,7 +37,7 @@ from repo_research.models import (
     SearchResult,
 )
 from repo_research.pricing import estimate_openai_price
-from repo_research.protocols import RepositorySearcher
+from repo_research.protocols import RepositoryGraphStore, RepositorySearcher
 from repo_research.rag import infer_rag_mode
 from repo_research.telemetry import elapsed_ms, total_estimated_cost, usage_int
 
@@ -85,6 +86,7 @@ class ToolEvidence(BaseModel):
             score=self.score,
             reason=self.reason,
             content=self.content,
+            chunk_id=self.chunk_id,
         )
 
 
@@ -118,6 +120,7 @@ class ResearchToolContext:
         repository: RepositoryIdentity,
         root_path: Path,
         request: ResearchRequest,
+        graph_store: RepositoryGraphStore | None = None,
         seed_evidence: Iterable[SearchResult] = (),
     ) -> None:
         self._database = database
@@ -130,6 +133,20 @@ class ResearchToolContext:
         self.search_calls = 0
         self.file_read_calls = 0
         self.total_tool_calls = 0
+        self.graph_expansion_calls = 0
+        self.graph_nodes_visited = 0
+        self.graph_relationship_counts: dict[str, int] = {}
+        self.graph_fallback_reason: str | None = None
+        self._graph = self._load_graph(graph_store)
+        self._graph_nodes_by_chunk_id = (
+            {
+                node.chunk_id: node
+                for node in self._graph.nodes
+                if self._graph is not None and node.chunk_id is not None
+            }
+            if self._graph is not None
+            else {}
+        )
         for result in seed_evidence:
             self._record_search_result(result, reason="Initial repository evidence.")
 
@@ -142,6 +159,11 @@ class ResearchToolContext:
     def evidence_by_id(self) -> dict[str, ToolEvidence]:
         """Return canonical evidence keyed by evidence ID."""
         return dict(self._evidence_by_id)
+
+    @property
+    def graph_available(self) -> bool:
+        """Return whether a graph was loaded for the current revision."""
+        return self._graph is not None
 
     def search_repository(
         self, query: str, limit: int | None = None
@@ -225,6 +247,102 @@ class ResearchToolContext:
             for result in matched
         ]
 
+    def expand_related(
+        self,
+        evidence_ids: list[str],
+        relationship_types: list[RelationshipType] | None = None,
+    ) -> list[ToolEvidence]:
+        """Expand from known evidence through bounded graph relationships."""
+        self._consume_tool_call(kind="graph")
+        if self._graph is None:
+            return []
+        start_nodes = self._start_nodes_for_evidence(evidence_ids)
+        if not start_nodes:
+            return []
+        allowed = (
+            set(relationship_types)
+            if relationship_types
+            else _default_graph_relationships(self._request.mode)
+        )
+        traversal = self._graph.traverse(
+            start_node_ids=[node.id for node in start_nodes],
+            relationship_types=allowed,
+            max_depth=self._request.budget.max_graph_depth,
+            max_nodes=self._request.budget.max_graph_nodes,
+            min_confidence=0.5,
+        )
+        self._record_graph_traversal(
+            traversal.relationship_counts, len(traversal.nodes)
+        )
+        reasons = {
+            edge.target: (
+                f"Related through {edge.type.value} "
+                f"({edge.method}, confidence {edge.confidence:.2f})."
+            )
+            for edge in traversal.edges
+        }
+        existing = [
+            self._evidence_by_chunk_id[node.chunk_id].model_copy(
+                update={"reason": reasons.get(node.id, "Related repository evidence.")}
+            )
+            for node in traversal.nodes
+            if node.chunk_id is not None and node.chunk_id in self._evidence_by_chunk_id
+        ]
+        chunk_ids = [
+            node.chunk_id
+            for node in traversal.nodes
+            if node.chunk_id is not None
+            and node.chunk_id not in self._evidence_by_chunk_id
+        ]
+        chunks = self._database.get_chunks(
+            self._repository.repository_id,
+            self._repository.commit_hash,
+            chunk_ids,
+        )
+        return existing + [
+            self._record_chunk(
+                chunk,
+                reason=reasons.get(
+                    self._graph_nodes_by_chunk_id[chunk.chunk_id].id,
+                    "Related repository evidence.",
+                ),
+            )
+            for chunk in chunks
+        ]
+
+    def find_references(self, symbol: str) -> list[ToolEvidence]:
+        """Find incoming graph references and calls for one known symbol."""
+        self._consume_tool_call(kind="graph")
+        if self._graph is None:
+            return []
+        targets = [
+            node
+            for node in self._graph.nodes
+            if node.symbol == symbol or (node.symbol or "").endswith(f".{symbol}")
+        ]
+        traversal = self._graph.traverse(
+            start_node_ids=[node.id for node in targets],
+            relationship_types={RelationshipType.REFERENCES, RelationshipType.CALLS},
+            max_depth=1,
+            max_nodes=self._request.budget.max_graph_nodes,
+            min_confidence=0.5,
+            direction="incoming",
+        )
+        self._record_graph_traversal(
+            traversal.relationship_counts, len(traversal.nodes)
+        )
+        chunk_ids = [
+            node.chunk_id for node in traversal.nodes if node.chunk_id is not None
+        ]
+        return [
+            self._record_chunk(chunk, reason="Referenced by repository graph evidence.")
+            for chunk in self._database.get_chunks(
+                self._repository.repository_id,
+                self._repository.commit_hash,
+                chunk_ids,
+            )
+        ]
+
     def _consume_tool_call(self, *, kind: str) -> None:
         if self.total_tool_calls >= self._request.budget.max_total_tool_calls:
             raise ResearchBudgetExceeded("maximum total tool calls exceeded")
@@ -236,6 +354,10 @@ class ResearchToolContext:
             if self.file_read_calls >= self._request.budget.max_file_reads:
                 raise ResearchBudgetExceeded("maximum file reads exceeded")
             self.file_read_calls += 1
+        elif kind == "graph":
+            if self.graph_expansion_calls >= self._request.budget.max_graph_expansions:
+                raise ResearchBudgetExceeded("maximum graph expansions exceeded")
+            self.graph_expansion_calls += 1
         self.total_tool_calls += 1
 
     def _bounded_limit(self, limit: int | None) -> int:
@@ -264,6 +386,63 @@ class ResearchToolContext:
         self._evidence_by_chunk_id[result.chunk.chunk_id] = evidence
         return evidence
 
+    def _record_chunk(self, chunk: object, *, reason: str) -> ToolEvidence:
+        from repo_research.models import ParsedChunk
+
+        parsed = cast(ParsedChunk, chunk)
+        existing = self._evidence_by_chunk_id.get(parsed.chunk_id)
+        if existing is not None:
+            return existing
+        evidence = ToolEvidence(
+            evidence_id=self._next_evidence_id(),
+            path=parsed.path,
+            start_line=parsed.start_line,
+            end_line=parsed.end_line,
+            symbol=parsed.symbol,
+            score=1.0,
+            reason=reason,
+            content=parsed.content,
+            chunk_id=parsed.chunk_id,
+        )
+        self._evidence_by_id[evidence.evidence_id] = evidence
+        self._evidence_by_chunk_id[parsed.chunk_id] = evidence
+        return evidence
+
+    def _load_graph(
+        self, graph_store: RepositoryGraphStore | None
+    ) -> RepositoryGraph | None:
+        if graph_store is None:
+            self.graph_fallback_reason = "graph store unavailable"
+            return None
+        try:
+            return graph_store.load(
+                self._repository.repository_id,
+                self._repository.commit_hash,
+            )
+        except ValueError as error:
+            self.graph_fallback_reason = str(error)
+            return None
+
+    def _start_nodes_for_evidence(self, evidence_ids: list[str]) -> list[GraphNode]:
+        nodes: list[GraphNode] = []
+        for evidence_id in evidence_ids:
+            evidence = self._evidence_by_id.get(evidence_id)
+            if evidence is None or evidence.chunk_id is None:
+                continue
+            node = self._graph_nodes_by_chunk_id.get(evidence.chunk_id)
+            if node is not None:
+                nodes.append(node)
+        return nodes
+
+    def _record_graph_traversal(
+        self, counts: dict[RelationshipType, int], node_count: int
+    ) -> None:
+        self.graph_nodes_visited += node_count
+        for relationship, count in counts.items():
+            self.graph_relationship_counts[relationship.value] = (
+                self.graph_relationship_counts.get(relationship.value, 0) + count
+            )
+
     def _next_evidence_id(self) -> str:
         evidence_id = f"E{self._next_evidence_index}"
         self._next_evidence_index += 1
@@ -286,9 +465,11 @@ class BoundedResearchService:
         *,
         database: RepositorySearcher,
         agent: ResearchAgentRunner,
+        graph_store: RepositoryGraphStore | None = None,
     ) -> None:
         self._database = database
         self._agent = agent
+        self._graph_store = graph_store
 
     def run(
         self,
@@ -319,6 +500,7 @@ class BoundedResearchService:
                 repository=repository,
                 root_path=root_path,
                 request=request,
+                graph_store=self._graph_store,
                 seed_evidence=self._initial_search(
                     repository=repository, request=request
                 ),
@@ -342,6 +524,7 @@ class BoundedResearchService:
                     repository=repository,
                     root_path=root_path,
                     request=request,
+                    graph_store=self._graph_store,
                 )
             usage = getattr(error, "usage", None)
             if isinstance(usage, ModelUsage):
@@ -376,6 +559,11 @@ class BoundedResearchService:
                 error_type=error_type,
                 error_message=error_message,
                 tool_call_count=tools.total_tool_calls,
+                graph_available=tools.graph_available,
+                graph_expansion_count=tools.graph_expansion_calls,
+                graph_nodes_visited=tools.graph_nodes_visited,
+                graph_relationship_counts=tools.graph_relationship_counts,
+                graph_fallback_reason=tools.graph_fallback_reason,
             ),
         )
 
@@ -411,6 +599,7 @@ class BoundedResearchService:
                 repository=repository,
                 root_path=root_path,
                 request=request,
+                graph_store=self._graph_store,
                 seed_evidence=seed_evidence,
             )
             model_start = time.perf_counter()
@@ -438,6 +627,7 @@ class BoundedResearchService:
                     repository=repository,
                     root_path=root_path,
                     request=request,
+                    graph_store=self._graph_store,
                 )
             usage = getattr(error, "usage", None)
             if isinstance(usage, ModelUsage):
@@ -472,6 +662,11 @@ class BoundedResearchService:
                 error_type=error_type,
                 error_message=error_message,
                 tool_call_count=tools.total_tool_calls,
+                graph_available=tools.graph_available,
+                graph_expansion_count=tools.graph_expansion_calls,
+                graph_nodes_visited=tools.graph_nodes_visited,
+                graph_relationship_counts=tools.graph_relationship_counts,
+                graph_fallback_reason=tools.graph_fallback_reason,
             ),
         )
 
@@ -618,6 +813,22 @@ class PydanticAIResearchAgent:
             """Find indexed repository evidence for a symbol."""
             return ctx.deps.tools.find_symbol(symbol)
 
+        @self._agent.tool
+        def expand_related(
+            ctx: RunContext[PydanticResearchDeps],
+            evidence_ids: list[str],
+            relationship_types: list[RelationshipType] | None = None,
+        ) -> list[ToolEvidence]:
+            """Expand from cited evidence through bounded graph relationships."""
+            return ctx.deps.tools.expand_related(evidence_ids, relationship_types)
+
+        @self._agent.tool
+        def find_references(
+            ctx: RunContext[PydanticResearchDeps], symbol: str
+        ) -> list[ToolEvidence]:
+            """Find incoming repository graph references to a symbol."""
+            return ctx.deps.tools.find_references(symbol)
+
 
 def insufficient_evidence_research_answer(
     *,
@@ -762,6 +973,23 @@ def _change_target_evidence(
     return target_evidence
 
 
+def _default_graph_relationships(mode: RagMode) -> set[RelationshipType]:
+    if mode is RagMode.CHANGE:
+        return {
+            RelationshipType.IMPORTS,
+            RelationshipType.REFERENCES,
+            RelationshipType.CALLS,
+            RelationshipType.TESTS,
+            RelationshipType.READS_CONFIG,
+            RelationshipType.INHERITS,
+        }
+    return {
+        RelationshipType.IMPORTS,
+        RelationshipType.REFERENCES,
+        RelationshipType.CALLS,
+    }
+
+
 def _canonical_research_answer(
     *,
     request: ResearchRequest,
@@ -836,6 +1064,11 @@ def _build_research_trace(
     error_type: str | None,
     error_message: str | None,
     tool_call_count: int,
+    graph_available: bool = False,
+    graph_expansion_count: int = 0,
+    graph_nodes_visited: int = 0,
+    graph_relationship_counts: dict[str, int] | None = None,
+    graph_fallback_reason: str | None = None,
 ) -> RagRunTrace:
     unique_files = {item.path for item in evidence}
     return RagRunTrace(
@@ -862,6 +1095,11 @@ def _build_research_trace(
         error_type=error_type,
         error_message=error_message,
         tool_call_count=tool_call_count,
+        graph_available=graph_available,
+        graph_expansion_count=graph_expansion_count,
+        graph_nodes_visited=graph_nodes_visited,
+        graph_relationship_counts=graph_relationship_counts or {},
+        graph_fallback_reason=graph_fallback_reason,
     )
 
 

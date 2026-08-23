@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
@@ -13,6 +14,7 @@ from openai import OpenAIError
 from qdrant_client.http.exceptions import ResponseHandlingException
 
 from repo_research.config import Settings, load_dotenv_environment
+from repo_research.graph_models import GraphSummary
 from repo_research.ingestion import (
     discover_repository,
     ingest_repository_if_needed,
@@ -48,6 +50,7 @@ from repo_research.models import (
     SearchResult,
 )
 from repo_research.monitoring import instrument_fastapi
+from repo_research.protocols import RepositoryGraphStore
 from repo_research.rag import AnswerGenerator
 from repo_research.research import ResearchAgentRunner
 from repo_research.runtime import (
@@ -55,6 +58,7 @@ from repo_research.runtime import (
     create_bounded_research_service,
     create_database,
     create_direct_rag_service,
+    create_graph_store,
     create_recording_store,
     create_research_agent,
 )
@@ -101,6 +105,11 @@ class RagDatabase(Protocol):
 
     def indexed_chunk_count(self, repository_id: str, commit_hash: str) -> int:
         """Return indexed chunk count for one repository revision."""
+
+    def get_chunks(
+        self, repository_id: str, commit_hash: str, chunk_ids: list[str]
+    ) -> list[ParsedChunk]:
+        """Return canonical chunks for one repository revision."""
 
 
 class RecordingStore(Protocol):
@@ -176,6 +185,7 @@ def create_app(
     generator: AnswerGenerator | None = None,
     research_agent: ResearchAgentRunner | None = None,
     recording_store: RecordingStore | None = None,
+    graph_store: RepositoryGraphStore | None = None,
 ) -> FastAPI:
     """Create a FastAPI app with injectable runtime dependencies."""
     load_dotenv_environment(keys=("OPENAI_API_KEY", "OPENAI_ADMIN_KEY"))
@@ -210,6 +220,9 @@ def create_app(
 
     def get_research_agent() -> ResearchAgentRunner:
         return research_agent or create_research_agent(app_settings)
+
+    def get_graph_store() -> RepositoryGraphStore:
+        return graph_store or create_graph_store(app_settings)
 
     recording_store_instance = recording_store
 
@@ -258,6 +271,7 @@ def create_app(
             )
             return ingest_repository_if_needed(
                 database=get_database(),
+                graph_store=get_graph_store(),
                 repository=repository,
                 files=files,
             )
@@ -336,6 +350,7 @@ def create_app(
             service = create_bounded_research_service(
                 settings=app_settings,
                 database=get_database(),
+                graph_store=get_graph_store(),
                 agent=get_research_agent(),
             )
             research_request = request.model_copy(update={"repository_path": root_path})
@@ -368,6 +383,36 @@ def create_app(
                     "service configuration."
                 ),
             ) from error
+
+    @app.get(
+        "/repositories/graph-summary",
+        response_model=GraphSummary,
+        tags=["repositories"],
+        summary="Get the current repository graph summary",
+        operation_id="get_repository_graph_summary",
+    )
+    async def repository_graph_summary(
+        repository_path: str | None = Query(default=None, min_length=1),
+    ) -> GraphSummary:
+        root_path = (
+            Path(repository_path).resolve()
+            if repository_path
+            else app_settings.repository_root.resolve()
+        )
+        try:
+            repository, _ = discover_repository(
+                root_path, app_settings.max_file_size_bytes
+            )
+            return (
+                get_graph_store()
+                .load(
+                    repository.repository_id,
+                    repository.commit_hash,
+                )
+                .summary()
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
 
     @app.post(
         "/feedback",

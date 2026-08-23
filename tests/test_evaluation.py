@@ -30,6 +30,12 @@ class FakeDatabase:
     def search(self, query: object) -> list[SearchResult]:
         return [self._result]
 
+    def get_chunks(
+        self, repository_id: str, commit_hash: str, chunk_ids: list[str]
+    ) -> list[ParsedChunk]:
+        del repository_id, commit_hash, chunk_ids
+        return []
+
 
 def test_evaluation_calculates_metrics_and_writes_stable_report(tmp_path: Path) -> None:
     repository = RepositoryIdentity(

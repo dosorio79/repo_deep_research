@@ -29,6 +29,12 @@ class FixedDatabase:
     def search(self, query: SearchQuery) -> list[SearchResult]:
         return self._results
 
+    def get_chunks(
+        self, repository_id: str, commit_hash: str, chunk_ids: list[str]
+    ) -> list[ParsedChunk]:
+        del repository_id, commit_hash, chunk_ids
+        return []
+
 
 class BudgetLimitedAgent:
     """Spend the single search budget so the service must return a partial plan."""

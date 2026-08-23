@@ -39,6 +39,12 @@ class FakeDatabase:
         self.queries.append(query)
         return self._results
 
+    def get_chunks(
+        self, repository_id: str, commit_hash: str, chunk_ids: list[str]
+    ) -> list[ParsedChunk]:
+        del repository_id, commit_hash, chunk_ids
+        return []
+
 
 class FakeGenerator:
     """Return a fixed model draft without network calls."""

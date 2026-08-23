@@ -5,8 +5,9 @@ from __future__ import annotations
 from qdrant_client import QdrantClient
 
 from repo_research.config import Settings
+from repo_research.graph_store import GraphArtifactStore
 from repo_research.monitoring import instrument_pydantic_ai
-from repo_research.protocols import RepositorySearcher
+from repo_research.protocols import RepositoryGraphStore, RepositorySearcher
 from repo_research.qdrant_store import (
     RepositoryDatabase,
     local_embedder,
@@ -41,6 +42,13 @@ def create_database(settings: Settings) -> RepositoryDatabase:
             settings.embedding_batch_size,
             settings.fastembed_cache_path,
         ),
+    )
+
+
+def create_graph_store(settings: Settings) -> GraphArtifactStore:
+    """Create the repository graph artifact store."""
+    return GraphArtifactStore(
+        getattr(settings, "repository_graph_dir", Settings().repository_graph_dir)
     )
 
 
@@ -86,10 +94,12 @@ def create_bounded_research_service(
     *,
     settings: Settings,
     database: RepositorySearcher | None = None,
+    graph_store: RepositoryGraphStore | None = None,
     agent: ResearchAgentRunner | None = None,
 ) -> BoundedResearchService:
     """Create the bounded agentic research service used by CLI and API."""
     return BoundedResearchService(
         database=database or create_database(settings),
+        graph_store=graph_store,
         agent=agent or create_research_agent(settings),
     )

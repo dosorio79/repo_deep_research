@@ -241,6 +241,33 @@ class RepositoryDatabase:
             for point in response.points
         ]
 
+    def get_chunks(
+        self, repository_id: str, commit_hash: str, chunk_ids: list[str]
+    ) -> list[ParsedChunk]:
+        """Return indexed chunks by ID without semantic search or embeddings."""
+        if not chunk_ids or not self._client.collection_exists(self._collection_name):
+            return []
+        unique_ids = list(dict.fromkeys(chunk_ids))
+        points = self._client.retrieve(
+            collection_name=self._collection_name,
+            ids=unique_ids,
+            with_payload=True,
+            with_vectors=False,
+        )
+        chunks_by_id: dict[str, ParsedChunk] = {}
+        for point in points:
+            if point.payload is None:
+                continue
+            chunk = ParsedChunk.model_validate(point.payload)
+            if (
+                chunk.repository_id == repository_id
+                and chunk.commit_hash == commit_hash
+            ):
+                chunks_by_id[chunk.chunk_id] = chunk
+        return [
+            chunks_by_id[chunk_id] for chunk_id in chunk_ids if chunk_id in chunks_by_id
+        ]
+
     def health_check(self) -> bool:
         """Return whether Qdrant responds to a lightweight collection request."""
         return bool(self._client.get_collections())

@@ -104,6 +104,11 @@ class AnswerEvaluationCandidate:
     feedback_not_useful: int = 0
     latency_ms_total: int | None = None
     total_estimated_cost_usd: Decimal | None = None
+    graph_available: bool = False
+    graph_expansion_count: int = 0
+    graph_nodes_visited: int = 0
+    graph_relationship_counts: dict[str, int] | None = None
+    graph_fallback_reason: str | None = None
 
 
 def audit_evaluation_records(
@@ -185,6 +190,11 @@ def dataset_candidates(
             source_type=EvaluationSourceType.DATASET,
             latency_ms_total=research_run.trace.latency_ms_total,
             total_estimated_cost_usd=research_run.trace.total_estimated_cost_usd,
+            graph_available=research_run.trace.graph_available,
+            graph_expansion_count=research_run.trace.graph_expansion_count,
+            graph_nodes_visited=research_run.trace.graph_nodes_visited,
+            graph_relationship_counts=research_run.trace.graph_relationship_counts,
+            graph_fallback_reason=research_run.trace.graph_fallback_reason,
         )
 
     for approach in approaches:
@@ -505,6 +515,11 @@ def _persisted_result_from_judgement(
         feedback_not_useful=candidate.feedback_not_useful,
         latency_ms_total=candidate.latency_ms_total,
         total_estimated_cost_usd=candidate.total_estimated_cost_usd,
+        graph_available=candidate.graph_available,
+        graph_expansion_count=candidate.graph_expansion_count,
+        graph_nodes_visited=candidate.graph_nodes_visited,
+        graph_relationship_counts=candidate.graph_relationship_counts or {},
+        graph_fallback_reason=candidate.graph_fallback_reason,
         notes=judgement.notes,
         created_at=created_at,
     )

@@ -9,7 +9,7 @@ FRONTEND_NODE_VERSION := $(shell cat frontend/.nvmrc 2>/dev/null)
 FRONTEND_NODE_BIN := $(HOME)/.nvm/versions/node/v$(FRONTEND_NODE_VERSION)/bin
 FRONTEND_NPM := PATH=$(FRONTEND_NODE_BIN):$$PATH npm
 
-.PHONY: help install format lint typecheck test check test-all services-up services-down stack-start stack-rebuild stack-up stack-stop stack-down ingest rag research evaluate-retrieval evaluate-answers export-openapi api app
+.PHONY: help install format lint typecheck test check test-all services-up services-down stack-start stack-rebuild stack-up stack-stop stack-down ingest graph-summary rag research evaluate-retrieval evaluate-answers export-openapi api app
 
 # -----------------------------------------------------------------------------
 # Help
@@ -38,6 +38,7 @@ help:
 	printf '%s\n' ''
 	printf '%s\n' 'Repository workflows'
 	printf '%s\n' '  make ingest                 index this repository'
+	printf '%s\n' '  make graph-summary          print current repository graph summary'
 	printf '%s\n' '  make rag QUESTION="..."     run direct RAG'
 	printf '%s\n' '  make research QUESTION="..." run bounded agentic research'
 	printf '%s\n' ''
@@ -112,6 +113,9 @@ stack-down:
 
 ingest:
 	$(RUN) repo-research ingest .
+
+graph-summary:
+	$(RUN) repo-research graph-summary --path .
 
 rag:
 	$(RUN) repo-research ask "$(QUESTION)"

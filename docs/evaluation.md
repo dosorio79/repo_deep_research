@@ -181,6 +181,12 @@ reference coverage are unavailable because there is no independent ground-truth
 record. The dashboard omits unavailable values from metric averages and shows
 persisted answer evidence so evidence IDs can be inspected.
 
+For v0.6.0 and later, generated agentic dataset rows also preserve graph trace
+fields: graph availability, expansion count, visited node count, relationship
+counts, and fallback reason. These fields verify whether relationship-aware
+change-impact answers actually used graph expansion; they do not change the
+judge scoring rubric.
+
 Answer-evaluation metric definitions:
 
 | Metric | Scale | Available for | Definition |

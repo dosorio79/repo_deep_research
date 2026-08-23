@@ -44,7 +44,7 @@ from repo_research.models import (
     RunKind,
     SearchQuery,
 )
-from repo_research.protocols import RepositorySearcher
+from repo_research.protocols import RepositoryGraphStore, RepositorySearcher
 from repo_research.rag import AnswerJudge, DirectRagService
 from repo_research.research import ResearchAgentRunner
 
@@ -55,6 +55,10 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     ingest = subparsers.add_parser("ingest", help="parse and index a repository")
     ingest.add_argument("path", type=Path, nargs="?", default=None)
+    graph_summary = subparsers.add_parser(
+        "graph-summary", help="print the current commit repository graph summary"
+    )
+    graph_summary.add_argument("--path", type=Path, default=None)
     ask = subparsers.add_parser(
         "ask", help="ingest if needed and answer with grounded direct RAG"
     )
@@ -126,6 +130,9 @@ def build_parser() -> argparse.ArgumentParser:
     research.add_argument("--max-searches", type=int, default=None)
     research.add_argument("--max-file-reads", type=int, default=None)
     research.add_argument("--max-total-tool-calls", type=int, default=None)
+    research.add_argument("--max-graph-expansions", type=int, default=None)
+    research.add_argument("--max-graph-nodes", type=int, default=None)
+    research.add_argument("--max-graph-depth", type=int, default=None)
     answer_eval = subparsers.add_parser(
         "evaluate-answers", help="evaluate grounded answers with an LLM judge"
     )
@@ -212,7 +219,21 @@ def main() -> None:
         )
         return
 
+    if arguments.command == "graph-summary":
+        repository, _ = discover_repository(root_path, settings.max_file_size_bytes)
+        graph_summary_result = (
+            runtime.create_graph_store(settings)
+            .load(
+                repository.repository_id,
+                repository.commit_hash,
+            )
+            .summary()
+        )
+        print(json.dumps(graph_summary_result.model_dump(mode="json"), indent=2))
+        return
+
     database = runtime.create_database(settings)
+    graph_store = runtime.create_graph_store(settings)
     if arguments.command in {"ask", "ingest"}:
         if arguments.command == "ask":
             _report_step("starting qdrant")
@@ -221,6 +242,7 @@ def main() -> None:
         repository, files = discover_repository(root_path, settings.max_file_size_bytes)
         summary = ingest_repository_if_needed(
             database=database,
+            graph_store=graph_store,
             repository=repository,
             files=files,
         )
@@ -250,6 +272,7 @@ def main() -> None:
         _report_step("ingesting repository")
         summary = ingest_repository_if_needed(
             database=database,
+            graph_store=graph_store,
             repository=repository,
             files=files,
         )
@@ -257,6 +280,7 @@ def main() -> None:
         _report_step("running agentic research")
         research_run_result = _run_agentic_research(
             database=database,
+            graph_store=graph_store,
             agent=runtime.create_research_agent(settings),
             repository=repository,
             root_path=root_path,
@@ -273,6 +297,15 @@ def main() -> None:
                 or settings.research_max_file_reads,
                 max_total_tool_calls=arguments.max_total_tool_calls
                 or settings.research_max_total_tool_calls,
+                max_graph_expansions=arguments.max_graph_expansions
+                if arguments.max_graph_expansions is not None
+                else getattr(settings, "research_max_graph_expansions", 2),
+                max_graph_nodes=arguments.max_graph_nodes
+                if arguments.max_graph_nodes is not None
+                else getattr(settings, "research_max_graph_nodes", 12),
+                max_graph_depth=arguments.max_graph_depth
+                if arguments.max_graph_depth is not None
+                else getattr(settings, "research_max_graph_depth", 2),
             ),
         )
         _report_step("done")
@@ -410,6 +443,7 @@ def _run_direct_rag(
 def _run_agentic_research(
     *,
     database: RepositorySearcher,
+    graph_store: RepositoryGraphStore | None = None,
     agent: ResearchAgentRunner,
     repository: RepositoryIdentity,
     root_path: Path,
@@ -423,6 +457,7 @@ def _run_agentic_research(
     service = runtime.create_bounded_research_service(
         settings=settings,
         database=database,
+        graph_store=graph_store,
         agent=agent,
     )
     return service.run(
@@ -500,6 +535,7 @@ def _run_unified_answer_evaluation(
                 research_service=runtime.create_bounded_research_service(
                     settings=settings,
                     database=database,
+                    graph_store=runtime.create_graph_store(settings),
                     agent=runtime.create_research_agent(settings),
                 )
                 if arguments.approach in {"agentic", "both"}

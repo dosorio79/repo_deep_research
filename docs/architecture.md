@@ -51,8 +51,8 @@ Entry points
   React TypeScript frontend under frontend/.
 
 Runtime composition
-  runtime.py creates shared database, model, RAG, research-agent, and
-  recording-store dependencies.
+  runtime.py creates shared database, graph-store, model, RAG, research-agent,
+  and recording-store dependencies.
 
 Service layer
   rag.py        runs direct RAG, citation validation, and answer evaluation.
@@ -60,6 +60,7 @@ Service layer
 
 Retrieval and storage
   qdrant_store.py  owns FastEmbed, Qdrant payloads, and dense/sparse/hybrid search.
+  graph_store.py   owns immutable JSONL repository graph artifacts.
 
 Persistence
   recording_store.py  persists run telemetry, feedback, answer snapshots, and
@@ -86,7 +87,8 @@ GET  /            Redirect to Swagger UI at /docs
 GET  /docs        Swagger UI for the FastAPI contract
 GET  /openapi.json  Runtime OpenAPI JSON
 GET  /health      Qdrant dependency health
-POST /repositories/ingest   Parse and index a repository
+POST /repositories/ingest   Parse, graph, and index a repository
+GET  /repositories/graph-summary  Current commit graph artifact summary
 POST /rag         Direct RAG answer with trace metadata
 POST /research    Bounded agentic research with trace metadata
 POST /feedback    Persist useful/not-useful feedback linked by session_id
@@ -107,6 +109,9 @@ Local repository path or GitHub URL
 ingestion.py -- filters, Git identity, and parsing
         |
         v
+graph_store.py -- commit-scoped JSONL relationship artifact
+        |
+        v
 qdrant_store.py -- FastEmbed, current chunk payloads, vector search
         |
         v
@@ -124,8 +129,8 @@ frontend/ -- browser research UI, feedback, and admin monitoring dashboard
 
 Ingestion is request-driven because the repository is selected by the user at
 runtime. The application-owned Python lifecycle is:
-repository selection -> local access or GitHub clone -> parse -> chunk -> embed
--> Qdrant index. This keeps Local Alpha simple and reproducible without adding
+repository selection -> local access or GitHub clone -> parse -> chunk -> graph
+-> embed -> Qdrant index. This keeps Local Alpha simple and reproducible without adding
 Kestra, dlt, Airflow, Prefect, or another orchestration framework solely for
 batch scheduling.
 
@@ -164,6 +169,15 @@ Fusion over bounded candidates.
 files without discarding successfully parsed chunks. The CLI emits those
 diagnostics alongside repository identity and indexed-chunk count.
 
+Each successful indexed commit also writes a portable graph artifact under
+`.repo_research_cache/graphs/<repository-id>/<commit-hash>/` with
+`manifest.json`, `nodes.jsonl`, and `edges.jsonl`. The graph records local AST
+and heuristic relationships such as imports, calls, tests, inheritance,
+decorators, references, and configuration reads. It is bounded and inspectable,
+not a compiler-grade call graph. Qdrant remains the canonical evidence store:
+graph-expanded nodes must resolve back to same-repository, same-commit chunks
+before they can be cited.
+
 `evaluation.py` loads versioned JSON ground truth, runs every baseline retrieval
 mode, and writes deterministic file- and symbol-level metric reports.
 `answer_evaluation.py` evaluates generated or previously recorded answers and
@@ -178,6 +192,9 @@ model-authored answer content under `answer` and application-owned telemetry
 under `trace`.
 
 `research.py` runs bounded agentic research using PydanticAI. The
+change-impact path can expand from confirmed semantic evidence through the
+commit graph, traverse at most two hops, and report graph expansion counts,
+visited nodes, relationship counts, and fallback reason in the run trace. The
 `BoundedResearchService` enforces configurable limits on search calls, file
 reads, and total tool calls. Tools include `search_repository`, `read_chunk`,
 `read_file`, and `find_symbol`. The agent produces structured change-impact

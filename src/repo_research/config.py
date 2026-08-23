@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     qdrant_collection: str = "repo_chunks_v2"
     repository_root: Path = Path(".")
     repository_cache_dir: Path = Path(".repo_research_cache/repositories")
+    repository_graph_dir: Path = Path(".repo_research_cache/graphs")
     max_file_size_bytes: int = Field(default=1_048_576, gt=0)
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dimension: int = Field(default=384, gt=0)
@@ -140,6 +141,33 @@ class Settings(BaseSettings):
             "RDR_RESEARCH_MAX_TOTAL_TOOL_CALLS",
         ),
     )
+    research_max_graph_expansions: int = Field(
+        default=2,
+        ge=0,
+        le=10,
+        validation_alias=AliasChoices(
+            "research_max_graph_expansions",
+            "RDR_RESEARCH_MAX_GRAPH_EXPANSIONS",
+        ),
+    )
+    research_max_graph_nodes: int = Field(
+        default=12,
+        ge=1,
+        le=50,
+        validation_alias=AliasChoices(
+            "research_max_graph_nodes",
+            "RDR_RESEARCH_MAX_GRAPH_NODES",
+        ),
+    )
+    research_max_graph_depth: int = Field(
+        default=2,
+        ge=0,
+        le=2,
+        validation_alias=AliasChoices(
+            "research_max_graph_depth",
+            "RDR_RESEARCH_MAX_GRAPH_DEPTH",
+        ),
+    )
     cors_allowed_origins: list[str] = Field(
         default_factory=list,
         validation_alias=AliasChoices(
@@ -178,6 +206,9 @@ class Settings(BaseSettings):
             max_searches=self.research_max_searches,
             max_file_reads=self.research_max_file_reads,
             max_total_tool_calls=self.research_max_total_tool_calls,
+            max_graph_expansions=self.research_max_graph_expansions,
+            max_graph_nodes=self.research_max_graph_nodes,
+            max_graph_depth=self.research_max_graph_depth,
         )
 
     @model_validator(mode="after")
