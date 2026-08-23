@@ -137,6 +137,9 @@ class ResearchToolContext:
         self.graph_nodes_visited = 0
         self.graph_relationship_counts: dict[str, int] = {}
         self.graph_fallback_reason: str | None = None
+        self._related_cache: dict[
+            tuple[tuple[str, ...], tuple[str, ...]], list[ToolEvidence]
+        ] = {}
         self._graph = self._load_graph(graph_store)
         self._graph_nodes_by_chunk_id = (
             {
@@ -253,17 +256,24 @@ class ResearchToolContext:
         relationship_types: list[RelationshipType] | None = None,
     ) -> list[ToolEvidence]:
         """Expand from known evidence through bounded graph relationships."""
-        self._consume_tool_call(kind="graph")
         if self._graph is None:
-            return []
-        start_nodes = self._start_nodes_for_evidence(evidence_ids)
-        if not start_nodes:
             return []
         allowed = (
             set(relationship_types)
             if relationship_types
             else _default_graph_relationships(self._request.mode)
         )
+        cache_key = (
+            tuple(evidence_ids),
+            tuple(sorted(relationship.value for relationship in allowed)),
+        )
+        cached = self._related_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        self._consume_tool_call(kind="graph")
+        start_nodes = self._start_nodes_for_evidence(evidence_ids)
+        if not start_nodes:
+            return []
         traversal = self._graph.traverse(
             start_node_ids=[node.id for node in start_nodes],
             relationship_types=allowed,
@@ -299,7 +309,7 @@ class ResearchToolContext:
             self._repository.commit_hash,
             chunk_ids,
         )
-        return existing + [
+        expanded = existing + [
             self._record_chunk(
                 chunk,
                 reason=reasons.get(
@@ -309,6 +319,8 @@ class ResearchToolContext:
             )
             for chunk in chunks
         ]
+        self._related_cache[cache_key] = expanded
+        return expanded
 
     def find_references(self, symbol: str) -> list[ToolEvidence]:
         """Find incoming graph references and calls for one known symbol."""
@@ -505,6 +517,7 @@ class BoundedResearchService:
                     repository=repository, request=request
                 ),
             )
+            _preexpand_graph_evidence(tools, request)
             model_start = time.perf_counter()
             agent_result = self._agent.run_research(request=request, tools=tools)
             latency_ms_model = elapsed_ms(model_start)
@@ -602,6 +615,7 @@ class BoundedResearchService:
                 graph_store=self._graph_store,
                 seed_evidence=seed_evidence,
             )
+            _preexpand_graph_evidence(tools, request)
             model_start = time.perf_counter()
             current_tools = tools
             agent_result = await _run_in_worker_thread(
@@ -988,6 +1002,19 @@ def _default_graph_relationships(mode: RagMode) -> set[RelationshipType]:
         RelationshipType.REFERENCES,
         RelationshipType.CALLS,
     }
+
+
+def _preexpand_graph_evidence(
+    tools: ResearchToolContext, request: ResearchRequest
+) -> None:
+    """Seed change and flow research with deterministic graph-neighbor evidence."""
+    if request.mode not in {RagMode.CHANGE, RagMode.FLOW}:
+        return
+    if request.budget.max_graph_expansions <= 0 or not tools.graph_available:
+        return
+    evidence_ids = [item.evidence_id for item in tools.evidence]
+    if evidence_ids:
+        tools.expand_related(evidence_ids)
 
 
 def _canonical_research_answer(
