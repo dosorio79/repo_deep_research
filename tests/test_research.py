@@ -43,6 +43,7 @@ from repo_research.research import (
     ResearchAgentRunError,
     ResearchBudgetExceeded,
     ResearchToolContext,
+    _research_system_prompt,
     _model_usage_from_agent_usage,
 )
 
@@ -465,6 +466,13 @@ def test_agentic_preexpand_respects_zero_graph_budget(tmp_path: Path) -> None:
     assert run.trace.graph_expansion_count == 0
     assert run.trace.graph_nodes_visited == 0
     assert [item.chunk_id for item in run.answer.evidence] == [seed.chunk_id]
+
+
+def test_research_prompt_guides_agent_to_use_graph_expanded_evidence() -> None:
+    prompt = _research_system_prompt()
+
+    assert "graph-expanded evidence" in prompt
+    assert "change or flow" in prompt
 
 
 def test_missing_graph_falls_back_to_semantic_research(tmp_path: Path) -> None:

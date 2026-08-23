@@ -1239,7 +1239,9 @@ def _research_system_prompt() -> str:
         "tests. Return structured ResearchAnswer output. Cite evidence by the "
         "evidence_id values returned by tools. You start with initial evidence "
         "already available in the prompt; inspect it before spending follow-up "
-        "search calls. Prefer change-impact analysis with risks and unresolved "
+        "search calls. For change or flow mode, graph-expanded evidence may "
+        "already be present; use it before spending more search or file-read "
+        "calls. Prefer change-impact analysis with risks and unresolved "
         "questions when the mode is change."
     )
 
