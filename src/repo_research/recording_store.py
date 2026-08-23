@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -298,6 +299,13 @@ class PostgresRecordingStore:
                     "feedback_not_useful": result.feedback_not_useful,
                     "latency_ms_total": result.latency_ms_total,
                     "total_estimated_cost_usd": result.total_estimated_cost_usd,
+                    "graph_available": result.graph_available,
+                    "graph_expansion_count": result.graph_expansion_count,
+                    "graph_nodes_visited": result.graph_nodes_visited,
+                    "graph_relationship_counts": Jsonb(
+                        result.graph_relationship_counts
+                    ),
+                    "graph_fallback_reason": result.graph_fallback_reason,
                     "notes": result.notes,
                     "created_at": result.created_at,
                 },
@@ -762,10 +770,27 @@ def _evaluation_result_summary_from_row(row: dict[str, Any]) -> EvaluationResult
         feedback_not_useful=int(row["feedback_not_useful"]),
         latency_ms_total=row.get("latency_ms_total"),
         total_estimated_cost_usd=row.get("total_estimated_cost_usd"),
+        graph_available=bool(row.get("graph_available")),
+        graph_expansion_count=int(row.get("graph_expansion_count") or 0),
+        graph_nodes_visited=int(row.get("graph_nodes_visited") or 0),
+        graph_relationship_counts=_json_dict(row.get("graph_relationship_counts")),
+        graph_fallback_reason=row.get("graph_fallback_reason"),
         notes=str(row.get("notes") or ""),
         answer_evidence=_evidence_items_from_json(row.get("answer_evidence")),
         created_at=row["created_at"],
     )
+
+
+def _json_dict(value: object) -> dict[str, int]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return {str(key): int(item) for key, item in value.items()}
+    if isinstance(value, str):
+        loaded = json.loads(value)
+        if isinstance(loaded, dict):
+            return {str(key): int(item) for key, item in loaded.items()}
+    return {}
 
 
 def _retrieval_evaluation_summary_from_row(
@@ -1169,6 +1194,11 @@ _SCHEMA_STATEMENTS = (
         feedback_not_useful INTEGER NOT NULL DEFAULT 0,
         latency_ms_total INTEGER,
         total_estimated_cost_usd NUMERIC,
+        graph_available BOOLEAN NOT NULL DEFAULT false,
+        graph_expansion_count INTEGER NOT NULL DEFAULT 0,
+        graph_nodes_visited INTEGER NOT NULL DEFAULT 0,
+        graph_relationship_counts JSONB NOT NULL DEFAULT '{}'::jsonb,
+        graph_fallback_reason TEXT,
         notes TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMPTZ NOT NULL
     )
@@ -1196,6 +1226,27 @@ _SCHEMA_STATEMENTS = (
     """
     ALTER TABLE evaluation_results
     ADD COLUMN IF NOT EXISTS presentation_quality NUMERIC NOT NULL DEFAULT 0
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS graph_available BOOLEAN NOT NULL DEFAULT false
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS graph_expansion_count INTEGER NOT NULL DEFAULT 0
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS graph_nodes_visited INTEGER NOT NULL DEFAULT 0
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS graph_relationship_counts
+    JSONB NOT NULL DEFAULT '{}'::jsonb
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS graph_fallback_reason TEXT
     """,
     """
     DO $$
@@ -1613,6 +1664,11 @@ INSERT INTO evaluation_results (
     feedback_not_useful,
     latency_ms_total,
     total_estimated_cost_usd,
+    graph_available,
+    graph_expansion_count,
+    graph_nodes_visited,
+    graph_relationship_counts,
+    graph_fallback_reason,
     notes,
     created_at
 ) VALUES (
@@ -1633,6 +1689,11 @@ INSERT INTO evaluation_results (
     %(feedback_not_useful)s,
     %(latency_ms_total)s,
     %(total_estimated_cost_usd)s,
+    %(graph_available)s,
+    %(graph_expansion_count)s,
+    %(graph_nodes_visited)s,
+    %(graph_relationship_counts)s,
+    %(graph_fallback_reason)s,
     %(notes)s,
     %(created_at)s
 )
@@ -1653,6 +1714,11 @@ ON CONFLICT (result_id) DO UPDATE SET
     feedback_not_useful = EXCLUDED.feedback_not_useful,
     latency_ms_total = EXCLUDED.latency_ms_total,
     total_estimated_cost_usd = EXCLUDED.total_estimated_cost_usd,
+    graph_available = EXCLUDED.graph_available,
+    graph_expansion_count = EXCLUDED.graph_expansion_count,
+    graph_nodes_visited = EXCLUDED.graph_nodes_visited,
+    graph_relationship_counts = EXCLUDED.graph_relationship_counts,
+    graph_fallback_reason = EXCLUDED.graph_fallback_reason,
     notes = EXCLUDED.notes,
     created_at = EXCLUDED.created_at
 """
@@ -1864,6 +1930,11 @@ SELECT
     r.feedback_not_useful,
     r.latency_ms_total,
     r.total_estimated_cost_usd,
+    r.graph_available,
+    r.graph_expansion_count,
+    r.graph_nodes_visited,
+    r.graph_relationship_counts,
+    r.graph_fallback_reason,
     r.notes,
     s.evidence AS answer_evidence,
     r.created_at

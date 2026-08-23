@@ -11,6 +11,8 @@ from urllib.parse import ParseResult, urlparse
 from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 
+from repo_research.graph_extraction import build_repository_graph
+from repo_research.graph_models import GraphSummary
 from repo_research.models import (
     IngestionIssue,
     IngestSummary,
@@ -19,7 +21,7 @@ from repo_research.models import (
     RepositoryIdentity,
     create_chunk,
 )
-from repo_research.protocols import RepositoryIndexer
+from repo_research.protocols import RepositoryGraphStore, RepositoryIndexer
 
 SUPPORTED_SUFFIXES = {".json", ".md", ".py", ".toml", ".yaml", ".yml"}
 IGNORED_DIRECTORY_NAMES = {
@@ -138,6 +140,7 @@ def parse_files(paths: list[Path], repository: RepositoryIdentity) -> ParsedFile
 def ingest_repository_if_needed(
     *,
     database: RepositoryIndexer,
+    graph_store: RepositoryGraphStore,
     repository: RepositoryIdentity,
     files: list[Path],
 ) -> IngestSummary:
@@ -150,28 +153,58 @@ def ingest_repository_if_needed(
         repository.repository_id,
         repository.commit_hash,
     )
-    if can_reuse_index(repository.commit_hash, existing_chunk_count):
+    graph_exists = graph_store.exists(repository.repository_id, repository.commit_hash)
+    if can_reuse_index(repository.commit_hash, existing_chunk_count, graph_exists):
+        reused_graph_summary = graph_store.load(
+            repository.repository_id,
+            repository.commit_hash,
+        ).summary()
         return IngestSummary(
             repository=repository,
             indexed_chunks=existing_chunk_count,
             skipped_files=[],
             index_updated=False,
+            graph_nodes=reused_graph_summary.node_count,
+            graph_edges=reused_graph_summary.edge_count,
+            graph_updated=False,
+            graph_warning_count=len(reused_graph_summary.warnings),
         )
     parsed_files = parse_files(files, repository)
     index_updated = bool(parsed_files.chunks)
+    graph_summary: GraphSummary | None = None
     if index_updated:
+        graph = build_repository_graph(
+            repository,
+            files,
+            parsed_files.chunks,
+            skipped_files=[issue.path for issue in parsed_files.skipped_files],
+        )
+        graph_summary = graph_store.write(graph)
         database.replace(repository.repository_id, parsed_files.chunks)
     return IngestSummary(
         repository=repository,
         indexed_chunks=len(parsed_files.chunks),
         skipped_files=parsed_files.skipped_files,
         index_updated=index_updated,
+        graph_nodes=graph_summary.node_count if graph_summary else 0,
+        graph_edges=graph_summary.edge_count if graph_summary else 0,
+        graph_updated=index_updated,
+        graph_warning_count=len(graph_summary.warnings) if graph_summary else 0,
+        graph_skipped_file_count=len(parsed_files.skipped_files)
+        if graph_summary
+        else 0,
     )
 
 
-def can_reuse_index(commit_hash: str, indexed_chunk_count: int) -> bool:
+def can_reuse_index(
+    commit_hash: str, indexed_chunk_count: int, graph_exists: bool = False
+) -> bool:
     """Return whether a previously indexed commit can be reused."""
-    return indexed_chunk_count > 0 and not commit_hash.startswith("unknown-")
+    return (
+        indexed_chunk_count > 0
+        and graph_exists
+        and not commit_hash.startswith("unknown-")
+    )
 
 
 def parse_file(path: Path, repository: RepositoryIdentity) -> list[ParsedChunk]:

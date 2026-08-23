@@ -21,3 +21,4 @@ qdrant_storage/
 *.tfstate.*
 .agents/
 skills-lock.json
+artifacts/

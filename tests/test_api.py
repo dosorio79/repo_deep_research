@@ -17,6 +17,14 @@ from qdrant_client.http.exceptions import ResponseHandlingException
 import repo_research.api as api_module
 from repo_research.api import create_app
 from repo_research.config import Settings
+from repo_research.graph_models import (
+    GraphManifest,
+    GraphNode,
+    GraphSummary,
+    NodeLabel,
+    RepositoryGraph,
+    stable_node_id,
+)
 from repo_research.models import (
     AnswerSnapshot,
     EvaluationDashboardSummary,
@@ -73,6 +81,51 @@ class FakeDatabase:
 
     def indexed_chunk_count(self, repository_id: str, commit_hash: str) -> int:
         return self.existing_chunk_count
+
+    def get_chunks(
+        self, repository_id: str, commit_hash: str, chunk_ids: list[str]
+    ) -> list[ParsedChunk]:
+        del repository_id, commit_hash, chunk_ids
+        return []
+
+
+class FakeGraphStore:
+    def __init__(self, *, exists: bool = False) -> None:
+        self._exists = exists
+
+    def write(self, graph: RepositoryGraph) -> GraphSummary:
+        return graph.summary()
+
+    def load(self, repository_id: str, commit_hash: str) -> RepositoryGraph:
+        return sample_graph(repository_id=repository_id, commit_hash=commit_hash)
+
+    def exists(self, repository_id: str, commit_hash: str) -> bool:
+        del repository_id, commit_hash
+        return self._exists
+
+
+def sample_graph(repository_id: str, commit_hash: str) -> RepositoryGraph:
+    node = GraphNode(
+        id=stable_node_id(repository_id, commit_hash, "File", "app.py"),
+        repository_id=repository_id,
+        commit_hash=commit_hash,
+        labels=[NodeLabel.FILE],
+        key="app.py",
+        path="app.py",
+    )
+    return RepositoryGraph(
+        manifest=GraphManifest(
+            repository_id=repository_id,
+            repository_name="repo",
+            branch="main",
+            commit_hash=commit_hash,
+            generated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            node_count=1,
+            edge_count=0,
+        ),
+        nodes=[node],
+        edges=[],
+    )
 
 
 class FakeGenerator:
@@ -462,6 +515,7 @@ async def test_ingest_repository_indexes_local_repository_path(tmp_path: Path) -
         database=database,
         generator=FakeGenerator(),
         research_agent=FakeResearchAgent(),
+        graph_store=FakeGraphStore(exists=True),
     )
 
     transport = httpx.ASGITransport(app=app)
@@ -495,6 +549,7 @@ async def test_ingest_repository_skips_existing_git_revision(tmp_path: Path) -> 
         database=database,
         generator=FakeGenerator(),
         research_agent=FakeResearchAgent(),
+        graph_store=FakeGraphStore(exists=True),
     )
 
     transport = httpx.ASGITransport(app=app)

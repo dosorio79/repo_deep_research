@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
@@ -11,6 +12,13 @@ import pytest
 from repo_research import cli, runtime
 from repo_research.cli import build_parser
 from repo_research.config import Settings
+from repo_research.graph_models import (
+    GraphManifest,
+    GraphNode,
+    NodeLabel,
+    RepositoryGraph,
+    stable_node_id,
+)
 from repo_research.models import (
     EvaluationResult,
     ParsedChunk,
@@ -266,6 +274,47 @@ class FakeDatabase:
         return self.existing_chunk_count
 
 
+class FakeGraphStore:
+    """Capture graph store calls for CLI tests."""
+
+    def __init__(self, *, exists: bool = False) -> None:
+        self._exists = exists
+
+    def write(self, graph: object) -> object:
+        return graph.summary()  # type: ignore[attr-defined]
+
+    def load(self, repository_id: str, commit_hash: str) -> RepositoryGraph:
+        return sample_graph(repository_id=repository_id, commit_hash=commit_hash)
+
+    def exists(self, repository_id: str, commit_hash: str) -> bool:
+        del repository_id, commit_hash
+        return self._exists
+
+
+def sample_graph(repository_id: str, commit_hash: str) -> RepositoryGraph:
+    node = GraphNode(
+        id=stable_node_id(repository_id, commit_hash, "File", "app.py"),
+        repository_id=repository_id,
+        commit_hash=commit_hash,
+        labels=[NodeLabel.FILE],
+        key="app.py",
+        path="app.py",
+    )
+    return RepositoryGraph(
+        manifest=GraphManifest(
+            repository_id=repository_id,
+            repository_name="repo",
+            branch="main",
+            commit_hash=commit_hash,
+            generated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            node_count=1,
+            edge_count=0,
+        ),
+        nodes=[node],
+        edges=[],
+    )
+
+
 class FakeSettings:
     """Minimal settings used by the CLI ingestion test."""
 
@@ -277,6 +326,9 @@ class FakeSettings:
     research_max_searches = 3
     research_max_file_reads = 5
     research_max_total_tool_calls = 8
+    research_max_graph_expansions = 2
+    research_max_graph_nodes = 12
+    research_max_graph_depth = 2
     openai_model = "gpt-5-mini"
     openai_judge_model = "gpt-5.1"
     postgres_dsn: str | None = None
@@ -560,6 +612,9 @@ def test_cli_ingest_skips_existing_git_revision(
     database.existing_chunk_count = 3
     monkeypatch.setattr(cli, "Settings", FakeSettings)
     monkeypatch.setattr(runtime, "create_database", lambda _: database)
+    monkeypatch.setattr(
+        runtime, "create_graph_store", lambda _: FakeGraphStore(exists=True)
+    )
     monkeypatch.setattr(sys, "argv", ["repo-research", "ingest", str(tmp_path)])
 
     cli.main()
