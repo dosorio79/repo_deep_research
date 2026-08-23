@@ -42,6 +42,12 @@ def main() -> int:
     if args.run_answers:
         if not os.environ.get("OPENAI_API_KEY"):
             raise SystemExit("--run-answers requires OPENAI_API_KEY")
+        dataset = _prepare_answer_dataset(
+            source=args.dataset,
+            output_dir=output_dir,
+            question_types=args.question_type,
+            max_records=args.max_records,
+        )
         answer_report_path = output_dir / "answer-agentic-hybrid.json"
         answer_results = _run_json(
             [
@@ -52,7 +58,7 @@ def main() -> int:
                 "--source",
                 "dataset",
                 "--dataset",
-                str(args.dataset),
+                str(dataset),
                 "--path",
                 str(repository_path),
                 "--approach",
@@ -106,6 +112,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
+    parser.add_argument(
+        "--question-type",
+        action="append",
+        default=[],
+        choices=["locate", "flow", "change"],
+        help="optional dataset question type filter; repeat for multiple types",
+    )
+    parser.add_argument(
+        "--max-records",
+        type=int,
+        default=None,
+        help="optional cap after question-type filtering for faster live eval",
+    )
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument(
         "--run-answers",
@@ -124,6 +143,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional previous evaluate-answers JSON report for A/B comparison",
     )
     return parser
+
+
+def _prepare_answer_dataset(
+    *,
+    source: Path,
+    output_dir: Path,
+    question_types: list[str],
+    max_records: int | None,
+) -> Path:
+    if not question_types and max_records is None:
+        return source
+    records = _select_records(
+        json.loads(source.read_text(encoding="utf-8")),
+        question_types=question_types,
+        max_records=max_records,
+    )
+    if not records:
+        raise SystemExit("dataset filter selected no records")
+    output = output_dir / "answer-dataset-subset.json"
+    _write_json(output, records)
+    return output
+
+
+def _select_records(
+    records: list[dict[str, Any]],
+    *,
+    question_types: list[str],
+    max_records: int | None,
+) -> list[dict[str, Any]]:
+    selected = [
+        record
+        for record in records
+        if not question_types or record.get("question_type") in set(question_types)
+    ]
+    if max_records is not None:
+        if max_records <= 0:
+            raise ValueError("max_records must be greater than zero")
+        selected = selected[:max_records]
+    return selected
 
 
 def _prepare_default_fixture(output_dir: Path) -> Path:

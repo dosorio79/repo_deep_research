@@ -88,6 +88,40 @@ def test_require_graph_expansion_accepts_expanded_rows() -> None:
     )
 
 
+def test_select_records_filters_question_type_and_limits() -> None:
+    module = _load_script()
+
+    records = [
+        {"id": "locate_001", "question_type": "locate"},
+        {"id": "flow_001", "question_type": "flow"},
+        {"id": "flow_002", "question_type": "flow"},
+        {"id": "change_001", "question_type": "change"},
+    ]
+
+    selected = module._select_records(
+        records,
+        question_types=["flow", "change"],
+        max_records=2,
+    )
+
+    assert [record["id"] for record in selected] == ["flow_001", "flow_002"]
+
+
+def test_select_records_rejects_non_positive_limit() -> None:
+    module = _load_script()
+
+    try:
+        module._select_records(
+            [{"id": "flow_001", "question_type": "flow"}],
+            question_types=[],
+            max_records=0,
+        )
+    except ValueError as error:
+        assert "greater than zero" in str(error)
+    else:
+        raise AssertionError("max_records=0 should be rejected")
+
+
 def test_compare_answer_reports_returns_candidate_minus_baseline_delta() -> None:
     module = _load_script()
 

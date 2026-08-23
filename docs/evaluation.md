@@ -160,6 +160,18 @@ evaluation is still useful, but it does not measure graph expansion because the
 graph is used after semantic retrieval inside bounded agentic research.
 Use `--require-graph-expansion` for v0.6.1 acceptance runs so a live answer
 evaluation fails when no judged row records graph expansion.
+For a faster graph-specific live check, filter to relationship-heavy rows:
+
+```bash
+uv run python scripts/evaluate_relationship_graph.py \
+  --path . \
+  --run-answers \
+  --require-graph-expansion \
+  --question-type flow \
+  --question-type change \
+  --max-records 4 \
+  --output-dir artifacts/eval/relationship-aware-v0.6.1-smoke
+```
 
 ## Answer Evaluation
 
