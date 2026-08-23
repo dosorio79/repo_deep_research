@@ -352,8 +352,8 @@ def _test_edges(
         _add_edge(
             repository,
             edges,
-            module,
             imported,
+            module,
             RelationshipType.TESTS,
             "test_import",
             1.0,
