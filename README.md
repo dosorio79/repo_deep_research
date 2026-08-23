@@ -153,6 +153,7 @@ local runs.
 | `make research QUESTION="..."` | Run bounded agentic repository research. |
 | `make evaluate-retrieval` | Compare dense, sparse, and hybrid retrieval. |
 | `make evaluate-answers` | Run opt-in answer evaluation. |
+| `make evaluate-relationship-graph` | Run the v0.6.0 graph readiness evaluation harness. |
 | `make export-openapi` | Refresh the versioned OpenAPI contract. |
 | `make api` | Run FastAPI locally. |
 | `make app` | Run the API and Vite frontend locally. |

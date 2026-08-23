@@ -44,14 +44,18 @@ from repo_research.research import (
     ResearchBudgetExceeded,
     ResearchToolContext,
     _model_usage_from_agent_usage,
+    _research_system_prompt,
 )
 
 
 class FakeDatabase:
     """Return fixed search results and capture queries."""
 
-    def __init__(self, results: list[SearchResult]) -> None:
+    def __init__(
+        self, results: list[SearchResult], chunks: list[ParsedChunk] | None = None
+    ) -> None:
         self._results = results
+        self._chunks = chunks or [result.chunk for result in results]
         self.queries: list[SearchQuery] = []
 
     def search(self, query: SearchQuery) -> list[SearchResult]:
@@ -61,7 +65,7 @@ class FakeDatabase:
     def get_chunks(
         self, repository_id: str, commit_hash: str, chunk_ids: list[str]
     ) -> list[ParsedChunk]:
-        chunks = {result.chunk.chunk_id: result.chunk for result in self._results}
+        chunks = {chunk.chunk_id: chunk for chunk in self._chunks}
         return [
             chunk
             for chunk_id in chunk_ids
@@ -118,6 +122,26 @@ class GraphExpansionAgent:
                 mode=request.mode,
                 summary="Use the related test evidence.",
                 evidence=[item.evidence_item for item in related],
+                confidence=0.8,
+            )
+        )
+
+
+class PassiveEvidenceAgent:
+    """Return the evidence already prepared for the model without tool calls."""
+
+    def run_research(
+        self,
+        *,
+        request: ResearchRequest,
+        tools: ResearchToolContext,
+    ) -> ResearchAgentResult:
+        return ResearchAgentResult(
+            answer=ResearchAnswer(
+                question=request.question,
+                mode=request.mode,
+                summary="Use the prepared evidence.",
+                evidence=[item.evidence_item for item in tools.evidence],
                 confidence=0.8,
             )
         )
@@ -319,9 +343,7 @@ def test_expand_related_returns_only_canonical_same_commit_evidence(
         symbol="test_settings",
         content="def test_settings():\n    assert True\n",
     )
-    database = FakeDatabase(
-        [SearchResult(chunk=seed, score=0.9), SearchResult(chunk=related, score=0.7)]
-    )
+    database = FakeDatabase([SearchResult(chunk=seed, score=0.9)], [seed, related])
     service = BoundedResearchService(
         database=database,
         graph_store=FakeGraphStore(_graph_for_chunks(repository, seed, related)),
@@ -335,12 +357,122 @@ def test_expand_related_returns_only_canonical_same_commit_evidence(
 
     assert [item.chunk_id for item in run.answer.evidence] == [related.chunk_id]
     assert run.answer.evidence[0].reason == (
-        "Related through TESTS (test_import, confidence 1.00)."
+        "Related through TESTS (test_graph, confidence 1.00)."
     )
     assert run.trace.graph_available is True
     assert run.trace.graph_expansion_count == 1
     assert run.trace.graph_nodes_visited == 1
     assert run.trace.graph_relationship_counts == {"TESTS": 1}
+
+
+@pytest.mark.parametrize("mode", [RagMode.CHANGE, RagMode.FLOW])
+def test_agentic_change_and_flow_preexpand_graph_before_model(
+    tmp_path: Path, mode: RagMode
+) -> None:
+    repository = _repository(tmp_path)
+    seed = _chunk(repository)
+    related = _chunk(
+        repository,
+        path="tests/test_config.py",
+        symbol="test_settings",
+        content="def test_settings():\n    assert True\n",
+    )
+    database = FakeDatabase([SearchResult(chunk=seed, score=0.9)], [seed, related])
+    service = BoundedResearchService(
+        database=database,
+        graph_store=FakeGraphStore(
+            _graph_for_chunks(
+                repository,
+                seed,
+                related,
+                relationship=RelationshipType.CALLS
+                if mode is RagMode.FLOW
+                else RelationshipType.TESTS,
+            )
+        ),
+        agent=PassiveEvidenceAgent(),
+    )
+
+    run = service.run(
+        repository=repository,
+        request=ResearchRequest(question="Which modules change?", mode=mode),
+    )
+
+    assert run.trace.graph_available is True
+    assert run.trace.graph_expansion_count == 1
+    assert run.trace.graph_nodes_visited == 1
+    assert run.trace.graph_relationship_counts == {
+        ("CALLS" if mode is RagMode.FLOW else "TESTS"): 1
+    }
+    assert [item.chunk_id for item in run.answer.evidence] == [
+        seed.chunk_id,
+        related.chunk_id,
+    ]
+
+
+def test_agentic_locate_does_not_preexpand_graph(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    seed = _chunk(repository)
+    related = _chunk(
+        repository,
+        path="tests/test_config.py",
+        symbol="test_settings",
+        content="def test_settings():\n    assert True\n",
+    )
+    database = FakeDatabase([SearchResult(chunk=seed, score=0.9)], [seed, related])
+    service = BoundedResearchService(
+        database=database,
+        graph_store=FakeGraphStore(_graph_for_chunks(repository, seed, related)),
+        agent=PassiveEvidenceAgent(),
+    )
+
+    run = service.run(
+        repository=repository,
+        request=ResearchRequest(question="Where is Settings?", mode=RagMode.LOCATE),
+    )
+
+    assert run.trace.graph_available is True
+    assert run.trace.graph_expansion_count == 0
+    assert run.trace.graph_nodes_visited == 0
+    assert [item.chunk_id for item in run.answer.evidence] == [seed.chunk_id]
+
+
+def test_agentic_preexpand_respects_zero_graph_budget(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    seed = _chunk(repository)
+    related = _chunk(
+        repository,
+        path="tests/test_config.py",
+        symbol="test_settings",
+        content="def test_settings():\n    assert True\n",
+    )
+    database = FakeDatabase([SearchResult(chunk=seed, score=0.9)], [seed, related])
+    service = BoundedResearchService(
+        database=database,
+        graph_store=FakeGraphStore(_graph_for_chunks(repository, seed, related)),
+        agent=PassiveEvidenceAgent(),
+    )
+
+    run = service.run(
+        repository=repository,
+        request=ResearchRequest(
+            question="Which modules change?",
+            mode=RagMode.CHANGE,
+            budget=ResearchBudget(max_graph_expansions=0),
+        ),
+    )
+
+    assert run.trace.graph_available is True
+    assert run.trace.graph_expansion_count == 0
+    assert run.trace.graph_nodes_visited == 0
+    assert [item.chunk_id for item in run.answer.evidence] == [seed.chunk_id]
+
+
+def test_research_prompt_guides_agent_to_use_graph_expanded_evidence() -> None:
+    prompt = _research_system_prompt()
+
+    assert "graph-expanded evidence" in prompt
+    assert "change or flow" in prompt
 
 
 def test_missing_graph_falls_back_to_semantic_research(tmp_path: Path) -> None:
@@ -677,7 +809,11 @@ def chunk_evidence(evidence_id: str, chunk: ParsedChunk) -> EvidenceItem:
 
 
 def _graph_for_chunks(
-    repository: RepositoryIdentity, seed: ParsedChunk, related: ParsedChunk
+    repository: RepositoryIdentity,
+    seed: ParsedChunk,
+    related: ParsedChunk,
+    *,
+    relationship: RelationshipType = RelationshipType.TESTS,
 ) -> RepositoryGraph:
     seed_node = GraphNode(
         id=stable_node_id(
@@ -715,16 +851,16 @@ def _graph_for_chunks(
             repository.commit_hash,
             seed_node.id,
             related_node.id,
-            RelationshipType.TESTS.value,
-            "test_import",
+            relationship.value,
+            "test_graph",
         ),
         repository_id=repository.repository_id,
         commit_hash=repository.commit_hash,
         source=seed_node.id,
         target=related_node.id,
-        type=RelationshipType.TESTS,
+        type=relationship,
         confidence=1.0,
-        method="test_import",
+        method="test_graph",
     )
     return RepositoryGraph(
         manifest=GraphManifest(
@@ -736,7 +872,7 @@ def _graph_for_chunks(
             generated_at=datetime(2026, 1, 1, tzinfo=UTC),
             node_count=2,
             edge_count=1,
-            edge_counts_by_type={"TESTS": 1},
+            edge_counts_by_type={relationship.value: 1},
         ),
         nodes=[seed_node, related_node],
         edges=[edge],
