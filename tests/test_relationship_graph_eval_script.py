@@ -48,10 +48,44 @@ def test_summarize_answer_results_includes_graph_usage() -> None:
     assert summary["graph_usage"] == {
         "available_count": 2,
         "expanded_count": 1,
+        "graph_expansion_rate": 0.5,
         "total_expansions": 1,
         "total_nodes_visited": 3,
         "relationship_counts": {"CALLS": 2},
     }
+
+
+def test_require_graph_expansion_rejects_zero_expanded_rows() -> None:
+    module = _load_script()
+
+    try:
+        module.require_graph_expansion(
+            {
+                "graph_usage": {
+                    "available_count": 2,
+                    "expanded_count": 0,
+                    "graph_expansion_rate": 0.0,
+                }
+            }
+        )
+    except SystemExit as error:
+        assert "graph expansion was required" in str(error)
+    else:
+        raise AssertionError("require_graph_expansion should reject zero expansions")
+
+
+def test_require_graph_expansion_accepts_expanded_rows() -> None:
+    module = _load_script()
+
+    module.require_graph_expansion(
+        {
+            "graph_usage": {
+                "available_count": 2,
+                "expanded_count": 1,
+                "graph_expansion_rate": 0.5,
+            }
+        }
+    )
 
 
 def test_compare_answer_reports_returns_candidate_minus_baseline_delta() -> None:

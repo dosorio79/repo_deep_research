@@ -149,6 +149,7 @@ script directly:
 ```bash
 uv run python scripts/evaluate_relationship_graph.py \
   --run-answers \
+  --require-graph-expansion \
   --baseline-report artifacts/eval/baseline/answer-agentic-hybrid.json
 ```
 
@@ -157,6 +158,8 @@ deltas for correctness, faithfulness, citation precision, reference coverage,
 answer relevance, presentation quality, and unsupported claims. Retrieval-only
 evaluation is still useful, but it does not measure graph expansion because the
 graph is used after semantic retrieval inside bounded agentic research.
+Use `--require-graph-expansion` for v0.6.1 acceptance runs so a live answer
+evaluation fails when no judged row records graph expansion.
 
 ## Answer Evaluation
 

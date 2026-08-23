@@ -68,6 +68,8 @@ def main() -> int:
         if not isinstance(answer_results, list):
             raise SystemExit("evaluate-answers did not return a JSON list")
         answer_summary = summarize_answer_results(answer_results)
+        if args.require_graph_expansion:
+            require_graph_expansion(answer_summary)
         _write_json(output_dir / "answer-summary.json", answer_summary)
 
     comparison: dict[str, Any] | None = None
@@ -109,6 +111,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--run-answers",
         action="store_true",
         help="run paid/LLM answer evaluation with the existing judge pipeline",
+    )
+    parser.add_argument(
+        "--require-graph-expansion",
+        action="store_true",
+        help="fail answer evaluation when no judged row records graph expansion",
     )
     parser.add_argument(
         "--baseline-report",
@@ -191,6 +198,10 @@ def summarize_answer_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in results:
         grouped[str(row.get("run_kind", "unknown"))].append(row)
+    available_count = sum(1 for row in results if row.get("graph_available"))
+    expanded_count = sum(
+        1 for row in results if int(row.get("graph_expansion_count") or 0) > 0
+    )
 
     return {
         "overall": _summarize_rows(results),
@@ -199,10 +210,11 @@ def summarize_answer_results(results: list[dict[str, Any]]) -> dict[str, Any]:
             for run_kind, rows in sorted(grouped.items())
         },
         "graph_usage": {
-            "available_count": sum(1 for row in results if row.get("graph_available")),
-            "expanded_count": sum(
-                1 for row in results if int(row.get("graph_expansion_count") or 0) > 0
-            ),
+            "available_count": available_count,
+            "expanded_count": expanded_count,
+            "graph_expansion_rate": round(expanded_count / len(results), 3)
+            if results
+            else None,
             "total_expansions": sum(
                 int(row.get("graph_expansion_count") or 0) for row in results
             ),
@@ -212,6 +224,16 @@ def summarize_answer_results(results: list[dict[str, Any]]) -> dict[str, Any]:
             "relationship_counts": _sum_relationship_counts(results),
         },
     }
+
+
+def require_graph_expansion(summary: dict[str, Any]) -> None:
+    """Raise when strict evaluation expected graph use but none occurred."""
+    graph_usage = summary.get("graph_usage") or {}
+    expanded_count = int(graph_usage.get("expanded_count") or 0)
+    if expanded_count <= 0:
+        raise SystemExit(
+            "graph expansion was required, but no judged rows recorded expansion"
+        )
 
 
 def compare_answer_reports(
