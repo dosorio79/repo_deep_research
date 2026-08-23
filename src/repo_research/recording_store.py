@@ -787,7 +787,10 @@ def _json_dict(value: object) -> dict[str, int]:
     if isinstance(value, dict):
         return {str(key): int(item) for key, item in value.items()}
     if isinstance(value, str):
-        loaded = json.loads(value)
+        try:
+            loaded = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
         if isinstance(loaded, dict):
             return {str(key): int(item) for key, item in loaded.items()}
     return {}
