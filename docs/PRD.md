@@ -1219,7 +1219,7 @@ produce measured evidence:
 - managed cloud hosting.
 
 Query rewriting or reranking may return to the roadmap only when an evaluation
-shows that correct starting evidence is being ranked poorly after v0.6.0.
+shows that correct starting evidence is being ranked poorly after v0.6.1.
 
 ## 27. Post-capstone definition of success
 

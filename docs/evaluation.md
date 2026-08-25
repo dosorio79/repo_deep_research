@@ -123,9 +123,9 @@ profile, so the default still favors the more precise evidence set.
 
 ## Relationship-Aware Graph Evaluation
 
-The v0.6.0 relationship-aware branch includes a functional harness for checking
-graph readiness and, optionally, answer-quality improvement. The default command
-is offline and does not require an OpenAI key:
+The v0.6.1 relationship-aware development line includes a functional harness
+for checking graph readiness and, optionally, answer-quality improvement. The
+default command is offline and does not require an OpenAI key:
 
 ```bash
 make evaluate-relationship-graph
@@ -233,7 +233,7 @@ reference coverage are unavailable because there is no independent ground-truth
 record. The dashboard omits unavailable values from metric averages and shows
 persisted answer evidence so evidence IDs can be inspected.
 
-For v0.6.0 and later, generated agentic dataset rows also preserve graph trace
+For v0.6.1 and later, generated agentic dataset rows also preserve graph trace
 fields: graph availability, expansion count, visited node count, relationship
 counts, and fallback reason. These fields verify whether relationship-aware
 change-impact answers actually used graph expansion; they do not change the

@@ -46,11 +46,12 @@ flowchart LR
 
 ## Release Status
 
-The current development line is `v0.6.0 Relationship-Aware Change Impact`.
-It keeps the local-first capstone stack and adds commit-scoped JSONL repository
-graphs for bounded agentic change-impact research. Live answer generation
-remains bring-your-own-key, while seeded offline evaluation evidence is
-available without an OpenAI key.
+The current development line is `v0.6.1 Relationship-Aware Change Impact`.
+It keeps the local-first capstone stack, adds commit-scoped JSONL repository
+graphs for bounded agentic change-impact research, and includes the graph
+expansion acceptance hardening needed before v0.7 adaptive research. Live
+answer generation remains bring-your-own-key, while seeded offline evaluation
+evidence is available without an OpenAI key.
 
 Cloud deployment is intentionally out of scope for the Local Alpha. The stack
 includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
@@ -153,7 +154,7 @@ local runs.
 | `make research QUESTION="..."` | Run bounded agentic repository research. |
 | `make evaluate-retrieval` | Compare dense, sparse, and hybrid retrieval. |
 | `make evaluate-answers` | Run opt-in answer evaluation. |
-| `make evaluate-relationship-graph` | Run the v0.6.0 graph readiness evaluation harness. |
+| `make evaluate-relationship-graph` | Run the v0.6.1 graph readiness evaluation harness. |
 | `make export-openapi` | Refresh the versioned OpenAPI contract. |
 | `make api` | Run FastAPI locally. |
 | `make app` | Run the API and Vite frontend locally. |
