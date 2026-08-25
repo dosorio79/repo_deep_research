@@ -76,6 +76,14 @@ class RunKind(StrEnum):
     AGENTIC = "agentic"
 
 
+class VersionProvenance(StrEnum):
+    """How persisted application version metadata was determined."""
+
+    EXACT = "exact"
+    INFERRED = "inferred"
+    UNKNOWN = "unknown"
+
+
 class EvaluationSourceType(StrEnum):
     """Sources that can feed an answer-quality evaluation run."""
 
@@ -300,6 +308,9 @@ class RagRunTrace(BaseModel):
     graph_nodes_visited: int = Field(default=0, ge=0)
     graph_relationship_counts: dict[str, int] = Field(default_factory=dict)
     graph_fallback_reason: str | None = None
+    answer_app_version: str | None = None
+    answer_git_commit: str | None = None
+    answer_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
 
 
 class RagRunResult(BaseModel):
@@ -333,6 +344,9 @@ class AnswerSnapshot(BaseModel):
     retrieval_mode: RetrievalMode
     retrieval_limit: int = Field(ge=1)
     created_at: datetime
+    answer_app_version: str | None = None
+    answer_git_commit: str | None = None
+    answer_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
 
 
 class EvaluatableAnswerSnapshot(AnswerSnapshot):
@@ -364,6 +378,7 @@ class FeedbackEvent(BaseModel):
     useful: bool
     comment: str | None = Field(default=None, max_length=2000)
     submitted_at: datetime
+    duplicate: bool = False
 
 
 class RunKindCount(BaseModel):
@@ -469,6 +484,9 @@ class MonitoringRunSummary(BaseModel):
     feedback_useful: int = Field(ge=0)
     feedback_not_useful: int = Field(ge=0)
     total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+    answer_app_version: str | None = None
+    answer_git_commit: str | None = None
+    answer_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
 
 
 class MonitoringRunDetail(MonitoringRunSummary):
@@ -587,6 +605,9 @@ class EvaluationRunRecord(BaseModel):
     started_at: datetime
     completed_at: datetime | None = None
     error_message: str | None = None
+    evaluation_app_version: str | None = None
+    evaluation_git_commit: str | None = None
+    evaluation_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
 
 
 class PersistedEvaluationResult(BaseModel):
@@ -664,6 +685,9 @@ class EvaluationRunSummary(BaseModel):
     result_count: int = Field(ge=0)
     average_score: float | None = Field(default=None, ge=0, le=5)
     unsupported_claim_count: int = Field(ge=0)
+    evaluation_app_version: str | None = None
+    evaluation_git_commit: str | None = None
+    evaluation_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
 
 
 class EvaluationRunList(BaseModel):
@@ -683,6 +707,12 @@ class EvaluationResultSummary(BaseModel):
     repository_name: str | None = Field(default=None, min_length=1)
     branch: str | None = Field(default=None, min_length=1)
     commit_hash: str | None = Field(default=None, min_length=1)
+    answer_app_version: str | None = None
+    answer_git_commit: str | None = None
+    answer_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
+    evaluation_app_version: str | None = None
+    evaluation_git_commit: str | None = None
+    evaluation_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
     record_id: str | None = Field(default=None, min_length=1)
     request_id: str | None = Field(default=None, min_length=1)
     run_kind: RunKind | None = None

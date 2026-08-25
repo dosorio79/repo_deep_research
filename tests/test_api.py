@@ -228,8 +228,9 @@ class FakeRecordingStore:
     def record_answer_snapshot(self, snapshot: AnswerSnapshot) -> None:
         self.answer_snapshots.append(snapshot)
 
-    def record_feedback(self, event: FeedbackEvent) -> None:
+    def record_feedback(self, event: FeedbackEvent) -> FeedbackEvent:
         self.feedback_events.append(event)
+        return event
 
     def monitoring_summary(self) -> MonitoringSummary:
         return self.summary
@@ -303,13 +304,20 @@ def test_record_completed_answer_persists_agentic_snapshot() -> None:
         trace=trace,
     )
 
-    assert recording_store.runs == [(RunKind.AGENTIC, trace)]
+    assert len(recording_store.runs) == 1
+    run_kind, stamped_trace = recording_store.runs[0]
+    assert run_kind is RunKind.AGENTIC
+    assert stamped_trace.request_id == trace.request_id
+    assert stamped_trace.answer_app_version == "0.6.2"
+    assert stamped_trace.answer_version_provenance.value == "exact"
     assert len(recording_store.answer_snapshots) == 1
     snapshot = recording_store.answer_snapshots[0]
     assert snapshot.request_id == "request-1"
     assert snapshot.run_kind is RunKind.AGENTIC
     assert snapshot.answer.summary == "Persist answer snapshots from API routes."
     assert snapshot.evidence[0].path == "src/repo_research/api.py"
+    assert snapshot.answer_app_version == "0.6.2"
+    assert snapshot.answer_version_provenance.value == "exact"
 
 
 @pytest.fixture

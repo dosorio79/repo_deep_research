@@ -48,6 +48,7 @@ from repo_research.models import (
     RunKind,
     SearchQuery,
     SearchResult,
+    VersionProvenance,
 )
 from repo_research.monitoring import instrument_fastapi
 from repo_research.protocols import RepositoryGraphStore
@@ -62,6 +63,7 @@ from repo_research.runtime import (
     create_recording_store,
     create_research_agent,
 )
+from repo_research.versioning import current_app_version_info
 
 OPENAPI_TAGS = [
     {
@@ -118,7 +120,7 @@ class RecordingStore(Protocol):
     def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
         """Persist one completed run trace."""
 
-    def record_feedback(self, event: FeedbackEvent) -> None:
+    def record_feedback(self, event: FeedbackEvent) -> FeedbackEvent:
         """Persist one feedback event."""
 
     def record_answer_snapshot(self, snapshot: AnswerSnapshot) -> None:
@@ -430,8 +432,7 @@ def create_app(
             comment=request.comment,
             submitted_at=datetime.now(UTC),
         )
-        get_recording_store().record_feedback(event)
-        return event
+        return get_recording_store().record_feedback(event)
 
     @app.get(
         "/monitoring/summary",
@@ -557,23 +558,34 @@ def _record_completed_answer(
     trace: RagRunTrace,
 ) -> None:
     """Persist monitoring metadata and the answer snapshot used by evaluation."""
-    recording_store.record_run(run_kind=run_kind, trace=trace)
+    version_info = current_app_version_info()
+    stamped_trace = trace.model_copy(
+        update={
+            "answer_app_version": version_info.app_version,
+            "answer_git_commit": version_info.git_commit,
+            "answer_version_provenance": VersionProvenance(version_info.provenance),
+        }
+    )
+    recording_store.record_run(run_kind=run_kind, trace=stamped_trace)
     recording_store.record_answer_snapshot(
         AnswerSnapshot(
-            request_id=trace.request_id,
-            session_id=trace.session_id,
+            request_id=stamped_trace.request_id,
+            session_id=stamped_trace.session_id,
             run_kind=run_kind,
             question=answer.question,
             answer=answer,
             evidence=answer.evidence,
-            repository_id=trace.repository_id,
-            repository_name=trace.repository_name,
-            branch=trace.branch,
-            commit_hash=trace.commit_hash,
-            question_mode=trace.question_mode,
-            retrieval_mode=trace.retrieval_mode,
-            retrieval_limit=trace.retrieval_limit,
-            created_at=trace.completed_at,
+            repository_id=stamped_trace.repository_id,
+            repository_name=stamped_trace.repository_name,
+            branch=stamped_trace.branch,
+            commit_hash=stamped_trace.commit_hash,
+            question_mode=stamped_trace.question_mode,
+            retrieval_mode=stamped_trace.retrieval_mode,
+            retrieval_limit=stamped_trace.retrieval_limit,
+            created_at=stamped_trace.completed_at,
+            answer_app_version=stamped_trace.answer_app_version,
+            answer_git_commit=stamped_trace.answer_git_commit,
+            answer_version_provenance=stamped_trace.answer_version_provenance,
         )
     )
 

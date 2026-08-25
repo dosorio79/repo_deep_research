@@ -354,6 +354,7 @@ class EmptyMonitoredStore:
         run_kind: object = None,
         repository_name: str | None = None,
         request_ids: list[str] | None = None,
+        unevaluated_only: bool = False,
     ) -> list[object]:
         self.calls.append(
             {
@@ -361,6 +362,7 @@ class EmptyMonitoredStore:
                 "run_kind": run_kind,
                 "repository_name": repository_name,
                 "request_ids": request_ids,
+                "unevaluated_only": unevaluated_only,
             }
         )
         return []
@@ -597,8 +599,24 @@ def test_cli_monitored_answer_evaluation_request_ids_skip_empty_judge(
             "run_kind": None,
             "repository_name": None,
             "request_ids": ["request-1", "request-2"],
+            "unevaluated_only": False,
         }
     ]
+
+
+def test_cli_samples_monitored_candidates_oldest_first_or_seeded() -> None:
+    candidates = list(range(6))
+
+    assert cli._sample_monitored_candidates(
+        candidates,
+        sample_size=3,
+        sample_seed=None,
+    ) == [0, 1, 2]
+    assert cli._sample_monitored_candidates(
+        candidates,
+        sample_size=3,
+        sample_seed=7,
+    ) == [1, 2, 3]
 
 
 def test_cli_ingest_skips_existing_git_revision(

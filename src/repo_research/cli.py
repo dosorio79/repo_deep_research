@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -43,10 +44,12 @@ from repo_research.models import (
     RetrievalMode,
     RunKind,
     SearchQuery,
+    VersionProvenance,
 )
 from repo_research.protocols import RepositoryGraphStore, RepositorySearcher
 from repo_research.rag import AnswerJudge, DirectRagService
 from repo_research.research import ResearchAgentRunner
+from repo_research.versioning import current_app_version_info
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -182,6 +185,23 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="optional monitored-runs request_id filter; repeat for multiple runs",
+    )
+    answer_eval.add_argument(
+        "--unevaluated-only",
+        action="store_true",
+        help="evaluate only monitored answers without a completed post-hoc result",
+    )
+    answer_eval.add_argument(
+        "--sample-size",
+        type=int,
+        default=None,
+        help="optional monitored-runs subset size after filters",
+    )
+    answer_eval.add_argument(
+        "--sample-seed",
+        type=int,
+        default=None,
+        help="optional deterministic random seed for monitored-runs sampling",
     )
     answer_eval.add_argument(
         "--persist",
@@ -513,11 +533,15 @@ def _run_unified_answer_evaluation(
         )
         source_label = "monitored-runs"
 
+    version_info = current_app_version_info()
     evaluation_run = EvaluationRunRecord(
         source_type=source_type,
         source_label=source_label,
         judge_model=settings.openai_judge_model,
         started_at=datetime.now(UTC),
+        evaluation_app_version=version_info.app_version,
+        evaluation_git_commit=version_info.git_commit,
+        evaluation_version_provenance=VersionProvenance(version_info.provenance),
     )
     evaluation_store = (
         runtime.create_recording_store(settings) if arguments.persist else None
@@ -584,7 +608,7 @@ def _run_unified_answer_evaluation(
                     }
                 )
             )
-    except Exception as error:
+    except (Exception, KeyboardInterrupt) as error:
         if evaluation_store is not None:
             evaluation_store.record_evaluation_run(
                 evaluation_run.model_copy(
@@ -618,7 +642,14 @@ def _run_monitored_answer_evaluation(
         run_kind=RunKind(arguments.run_kind) if arguments.run_kind else None,
         repository_name=arguments.repository_name,
         request_ids=request_ids,
+        unevaluated_only=bool(arguments.unevaluated_only),
     )
+    if request_ids is None:
+        candidates = _sample_monitored_candidates(
+            candidates,
+            sample_size=arguments.sample_size,
+            sample_seed=arguments.sample_seed,
+        )
     _report_step(f"loaded {len(candidates)} monitored answer snapshots")
     if not candidates:
         return []
@@ -641,11 +672,15 @@ def _judge_and_optionally_persist_answer_candidates(
     source_label: str,
     persist: bool,
 ) -> list[PersistedEvaluationResult]:
+    version_info = current_app_version_info()
     evaluation_run = EvaluationRunRecord(
         source_type=source_type,
         source_label=source_label,
         judge_model=settings.openai_judge_model,
         started_at=datetime.now(UTC),
+        evaluation_app_version=version_info.app_version,
+        evaluation_git_commit=version_info.git_commit,
+        evaluation_version_provenance=VersionProvenance(version_info.provenance),
     )
     evaluation_store = runtime.create_recording_store(settings) if persist else None
     if evaluation_store is not None:
@@ -675,7 +710,7 @@ def _judge_and_optionally_persist_answer_candidates(
                 )
             )
             _report_step(f"persisted {len(results)} evaluation results")
-    except Exception as error:
+    except (Exception, KeyboardInterrupt) as error:
         if evaluation_store is not None:
             evaluation_store.record_evaluation_run(
                 evaluation_run.model_copy(
@@ -688,6 +723,25 @@ def _judge_and_optionally_persist_answer_candidates(
             )
         raise
     return results
+
+
+def _sample_monitored_candidates[T](
+    candidates: list[T],
+    *,
+    sample_size: int | None,
+    sample_seed: int | None,
+) -> list[T]:
+    """Return a deterministic monitored-run subset after source filters."""
+    if sample_size is None or sample_size >= len(candidates):
+        return candidates
+    if sample_size < 1:
+        return []
+    if sample_seed is None:
+        return candidates[:sample_size]
+    sampled_indices = sorted(
+        random.Random(sample_seed).sample(range(len(candidates)), sample_size)
+    )
+    return [candidates[index] for index in sampled_indices]
 
 
 def _answer_evaluation_checkpoint_context(

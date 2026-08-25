@@ -63,6 +63,7 @@ class MonitoredAnswerSource(Protocol):
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
         request_ids: list[str] | None = None,
+        unevaluated_only: bool = False,
     ) -> list[EvaluatableAnswerSnapshot]:
         """Return recent monitored answer snapshots."""
 
@@ -214,6 +215,7 @@ def monitored_answer_candidates(
     run_kind: RunKind | None = None,
     repository_name: str | None = None,
     request_ids: list[str] | None = None,
+    unevaluated_only: bool = False,
 ) -> list[AnswerEvaluationCandidate]:
     """Load answer candidates from persisted monitoring snapshots."""
     snapshots = source.list_answer_snapshots_for_evaluation(
@@ -221,6 +223,7 @@ def monitored_answer_candidates(
         run_kind=run_kind,
         repository_name=repository_name,
         request_ids=request_ids,
+        unevaluated_only=unevaluated_only,
     )
     return [
         AnswerEvaluationCandidate(

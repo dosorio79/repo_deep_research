@@ -186,6 +186,7 @@ class FakeMonitoredSource:
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
         request_ids: list[str] | None = None,
+        unevaluated_only: bool = False,
     ) -> list[EvaluatableAnswerSnapshot]:
         self.calls.append(
             {
@@ -193,6 +194,7 @@ class FakeMonitoredSource:
                 "run_kind": run_kind,
                 "repository_name": repository_name,
                 "request_ids": request_ids,
+                "unevaluated_only": unevaluated_only,
             }
         )
         return self.snapshots[:limit]
@@ -372,6 +374,7 @@ def test_monitored_answer_candidates_include_feedback_and_latency(
             "run_kind": RunKind.AGENTIC,
             "repository_name": "repo",
             "request_ids": ["request-1", "request-2"],
+            "unevaluated_only": False,
         }
     ]
     assert candidates[0].record.id == "request-1"
