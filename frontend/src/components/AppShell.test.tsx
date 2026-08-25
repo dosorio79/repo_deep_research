@@ -1,10 +1,23 @@
-import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import type { MouseEventHandler, ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { Navigation } from "./AppShell";
 
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
+  Link: ({
+    to,
+    children,
+    onClick,
+    ...props
+  }: {
+    to: string;
+    children: ReactNode;
+    onClick?: MouseEventHandler<HTMLAnchorElement>;
+  }) => (
+    <a href={to} onClick={onClick} {...props}>
+      {children}
+    </a>
+  ),
 }));
 
 describe("Navigation", () => {
@@ -20,5 +33,16 @@ describe("Navigation", () => {
       "href",
       "/evaluations",
     );
+  });
+
+  it("blocks navigation clicks while a long operation is locked", () => {
+    render(<Navigation locked lockedReason="Repository ingestion is still running." />);
+
+    const monitoringLink = screen.getByRole("link", { name: /admin monitoring/i });
+    const clickResult = fireEvent.click(monitoringLink);
+
+    expect(clickResult).toBe(false);
+    expect(monitoringLink).toHaveAttribute("aria-disabled", "true");
+    expect(monitoringLink).toHaveAttribute("title", "Repository ingestion is still running.");
   });
 });

@@ -116,6 +116,7 @@ function ResearchView() {
   const [sessionId] = useState(() => getBrowserSessionId());
   const [ingestError, setIngestError] = useState<ApiErrorShape | null>(null);
   const [queryError, setQueryError] = useState<ApiErrorShape | null>(null);
+  const [ingestElapsedSeconds, setIngestElapsedSeconds] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
   const activeRequestId = result?.trace?.request_id ?? null;
 
@@ -145,6 +146,9 @@ function ResearchView() {
   const ingestMutation = useMutation({
     mutationFn: (payload: { baseUrl: string; repositoryAddress: string }) =>
       ingestRepository(payload.baseUrl, { repository_address: payload.repositoryAddress }),
+    onMutate: () => {
+      setIngestElapsedSeconds(0);
+    },
     onSuccess: (data) => {
       setIngestSummary(data);
       setIngestError(null);
@@ -158,6 +162,25 @@ function ResearchView() {
       });
     },
   });
+
+  useEffect(() => {
+    if (!ingestMutation.isPending) return undefined;
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setIngestElapsedSeconds(Math.max(1, Math.floor((Date.now() - startedAt) / 1000)));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [ingestMutation.isPending]);
+
+  useEffect(() => {
+    if (!ingestMutation.isPending) return undefined;
+    const preventUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", preventUnload);
+    return () => window.removeEventListener("beforeunload", preventUnload);
+  }, [ingestMutation.isPending]);
 
   const queryMutation = useMutation({
     mutationFn: (payload: {
@@ -268,7 +291,10 @@ function ResearchView() {
   const ingestStatusLabel = ingestSummary?.index_updated ? "indexed" : "already indexed";
 
   return (
-    <AppShell>
+    <AppShell
+      navigationLocked={ingestMutation.isPending}
+      navigationLockReason="Repository ingestion is still running."
+    >
       <div className="space-y-3">
         <header className="border-b border-border pb-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -359,6 +385,9 @@ function ResearchView() {
                   </Button>
                 </div>
                 {ingestError ? <ApiError error={ingestError} /> : null}
+                {ingestMutation.isPending ? (
+                  <IngestionProgress elapsedSeconds={ingestElapsedSeconds} />
+                ) : null}
                 {ingestSummary ? <RepositoryReceipt summary={ingestSummary} /> : null}
               </div>
             </section>
@@ -496,6 +525,30 @@ function ResearchView() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function IngestionProgress({ elapsedSeconds }: { elapsedSeconds: number }) {
+  const elapsedLabel =
+    elapsedSeconds > 0 ? `${elapsedSeconds.toLocaleString()}s elapsed` : "starting";
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-md border border-primary/25 bg-primary/5 p-3 text-[12px]"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
+          <span className="font-medium text-foreground">Ingestion in progress</span>
+        </div>
+        <span className="mono text-[11px] text-muted-foreground">{elapsedLabel}</span>
+      </div>
+      <div className="mt-2 grid gap-1 text-muted-foreground">
+        <span>Keeping this tab active while parsing files, building graph context, and indexing vectors.</span>
+        <span className="mono text-[11px]">Navigation is locked until ingestion finishes.</span>
+      </div>
+    </div>
   );
 }
 

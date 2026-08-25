@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Activity, ClipboardCheck, Lock, Search, Terminal } from "lucide-react";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -9,7 +9,13 @@ const NAV = [
   { to: "/evaluations", label: "Admin Evaluations", icon: ClipboardCheck, admin: true },
 ] as const;
 
-export function Navigation() {
+export function Navigation({
+  locked = false,
+  lockedReason = "Navigation is disabled while the current operation is running.",
+}: {
+  locked?: boolean;
+  lockedReason?: string | undefined;
+}) {
   return (
     <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
       {NAV.map((item) => (
@@ -17,8 +23,16 @@ export function Navigation() {
           key={item.to}
           to={item.to}
           activeOptions={{ exact: item.to === "/" }}
+          aria-disabled={locked}
+          title={locked ? lockedReason : undefined}
+          onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+            if (!locked) return;
+            event.preventDefault();
+            event.stopPropagation();
+          }}
           className={cn(
             "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            locked && "pointer-events-auto cursor-not-allowed opacity-60 hover:bg-transparent",
           )}
           activeProps={{ className: "bg-secondary text-foreground font-medium" }}
         >
@@ -31,7 +45,15 @@ export function Navigation() {
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  navigationLocked = false,
+  navigationLockReason,
+}: {
+  children: ReactNode;
+  navigationLocked?: boolean;
+  navigationLockReason?: string;
+}) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
@@ -42,7 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               Repo Deep Research
             </span>
           </div>
-          <Navigation />
+          <Navigation locked={navigationLocked} lockedReason={navigationLockReason} />
           <div className="hidden whitespace-nowrap mono text-[11px] text-muted-foreground xl:ml-auto xl:block">
             evidence-grounded repository research
           </div>
