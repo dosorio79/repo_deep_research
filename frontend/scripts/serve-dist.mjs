@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { extname, join, normalize, resolve, sep } from "node:path";
 
 import app from "../dist/server/server.js";
@@ -58,29 +59,33 @@ async function proxyApi(request, response) {
     requestUrl.pathname.replace(/^\/api/, "") + requestUrl.search,
     apiProxyTarget,
   );
-  const body =
-    request.method === "GET" || request.method === "HEAD"
-      ? undefined
-      : await readRequestBody(request);
-  const headers = new Headers();
+  const headers = {};
   for (const [key, value] of Object.entries(request.headers)) {
     if (value && !["connection", "host", "content-length"].includes(key.toLowerCase())) {
-      headers.set(key, Array.isArray(value) ? value.join(",") : value);
+      headers[key] = value;
     }
   }
 
-  const proxied = await fetch(targetUrl, { method: request.method, headers, body });
-  response.writeHead(proxied.status, Object.fromEntries(proxied.headers));
-  response.end(Buffer.from(await proxied.arrayBuffer()));
+  await new Promise((resolve, reject) => {
+    const client = targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
+    const upstream = client(
+      targetUrl,
+      {
+        method: request.method,
+        headers,
+        timeout: 0,
+      },
+      (upstreamResponse) => {
+        response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
+        upstreamResponse.pipe(response);
+        upstreamResponse.on("end", resolve);
+      },
+    );
+    upstream.on("error", reject);
+    response.on("close", () => upstream.destroy());
+    request.pipe(upstream);
+  });
   return true;
-}
-
-async function readRequestBody(request) {
-  const chunks = [];
-  for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks);
 }
 
 createServer(async (request, response) => {

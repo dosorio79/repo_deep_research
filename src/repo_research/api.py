@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from openai import OpenAIError
 from qdrant_client.http.exceptions import ResponseHandlingException
+from starlette.concurrency import run_in_threadpool
 
 from repo_research.config import Settings, load_dotenv_environment
 from repo_research.graph_models import GraphSummary
@@ -264,18 +265,12 @@ def create_app(
     )
     async def ingest_repository(request: RepositoryIngestRequest) -> IngestSummary:
         try:
-            root_path = materialize_repository_address(
-                request.repository_address,
-                app_settings.repository_cache_dir,
-            )
-            repository, files = discover_repository(
-                root_path, app_settings.max_file_size_bytes
-            )
-            return ingest_repository_if_needed(
-                database=get_database(),
-                graph_store=get_graph_store(),
-                repository=repository,
-                files=files,
+            return await run_in_threadpool(
+                _ingest_repository_sync,
+                request,
+                app_settings,
+                get_database(),
+                get_graph_store(),
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -548,6 +543,26 @@ def create_app(
         return get_recording_store().list_ground_truth_evaluation_results()
 
     return app
+
+
+def _ingest_repository_sync(
+    request: RepositoryIngestRequest,
+    app_settings: Settings,
+    database: RagDatabase,
+    graph_store: RepositoryGraphStore,
+) -> IngestSummary:
+    """Run repository ingestion away from the async server event loop."""
+    root_path = materialize_repository_address(
+        request.repository_address,
+        app_settings.repository_cache_dir,
+    )
+    repository, files = discover_repository(root_path, app_settings.max_file_size_bytes)
+    return ingest_repository_if_needed(
+        database=database,
+        graph_store=graph_store,
+        repository=repository,
+        files=files,
+    )
 
 
 def _record_completed_answer(

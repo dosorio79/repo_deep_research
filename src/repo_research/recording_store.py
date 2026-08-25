@@ -1259,6 +1259,38 @@ _SCHEMA_STATEMENTS = (
     )
     """,
     """
+    DELETE FROM feedback_events duplicate
+    USING feedback_events keeper
+    WHERE duplicate.request_id IS NOT NULL
+      AND keeper.request_id = duplicate.request_id
+      AND (
+          keeper.submitted_at,
+          keeper.created_at,
+          keeper.feedback_id
+      ) < (
+          duplicate.submitted_at,
+          duplicate.created_at,
+          duplicate.feedback_id
+      )
+    """,
+    """
+    DELETE FROM feedback_events duplicate
+    USING feedback_events keeper
+    WHERE duplicate.request_id IS NULL
+      AND keeper.request_id IS NULL
+      AND keeper.session_id = duplicate.session_id
+      AND keeper.run_kind = duplicate.run_kind
+      AND (
+          keeper.submitted_at,
+          keeper.created_at,
+          keeper.feedback_id
+      ) < (
+          duplicate.submitted_at,
+          duplicate.created_at,
+          duplicate.feedback_id
+      )
+    """,
+    """
     CREATE UNIQUE INDEX IF NOT EXISTS feedback_events_request_id_unique_idx
     ON feedback_events (request_id)
     WHERE request_id IS NOT NULL

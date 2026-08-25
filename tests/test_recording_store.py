@@ -146,6 +146,17 @@ def test_recording_store_initializes_postgres_schema() -> None:
     assert any("answer_app_version" in sql for sql in statements)
     assert any("evaluation_app_version" in sql for sql in statements)
     assert any("feedback_events_request_id_unique_idx" in sql for sql in statements)
+    dedupe_index = next(
+        index
+        for index, sql in enumerate(statements)
+        if "DELETE FROM feedback_events duplicate" in sql
+    )
+    unique_index = next(
+        index
+        for index, sql in enumerate(statements)
+        if "feedback_events_request_id_unique_idx" in sql
+    )
+    assert dedupe_index < unique_index
     assert any("feedback_events_session_id_idx" in sql for sql in statements)
     assert any("answer_snapshots_session_id_idx" in sql for sql in statements)
     assert any("evaluation_results_request_id_idx" in sql for sql in statements)
