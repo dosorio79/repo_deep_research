@@ -185,6 +185,17 @@
       "EvaluationResultSummary": {
         "description": "One persisted judged answer result for dashboard inspection.",
         "properties": {
+          "answer_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer App Version"
+          },
           "answer_correctness": {
             "anyOf": [
               {
@@ -205,11 +216,26 @@
             "title": "Answer Evidence",
             "type": "array"
           },
+          "answer_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Git Commit"
+          },
           "answer_relevance": {
             "maximum": 5.0,
             "minimum": 0.0,
             "title": "Answer Relevance",
             "type": "number"
+          },
+          "answer_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
           },
           "average_score": {
             "maximum": 5.0,
@@ -257,10 +283,36 @@
             "title": "Created At",
             "type": "string"
           },
+          "evaluation_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation App Version"
+          },
+          "evaluation_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Git Commit"
+          },
           "evaluation_run_id": {
             "minLength": 1,
             "title": "Evaluation Run Id",
             "type": "string"
+          },
+          "evaluation_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
           },
           "faithfulness": {
             "maximum": 5.0,
@@ -560,10 +612,36 @@
             ],
             "title": "Error Message"
           },
+          "evaluation_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation App Version"
+          },
+          "evaluation_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Git Commit"
+          },
           "evaluation_run_id": {
             "minLength": 1,
             "title": "Evaluation Run Id",
             "type": "string"
+          },
+          "evaluation_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
           },
           "judge_model": {
             "minLength": 1,
@@ -711,6 +789,11 @@
               }
             ],
             "title": "Comment"
+          },
+          "duplicate": {
+            "default": false,
+            "title": "Duplicate",
+            "type": "boolean"
           },
           "feedback_id": {
             "minLength": 1,
@@ -1339,6 +1422,32 @@
       "MonitoringRunDetail": {
         "description": "Detailed persisted monitoring data for one run.",
         "properties": {
+          "answer_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer App Version"
+          },
+          "answer_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Git Commit"
+          },
+          "answer_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
+          },
           "branch": {
             "minLength": 1,
             "title": "Branch",
@@ -1583,6 +1692,32 @@
       "MonitoringRunSummary": {
         "description": "One persisted run row for the monitoring history table.",
         "properties": {
+          "answer_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer App Version"
+          },
+          "answer_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Git Commit"
+          },
+          "answer_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
+          },
           "branch": {
             "minLength": 1,
             "title": "Branch",
@@ -1945,6 +2080,32 @@
       "RagRunTrace": {
         "description": "Application-owned trace metadata for one direct-RAG run.",
         "properties": {
+          "answer_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer App Version"
+          },
+          "answer_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Git Commit"
+          },
+          "answer_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
+          },
           "branch": {
             "minLength": 1,
             "title": "Branch",
@@ -2633,6 +2794,16 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "VersionProvenance": {
+        "description": "How persisted application version metadata was determined.",
+        "enum": [
+          "exact",
+          "inferred",
+          "unknown"
+        ],
+        "title": "VersionProvenance",
+        "type": "string"
       }
     }
   },
@@ -2646,7 +2817,7 @@
     },
     "summary": "Evidence-grounded research for Python repositories.",
     "title": "Repo Deep Research",
-    "version": "0.6.1"
+    "version": "0.6.2"
   },
   "openapi": "3.1.0",
   "paths": {

@@ -46,7 +46,7 @@ flowchart LR
 
 ## Release Status
 
-The current development line is `v0.6.1 Relationship-Aware Change Impact`.
+The current development line is `v0.6.2 Intermediate Hardening`.
 It keeps the local-first capstone stack, adds commit-scoped JSONL repository
 graphs for bounded agentic change-impact research, and includes the graph
 expansion acceptance hardening needed before v0.7 adaptive research. Live
@@ -158,6 +158,9 @@ local runs.
 | `make export-openapi` | Refresh the versioned OpenAPI contract. |
 | `make api` | Run FastAPI locally. |
 | `make app` | Run the API and Vite frontend locally. |
+
+Run `make export-openapi` in the same change as any API response model or
+package version metadata update.
 
 Frontend-only workflows use npm directly:
 

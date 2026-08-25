@@ -219,6 +219,18 @@ uv run repo-research evaluate-answers --source monitored-runs \
   --output eval/results/answer-monitored-agentic.json
 ```
 
+Use `--unevaluated-only --sample-size N` to run a bounded post-hoc subset
+without rejudging answers that already have completed monitored-run evaluation
+results. Without `--sample-seed`, sampling is deterministic oldest-first; with
+`--sample-seed`, the random subset is repeatable:
+
+```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
+uv run repo-research evaluate-answers --source monitored-runs \
+  --unevaluated-only --sample-size 4 --sample-seed 7 --persist \
+  --output eval/results/answer-monitored-sample.json
+```
+
 Use repeatable `--request-id` flags to judge specific recorded answers without
 depending on recency or run-kind filters:
 
