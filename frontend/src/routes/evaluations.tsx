@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ClipboardCheck, Gauge, MessageSquare, TriangleAlert } from "lucide-react";
 import { ApiError } from "@/components/ApiError";
@@ -170,6 +170,9 @@ function EvaluationDashboard({
     return (
       <div className="space-y-3">
         <SearchEvaluationHighlights results={retrievalResults} loading={loadingRetrievalResults} />
+        <Panel title="Recent evaluation runs">
+          <EvaluationRunTable runs={runs} loading={loadingRuns} />
+        </Panel>
         <EmptyEvaluations />
       </div>
     );
@@ -561,14 +564,24 @@ function ChartPanel({ title, children }: { title: string; children: ReactNode })
 function EvaluationRunTable({ runs, loading }: { runs: EvaluationRunSummary[]; loading: boolean }) {
   if (loading) return <EmptyLine>Loading evaluation runs.</EmptyLine>;
   if (runs.length === 0) return <EmptyLine>No persisted evaluation runs.</EmptyLine>;
+  const sections = [
+    ["Completed", runs.filter((run) => run.status === "completed" && run.result_count > 0)],
+    ["Zero-result", runs.filter((run) => run.status === "completed" && run.result_count === 0)],
+    ["Failed", runs.filter((run) => run.status === "failed")],
+    [
+      "Running or pending",
+      runs.filter((run) => run.status !== "completed" && run.status !== "failed"),
+    ],
+  ] as const;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] text-left text-[12px]">
+      <table className="w-full min-w-[860px] text-left text-[12px]">
         <thead className="border-b border-border text-muted-foreground">
           <tr>
             <th className="py-2 pr-3 font-medium">Started</th>
             <th className="py-2 pr-3 font-medium">Source</th>
             <th className="py-2 pr-3 font-medium">Context</th>
+            <th className="py-2 pr-3 font-medium">Eval version</th>
             <th className="py-2 pr-3 font-medium">Status</th>
             <th className="py-2 pr-3 font-medium">Results</th>
             <th className="py-2 pr-3 font-medium">Average</th>
@@ -576,17 +589,37 @@ function EvaluationRunTable({ runs, loading }: { runs: EvaluationRunSummary[]; l
           </tr>
         </thead>
         <tbody>
-          {runs.map((run) => (
-            <tr key={run.evaluation_run_id} className="border-b border-border/60">
-              <td className="py-2 pr-3 mono">{formatDate(run.started_at)}</td>
-              <td className="py-2 pr-3">{sourceLabel(run.source_type)}</td>
-              <td className="max-w-[240px] py-2 pr-3">{run.context_labels.join(", ")}</td>
-              <td className="py-2 pr-3">{run.status}</td>
-              <td className="py-2 pr-3 mono">{run.result_count}</td>
-              <td className="py-2 pr-3 mono">{formatScore(run.average_score)}</td>
-              <td className="py-2 pr-3 mono">{run.unsupported_claim_count}</td>
-            </tr>
-          ))}
+          {sections.map(([label, sectionRuns]) =>
+            sectionRuns.length ? (
+              <Fragment key={label}>
+                <tr className="border-b border-border/60 bg-secondary/35">
+                  <td
+                    className="py-1.5 pr-3 text-[11px] uppercase tracking-wide text-muted-foreground"
+                    colSpan={8}
+                  >
+                    {label}
+                  </td>
+                </tr>
+                {sectionRuns.map((run) => (
+                  <tr key={run.evaluation_run_id} className="border-b border-border/60">
+                    <td className="py-2 pr-3 mono">{formatDate(run.started_at)}</td>
+                    <td className="py-2 pr-3">{sourceLabel(run.source_type)}</td>
+                    <td className="max-w-[240px] py-2 pr-3">{run.context_labels.join(", ")}</td>
+                    <td className="py-2 pr-3 mono">
+                      {formatVersion(
+                        run.evaluation_app_version,
+                        run.evaluation_version_provenance,
+                      )}
+                    </td>
+                    <td className="py-2 pr-3">{run.status}</td>
+                    <td className="py-2 pr-3 mono">{run.result_count}</td>
+                    <td className="py-2 pr-3 mono">{formatScore(run.average_score)}</td>
+                    <td className="py-2 pr-3 mono">{run.unsupported_claim_count}</td>
+                  </tr>
+                ))}
+              </Fragment>
+            ) : null,
+          )}
         </tbody>
       </table>
     </div>
@@ -605,12 +638,13 @@ function EvaluationResultTable({
     return <EmptyLine>No evaluated answers match the current view.</EmptyLine>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1280px] text-left text-[12px]">
+      <table className="w-full min-w-[1420px] text-left text-[12px]">
         <thead className="border-b border-border text-muted-foreground">
           <tr>
             <th className="py-2 pr-3 font-medium">Question</th>
             <th className="py-2 pr-3 font-medium">Source</th>
             <th className="py-2 pr-3 font-medium">Context</th>
+            <th className="py-2 pr-3 font-medium">Versions</th>
             <th className="py-2 pr-3 font-medium">Approach</th>
             <th className="py-2 pr-3 font-medium">Average</th>
             <th className="py-2 pr-3 font-medium">Correct</th>
@@ -631,6 +665,15 @@ function EvaluationResultTable({
               <td className="max-w-[360px] break-words py-2 pr-3">{result.question}</td>
               <td className="py-2 pr-3">{sourceLabel(result.source_type)}</td>
               <td className="max-w-[220px] break-words py-2 pr-3">{result.context_label}</td>
+              <td className="py-2 pr-3 mono">
+                <span className="block">
+                  answer {formatVersion(result.answer_app_version, result.answer_version_provenance)}
+                </span>
+                <span className="block text-muted-foreground">
+                  eval{" "}
+                  {formatVersion(result.evaluation_app_version, result.evaluation_version_provenance)}
+                </span>
+              </td>
               <td className="py-2 pr-3">{result.run_kind ?? "unknown"}</td>
               <td className="py-2 pr-3 mono">{formatScore(result.average_score)}</td>
               <td className="py-2 pr-3 mono">{formatScore(result.answer_correctness)}</td>
@@ -865,6 +908,11 @@ function formatDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatVersion(version: string | null | undefined, provenance: string | null | undefined) {
+  const value = version || "unknown";
+  return provenance && provenance !== "exact" ? `${value} (${provenance})` : value;
 }
 
 function sourceLabel(value: string) {

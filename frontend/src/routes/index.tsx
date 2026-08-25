@@ -31,6 +31,7 @@ import { AppShell } from "@/components/AppShell";
 import { loadLatestRagRun, saveLatestRagRun } from "@/lib/latest-rag-run";
 import {
   getBackendHealth,
+  getMonitoringRunDetail,
   ingestRepository,
   runAgenticResearch,
   runRagQuery,
@@ -76,6 +77,10 @@ const EXAMPLES = [
 const QUESTION_MODES: QuestionMode[] = ["auto", "locate", "flow", "change"];
 const RETRIEVAL_MODES: RetrievalMode[] = ["dense", "sparse", "hybrid"];
 const DEFAULT_API_BASE_URL = (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "/api";
+type RecordedFeedback = {
+  useful: boolean;
+  duplicate?: boolean;
+};
 export const RESEARCH_HEAD = {
   meta: [
     { title: "Repo Deep Research" },
@@ -112,6 +117,7 @@ function ResearchView() {
   const [ingestError, setIngestError] = useState<ApiErrorShape | null>(null);
   const [queryError, setQueryError] = useState<ApiErrorShape | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
+  const activeRequestId = result?.trace?.request_id ?? null;
 
   useEffect(() => () => activeRequest.current?.abort(), []);
 
@@ -194,6 +200,18 @@ function ResearchView() {
         ...(payload.comment ? { comment: payload.comment } : {}),
       }),
   });
+  const monitoringDetailQuery = useQuery({
+    queryKey: ["answer-feedback-detail", baseUrl, activeRequestId],
+    queryFn: ({ signal }) =>
+      getMonitoringRunDetail(baseUrl, activeRequestId ?? "", signal),
+    enabled: Boolean(activeRequestId),
+    retry: false,
+    staleTime: 5_000,
+  });
+
+  useEffect(() => {
+    feedbackMutation.reset();
+  }, [activeRequestId]);
 
   const ingest = () => {
     setIngestError(null);
@@ -464,7 +482,11 @@ function ResearchView() {
               result={result}
               runKind={resultKind}
               feedbackPending={feedbackMutation.isPending}
-              feedbackSubmitted={feedbackMutation.isSuccess}
+              recordedFeedback={
+                feedbackMutation.data ??
+                monitoringDetailQuery.data?.feedback_events[0] ??
+                null
+              }
               feedbackError={(feedbackMutation.error as ApiErrorShape | null) ?? null}
               onSubmitFeedback={submitRunFeedback}
             />
@@ -692,14 +714,14 @@ function ReviewerResult({
   result,
   runKind,
   feedbackPending,
-  feedbackSubmitted,
+  recordedFeedback,
   feedbackError,
   onSubmitFeedback,
 }: {
   result: ResearchResult;
   runKind: ResearchKind;
   feedbackPending: boolean;
-  feedbackSubmitted: boolean;
+  recordedFeedback: RecordedFeedback | null;
   feedbackError: ApiErrorShape | null;
   onSubmitFeedback: (payload: { useful: boolean; comment?: string }) => void;
 }) {
@@ -762,7 +784,7 @@ function ReviewerResult({
           runKind={runKind}
           requestId={result.trace.request_id}
           pending={feedbackPending}
-          submitted={feedbackSubmitted}
+          recordedFeedback={recordedFeedback}
           error={feedbackError}
           onSubmit={onSubmitFeedback}
         />
@@ -775,19 +797,20 @@ function FeedbackControls({
   runKind,
   requestId,
   pending,
-  submitted,
+  recordedFeedback,
   error,
   onSubmit,
 }: {
   runKind: ResearchKind;
   requestId: string;
   pending: boolean;
-  submitted: boolean;
+  recordedFeedback: RecordedFeedback | null;
   error: ApiErrorShape | null;
   onSubmit: (payload: { useful: boolean; comment?: string }) => void;
 }) {
   const [useful, setUseful] = useState<boolean | null>(null);
   const [comment, setComment] = useState("");
+  const submitted = recordedFeedback !== null;
   const canSubmit = useful !== null && !pending && !submitted;
 
   return (
@@ -801,14 +824,18 @@ function FeedbackControls({
             {runKind} - {requestId}
           </p>
         </div>
-        {submitted ? <Badge variant="secondary">submitted</Badge> : null}
+        {submitted ? (
+          <Badge variant="secondary">
+            {recordedFeedback.duplicate ? "already recorded" : "submitted"}
+          </Badge>
+        ) : null}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button
           type="button"
           variant={useful === true ? "default" : "outline"}
           size="sm"
-          disabled={submitted}
+          disabled={submitted || pending}
           onClick={() => setUseful(true)}
           className="gap-1.5"
         >
@@ -819,7 +846,7 @@ function FeedbackControls({
           type="button"
           variant={useful === false ? "default" : "outline"}
           size="sm"
-          disabled={submitted}
+          disabled={submitted || pending}
           onClick={() => setUseful(false)}
           className="gap-1.5"
         >
@@ -838,7 +865,7 @@ function FeedbackControls({
         value={comment}
         rows={2}
         maxLength={2000}
-        disabled={submitted}
+        disabled={submitted || pending}
         onChange={(event) => setComment(event.target.value)}
         className="mt-1.5 min-h-[68px] resize-y text-[13px] leading-5"
       />
@@ -864,6 +891,11 @@ function FeedbackControls({
           )}
           {submitted ? "Feedback recorded" : "Submit feedback"}
         </Button>
+        {submitted ? (
+          <span className="text-[12px] text-muted-foreground">
+            Recorded as {recordedFeedback.useful ? "useful" : "not useful"}.
+          </span>
+        ) : null}
         {error ? <span className="text-[12px] text-destructive">{error.detail}</span> : null}
       </div>
     </div>

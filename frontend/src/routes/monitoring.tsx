@@ -849,12 +849,13 @@ function RunTable({
 
   return (
     <div className="max-w-full overflow-x-auto">
-      <table className="min-w-[820px] table-fixed border-collapse text-left text-[13px]">
+      <table className="min-w-[900px] table-fixed border-collapse text-left text-[13px]">
         <thead>
           <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
             <th className="w-[126px] py-2 pr-3 font-semibold">Time</th>
             <th className="w-[82px] py-2 pr-3 font-semibold">Kind</th>
             <th className="w-[190px] py-2 pr-3 font-semibold">Repository</th>
+            <th className="w-[100px] py-2 pr-3 font-semibold">Version</th>
             <th className="w-[82px] py-2 pr-3 font-semibold">Mode</th>
             <th className="w-[96px] py-2 pr-3 text-right font-semibold">Retrieval</th>
             <th className="w-[96px] py-2 pr-3 text-right font-semibold">Latency</th>
@@ -879,6 +880,9 @@ function RunTable({
                 <span className="block truncate mono text-[11px] text-muted-foreground">
                   {shortCommit(run.commit_hash)}
                 </span>
+              </td>
+              <td className="py-2 pr-3 mono text-[11px]">
+                {formatVersion(run.answer_app_version, run.answer_version_provenance)}
               </td>
               <td className="py-2 pr-3">{run.retrieval_mode}</td>
               <td className="py-2 pr-3 text-right mono text-[11px]">
@@ -948,6 +952,12 @@ function RunDetail({ detail, loading }: { detail: MonitoringRunDetail | null; lo
       </div>
       <div className="grid gap-1">
         <Field label="Request">{detail.request_id}</Field>
+        <Field label="Answer version">
+          {formatVersion(detail.answer_app_version, detail.answer_version_provenance)}
+        </Field>
+        <Field label="Answer commit">
+          {detail.answer_git_commit ? shortCommit(detail.answer_git_commit) : "unknown"}
+        </Field>
         <Field label="Kind">{detail.run_kind}</Field>
         <Field label="Mode">{detail.question_mode}</Field>
         <Field label="Retrieval">
@@ -1037,6 +1047,11 @@ function formatDateTime(value: string) {
 
 function shortCommit(value: string) {
   return value.slice(0, 7);
+}
+
+function formatVersion(version: string | null | undefined, provenance: string | null | undefined) {
+  const value = version || "unknown";
+  return provenance && provenance !== "exact" ? `${value} (${provenance})` : value;
 }
 
 function formatCost(value: number | string | null) {
