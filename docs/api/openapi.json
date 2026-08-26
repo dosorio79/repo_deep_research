@@ -185,6 +185,17 @@
       "EvaluationResultSummary": {
         "description": "One persisted judged answer result for dashboard inspection.",
         "properties": {
+          "answer_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer App Version"
+          },
           "answer_correctness": {
             "anyOf": [
               {
@@ -205,11 +216,26 @@
             "title": "Answer Evidence",
             "type": "array"
           },
+          "answer_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Git Commit"
+          },
           "answer_relevance": {
             "maximum": 5.0,
             "minimum": 0.0,
             "title": "Answer Relevance",
             "type": "number"
+          },
+          "answer_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
           },
           "average_score": {
             "maximum": 5.0,
@@ -257,10 +283,36 @@
             "title": "Created At",
             "type": "string"
           },
+          "evaluation_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation App Version"
+          },
+          "evaluation_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Git Commit"
+          },
           "evaluation_run_id": {
             "minLength": 1,
             "title": "Evaluation Run Id",
             "type": "string"
+          },
+          "evaluation_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
           },
           "faithfulness": {
             "maximum": 5.0,
@@ -277,6 +329,41 @@
             "minimum": 0.0,
             "title": "Feedback Useful",
             "type": "integer"
+          },
+          "graph_available": {
+            "default": false,
+            "title": "Graph Available",
+            "type": "boolean"
+          },
+          "graph_expansion_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Graph Expansion Count",
+            "type": "integer"
+          },
+          "graph_fallback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graph Fallback Reason"
+          },
+          "graph_nodes_visited": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Graph Nodes Visited",
+            "type": "integer"
+          },
+          "graph_relationship_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Graph Relationship Counts",
+            "type": "object"
           },
           "latency_ms_total": {
             "anyOf": [
@@ -525,10 +612,36 @@
             ],
             "title": "Error Message"
           },
+          "evaluation_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation App Version"
+          },
+          "evaluation_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Git Commit"
+          },
           "evaluation_run_id": {
             "minLength": 1,
             "title": "Evaluation Run Id",
             "type": "string"
+          },
+          "evaluation_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
           },
           "judge_model": {
             "minLength": 1,
@@ -587,6 +700,18 @@
       "EvidenceItem": {
         "description": "A canonical citation derived from a retrieved repository chunk.",
         "properties": {
+          "chunk_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Id"
+          },
           "content": {
             "anyOf": [
               {
@@ -664,6 +789,11 @@
               }
             ],
             "title": "Comment"
+          },
+          "duplicate": {
+            "default": false,
+            "title": "Duplicate",
+            "type": "boolean"
           },
           "feedback_id": {
             "minLength": 1,
@@ -792,6 +922,73 @@
           }
         },
         "title": "FeedbackUsefulSummary",
+        "type": "object"
+      },
+      "GraphSummary": {
+        "description": "Small printable summary for a graph artifact.",
+        "properties": {
+          "branch": {
+            "title": "Branch",
+            "type": "string"
+          },
+          "commit_hash": {
+            "title": "Commit Hash",
+            "type": "string"
+          },
+          "edge_count": {
+            "minimum": 0.0,
+            "title": "Edge Count",
+            "type": "integer"
+          },
+          "edge_counts_by_type": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Edge Counts By Type",
+            "type": "object"
+          },
+          "node_count": {
+            "minimum": 0.0,
+            "title": "Node Count",
+            "type": "integer"
+          },
+          "node_counts_by_label": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Node Counts By Label",
+            "type": "object"
+          },
+          "repository_id": {
+            "title": "Repository Id",
+            "type": "string"
+          },
+          "repository_name": {
+            "title": "Repository Name",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "repository_id",
+          "repository_name",
+          "branch",
+          "commit_hash",
+          "node_count",
+          "edge_count"
+        ],
+        "title": "GraphSummary",
         "type": "object"
       },
       "GroundTruthEvaluationList": {
@@ -952,6 +1149,35 @@
       "IngestSummary": {
         "description": "The observable result of one repository indexing operation.",
         "properties": {
+          "graph_edges": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Graph Edges",
+            "type": "integer"
+          },
+          "graph_nodes": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Graph Nodes",
+            "type": "integer"
+          },
+          "graph_skipped_file_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Graph Skipped File Count",
+            "type": "integer"
+          },
+          "graph_updated": {
+            "default": false,
+            "title": "Graph Updated",
+            "type": "boolean"
+          },
+          "graph_warning_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Graph Warning Count",
+            "type": "integer"
+          },
           "index_updated": {
             "default": true,
             "title": "Index Updated",
@@ -1196,6 +1422,32 @@
       "MonitoringRunDetail": {
         "description": "Detailed persisted monitoring data for one run.",
         "properties": {
+          "answer_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer App Version"
+          },
+          "answer_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Git Commit"
+          },
+          "answer_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
+          },
           "branch": {
             "minLength": 1,
             "title": "Branch",
@@ -1440,6 +1692,32 @@
       "MonitoringRunSummary": {
         "description": "One persisted run row for the monitoring history table.",
         "properties": {
+          "answer_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer App Version"
+          },
+          "answer_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Git Commit"
+          },
+          "answer_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
+          },
           "branch": {
             "minLength": 1,
             "title": "Branch",
@@ -1802,6 +2080,32 @@
       "RagRunTrace": {
         "description": "Application-owned trace metadata for one direct-RAG run.",
         "properties": {
+          "answer_app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer App Version"
+          },
+          "answer_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Git Commit"
+          },
+          "answer_version_provenance": {
+            "$ref": "#/components/schemas/VersionProvenance",
+            "default": "unknown"
+          },
           "branch": {
             "minLength": 1,
             "title": "Branch",
@@ -1845,6 +2149,41 @@
             },
             "title": "Evidence Ids",
             "type": "array"
+          },
+          "graph_available": {
+            "default": false,
+            "title": "Graph Available",
+            "type": "boolean"
+          },
+          "graph_expansion_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Graph Expansion Count",
+            "type": "integer"
+          },
+          "graph_fallback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graph Fallback Reason"
+          },
+          "graph_nodes_visited": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Graph Nodes Visited",
+            "type": "integer"
+          },
+          "graph_relationship_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Graph Relationship Counts",
+            "type": "object"
           },
           "insufficient_evidence": {
             "default": false,
@@ -2113,6 +2452,27 @@
             "maximum": 20.0,
             "minimum": 0.0,
             "title": "Max File Reads",
+            "type": "integer"
+          },
+          "max_graph_depth": {
+            "default": 2,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Max Graph Depth",
+            "type": "integer"
+          },
+          "max_graph_expansions": {
+            "default": 2,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Max Graph Expansions",
+            "type": "integer"
+          },
+          "max_graph_nodes": {
+            "default": 12,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Graph Nodes",
             "type": "integer"
           },
           "max_searches": {
@@ -2434,6 +2794,16 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "VersionProvenance": {
+        "description": "How persisted application version metadata was determined.",
+        "enum": [
+          "exact",
+          "inferred",
+          "unknown"
+        ],
+        "title": "VersionProvenance",
+        "type": "string"
       }
     }
   },
@@ -2447,7 +2817,7 @@
     },
     "summary": "Evidence-grounded research for Python repositories.",
     "title": "Repo Deep Research",
-    "version": "0.5.9"
+    "version": "0.6.2"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2962,6 +3332,56 @@
         "summary": "Answer with direct RAG",
         "tags": [
           "answers"
+        ]
+      }
+    },
+    "/repositories/graph-summary": {
+      "get": {
+        "operationId": "get_repository_graph_summary",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "repository_path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Repository Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get the current repository graph summary",
+        "tags": [
+          "repositories"
         ]
       }
     },

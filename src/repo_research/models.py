@@ -76,6 +76,14 @@ class RunKind(StrEnum):
     AGENTIC = "agentic"
 
 
+class VersionProvenance(StrEnum):
+    """How persisted application version metadata was determined."""
+
+    EXACT = "exact"
+    INFERRED = "inferred"
+    UNKNOWN = "unknown"
+
+
 class EvaluationSourceType(StrEnum):
     """Sources that can feed an answer-quality evaluation run."""
 
@@ -126,6 +134,9 @@ class ResearchBudget(BaseModel):
     max_searches: int = Field(default=5, ge=1, le=20)
     max_file_reads: int = Field(default=6, ge=0, le=20)
     max_total_tool_calls: int = Field(default=12, ge=1, le=40)
+    max_graph_expansions: int = Field(default=2, ge=0, le=10)
+    max_graph_nodes: int = Field(default=12, ge=1, le=50)
+    max_graph_depth: int = Field(default=2, ge=0, le=2)
 
     @model_validator(mode="after")
     def validate_total_budget(self) -> ResearchBudget:
@@ -169,6 +180,7 @@ class EvidenceItem(BaseModel):
     score: float
     reason: str = Field(min_length=1)
     content: str | None = None
+    chunk_id: str | None = Field(default=None, min_length=1)
 
 
 class ChangeTarget(BaseModel):
@@ -291,6 +303,14 @@ class RagRunTrace(BaseModel):
     error_type: str | None = None
     error_message: str | None = None
     tool_call_count: int = Field(default=0, ge=0)
+    graph_available: bool = False
+    graph_expansion_count: int = Field(default=0, ge=0)
+    graph_nodes_visited: int = Field(default=0, ge=0)
+    graph_relationship_counts: dict[str, int] = Field(default_factory=dict)
+    graph_fallback_reason: str | None = None
+    answer_app_version: str | None = None
+    answer_git_commit: str | None = None
+    answer_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
 
 
 class RagRunResult(BaseModel):
@@ -324,6 +344,9 @@ class AnswerSnapshot(BaseModel):
     retrieval_mode: RetrievalMode
     retrieval_limit: int = Field(ge=1)
     created_at: datetime
+    answer_app_version: str | None = None
+    answer_git_commit: str | None = None
+    answer_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
 
 
 class EvaluatableAnswerSnapshot(AnswerSnapshot):
@@ -355,6 +378,7 @@ class FeedbackEvent(BaseModel):
     useful: bool
     comment: str | None = Field(default=None, max_length=2000)
     submitted_at: datetime
+    duplicate: bool = False
 
 
 class RunKindCount(BaseModel):
@@ -460,6 +484,9 @@ class MonitoringRunSummary(BaseModel):
     feedback_useful: int = Field(ge=0)
     feedback_not_useful: int = Field(ge=0)
     total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+    answer_app_version: str | None = None
+    answer_git_commit: str | None = None
+    answer_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
 
 
 class MonitoringRunDetail(MonitoringRunSummary):
@@ -578,6 +605,9 @@ class EvaluationRunRecord(BaseModel):
     started_at: datetime
     completed_at: datetime | None = None
     error_message: str | None = None
+    evaluation_app_version: str | None = None
+    evaluation_git_commit: str | None = None
+    evaluation_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
 
 
 class PersistedEvaluationResult(BaseModel):
@@ -600,6 +630,11 @@ class PersistedEvaluationResult(BaseModel):
     feedback_not_useful: int = Field(default=0, ge=0)
     latency_ms_total: int | None = Field(default=None, ge=0)
     total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+    graph_available: bool = False
+    graph_expansion_count: int = Field(default=0, ge=0)
+    graph_nodes_visited: int = Field(default=0, ge=0)
+    graph_relationship_counts: dict[str, int] = Field(default_factory=dict)
+    graph_fallback_reason: str | None = None
     notes: str = ""
     created_at: datetime
 
@@ -650,6 +685,9 @@ class EvaluationRunSummary(BaseModel):
     result_count: int = Field(ge=0)
     average_score: float | None = Field(default=None, ge=0, le=5)
     unsupported_claim_count: int = Field(ge=0)
+    evaluation_app_version: str | None = None
+    evaluation_git_commit: str | None = None
+    evaluation_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
 
 
 class EvaluationRunList(BaseModel):
@@ -669,6 +707,12 @@ class EvaluationResultSummary(BaseModel):
     repository_name: str | None = Field(default=None, min_length=1)
     branch: str | None = Field(default=None, min_length=1)
     commit_hash: str | None = Field(default=None, min_length=1)
+    answer_app_version: str | None = None
+    answer_git_commit: str | None = None
+    answer_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
+    evaluation_app_version: str | None = None
+    evaluation_git_commit: str | None = None
+    evaluation_version_provenance: VersionProvenance = VersionProvenance.UNKNOWN
     record_id: str | None = Field(default=None, min_length=1)
     request_id: str | None = Field(default=None, min_length=1)
     run_kind: RunKind | None = None
@@ -685,6 +729,11 @@ class EvaluationResultSummary(BaseModel):
     feedback_not_useful: int = Field(ge=0)
     latency_ms_total: int | None = Field(default=None, ge=0)
     total_estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+    graph_available: bool = False
+    graph_expansion_count: int = Field(default=0, ge=0)
+    graph_nodes_visited: int = Field(default=0, ge=0)
+    graph_relationship_counts: dict[str, int] = Field(default_factory=dict)
+    graph_fallback_reason: str | None = None
     notes: str = ""
     answer_evidence: list[EvidenceItem] = Field(default_factory=list)
     created_at: datetime
@@ -711,6 +760,11 @@ class IngestSummary(BaseModel):
     indexed_chunks: int = Field(ge=0)
     skipped_files: list[IngestionIssue] = Field(default_factory=list)
     index_updated: bool = True
+    graph_nodes: int = Field(default=0, ge=0)
+    graph_edges: int = Field(default=0, ge=0)
+    graph_updated: bool = False
+    graph_warning_count: int = Field(default=0, ge=0)
+    graph_skipped_file_count: int = Field(default=0, ge=0)
 
 
 class ParsedFiles(BaseModel):

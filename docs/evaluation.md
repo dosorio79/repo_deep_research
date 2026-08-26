@@ -121,6 +121,58 @@ Hybrid finds at least one expected file slightly more often on Datapeek, but
 dense has the stronger held-out rank, precision, recall, and symbol-hit
 profile, so the default still favors the more precise evidence set.
 
+## Relationship-Aware Graph Evaluation
+
+The v0.6.1 relationship-aware development line includes a functional harness
+for checking graph readiness and, optionally, answer-quality improvement. The
+default command is offline and does not require an OpenAI key:
+
+```bash
+make evaluate-relationship-graph
+```
+
+It writes `artifacts/eval/relationship-aware/summary.json` plus separate
+ingest and graph summaries. The graph checks fail if the current repository
+artifact has no nodes, no edges, or no relationship counts.
+
+When `OPENAI_API_KEY` is available, run the same harness with answer judging:
+
+```bash
+make evaluate-relationship-graph RUN_ANSWERS=1
+```
+
+That runs agentic `evaluate-answers` over `eval/development.json` with hybrid
+retrieval and writes `answer-agentic-hybrid.json` and `answer-summary.json`.
+To compare against a baseline report generated from `origin/dev`, call the
+script directly:
+
+```bash
+uv run python scripts/evaluate_relationship_graph.py \
+  --run-answers \
+  --require-graph-expansion \
+  --baseline-report artifacts/eval/baseline/answer-agentic-hybrid.json
+```
+
+Use the resulting `answer-comparison.json` to inspect candidate-minus-baseline
+deltas for correctness, faithfulness, citation precision, reference coverage,
+answer relevance, presentation quality, and unsupported claims. Retrieval-only
+evaluation is still useful, but it does not measure graph expansion because the
+graph is used after semantic retrieval inside bounded agentic research.
+Use `--require-graph-expansion` for v0.6.1 acceptance runs so a live answer
+evaluation fails when no judged row records graph expansion.
+For a faster graph-specific live check, filter to relationship-heavy rows:
+
+```bash
+uv run python scripts/evaluate_relationship_graph.py \
+  --path . \
+  --run-answers \
+  --require-graph-expansion \
+  --question-type flow \
+  --question-type change \
+  --max-records 4 \
+  --output-dir artifacts/eval/relationship-aware-v0.6.1-smoke
+```
+
 ## Answer Evaluation
 
 Answer evaluation is opt-in because it calls OpenAI for judging. The default
@@ -154,6 +206,17 @@ uv run repo-research evaluate-answers --source monitored-runs \
   --output eval/results/answer-monitored-agentic.json
 ```
 
+Use `--unevaluated-only` with `--sample-size` for bounded post-hoc batches. The
+default subset is deterministic oldest-first; add `--sample-seed` for a
+repeatable random subset:
+
+```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
+uv run repo-research evaluate-answers --source monitored-runs \
+  --unevaluated-only --sample-size 4 --sample-seed 7 --persist \
+  --output eval/results/answer-monitored-sample.json
+```
+
 Use `--request-id` when evaluating specific recorded answers:
 
 ```bash
@@ -180,6 +243,12 @@ claim count. For monitored Evidence Audit runs, answer correctness and
 reference coverage are unavailable because there is no independent ground-truth
 record. The dashboard omits unavailable values from metric averages and shows
 persisted answer evidence so evidence IDs can be inspected.
+
+For v0.6.1 and later, generated agentic dataset rows also preserve graph trace
+fields: graph availability, expansion count, visited node count, relationship
+counts, and fallback reason. These fields verify whether relationship-aware
+change-impact answers actually used graph expansion; they do not change the
+judge scoring rubric.
 
 Answer-evaluation metric definitions:
 

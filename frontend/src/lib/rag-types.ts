@@ -1,6 +1,7 @@
 export type QuestionMode = "auto" | "locate" | "flow" | "change";
 export type RetrievalMode = "dense" | "sparse" | "hybrid";
 export type ResearchKind = "direct" | "agentic";
+export type VersionProvenance = "exact" | "inferred" | "unknown";
 
 export interface RagRequest {
   question: string;
@@ -137,6 +138,9 @@ export interface RagTrace {
   error_type: string | null;
   error_message: string | null;
   tool_call_count: number;
+  answer_app_version?: string | null;
+  answer_git_commit?: string | null;
+  answer_version_provenance?: VersionProvenance;
 }
 
 export interface RagRunResult {
@@ -167,6 +171,7 @@ export interface FeedbackEvent {
   useful: boolean;
   comment: string | null;
   submitted_at: string;
+  duplicate?: boolean;
 }
 
 export interface RunKindCount {
@@ -238,6 +243,9 @@ export interface MonitoringRunSummary {
   feedback_useful: number;
   feedback_not_useful: number;
   total_estimated_cost_usd: number | string | null;
+  answer_app_version?: string | null;
+  answer_git_commit?: string | null;
+  answer_version_provenance?: VersionProvenance;
 }
 
 export interface MonitoringRunFeedback {
@@ -347,6 +355,9 @@ export interface EvaluationRunSummary {
   started_at: string;
   completed_at: string | null;
   error_message: string | null;
+  evaluation_app_version?: string | null;
+  evaluation_git_commit?: string | null;
+  evaluation_version_provenance?: VersionProvenance;
   result_count: number;
   average_score: number | null;
   unsupported_claim_count: number;
@@ -365,6 +376,12 @@ export interface EvaluationResultSummary {
   repository_name: string | null;
   branch: string | null;
   commit_hash: string | null;
+  answer_app_version?: string | null;
+  answer_git_commit?: string | null;
+  answer_version_provenance?: VersionProvenance;
+  evaluation_app_version?: string | null;
+  evaluation_git_commit?: string | null;
+  evaluation_version_provenance?: VersionProvenance;
   record_id: string | null;
   request_id: string | null;
   run_kind: ResearchKind | null;

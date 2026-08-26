@@ -1,23 +1,72 @@
+# Environment and secrets
 .env
-.env.local
-eval/results/
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-.cache/
-.coverage
-coverage.xml
-htmlcov/
+.env.*
+!.env.example
+
+# Python bytecode and caches
 __pycache__/
 *.py[cod]
+*$py.class
+
+# Python packaging and build artifacts
+*.egg
 *.egg-info/
-.venv/
-dist/
+.eggs/
 build/
+dist/
+pip-wheel-metadata/
+wheels/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test, coverage, and type-check artifacts
+.coverage
+.coverage.*
+.hypothesis/
+.mypy_cache/
+.pyre/
+.pytest_cache/
+.pytype/
+.ruff_cache/
+.tox/
+.nox/
+.pyright/
+coverage.xml
+htmlcov/
+
+# Tool and notebook caches
+.cache/
+.ipynb_checkpoints/
+
+# Frontend dependencies and build outputs
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.output/
+frontend/.vite/
+frontend/.wrangler/
+
+# Local application runtime artifacts
+artifacts/
+eval/results/
 qdrant_storage/
 .repo_research_cache/
+
+# Terraform local state
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# Local editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local agent/plugin state
 .agents/
 skills-lock.json

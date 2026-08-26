@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
@@ -11,8 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from openai import OpenAIError
 from qdrant_client.http.exceptions import ResponseHandlingException
+from starlette.concurrency import run_in_threadpool
 
 from repo_research.config import Settings, load_dotenv_environment
+from repo_research.graph_models import GraphSummary
 from repo_research.ingestion import (
     discover_repository,
     ingest_repository_if_needed,
@@ -46,8 +49,10 @@ from repo_research.models import (
     RunKind,
     SearchQuery,
     SearchResult,
+    VersionProvenance,
 )
 from repo_research.monitoring import instrument_fastapi
+from repo_research.protocols import RepositoryGraphStore
 from repo_research.rag import AnswerGenerator
 from repo_research.research import ResearchAgentRunner
 from repo_research.runtime import (
@@ -55,9 +60,11 @@ from repo_research.runtime import (
     create_bounded_research_service,
     create_database,
     create_direct_rag_service,
+    create_graph_store,
     create_recording_store,
     create_research_agent,
 )
+from repo_research.versioning import current_app_version_info
 
 OPENAPI_TAGS = [
     {
@@ -102,6 +109,11 @@ class RagDatabase(Protocol):
     def indexed_chunk_count(self, repository_id: str, commit_hash: str) -> int:
         """Return indexed chunk count for one repository revision."""
 
+    def get_chunks(
+        self, repository_id: str, commit_hash: str, chunk_ids: list[str]
+    ) -> list[ParsedChunk]:
+        """Return canonical chunks for one repository revision."""
+
 
 class RecordingStore(Protocol):
     """Monitoring and feedback persistence behavior required by API routes."""
@@ -109,7 +121,7 @@ class RecordingStore(Protocol):
     def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
         """Persist one completed run trace."""
 
-    def record_feedback(self, event: FeedbackEvent) -> None:
+    def record_feedback(self, event: FeedbackEvent) -> FeedbackEvent:
         """Persist one feedback event."""
 
     def record_answer_snapshot(self, snapshot: AnswerSnapshot) -> None:
@@ -176,6 +188,7 @@ def create_app(
     generator: AnswerGenerator | None = None,
     research_agent: ResearchAgentRunner | None = None,
     recording_store: RecordingStore | None = None,
+    graph_store: RepositoryGraphStore | None = None,
 ) -> FastAPI:
     """Create a FastAPI app with injectable runtime dependencies."""
     load_dotenv_environment(keys=("OPENAI_API_KEY", "OPENAI_ADMIN_KEY"))
@@ -210,6 +223,9 @@ def create_app(
 
     def get_research_agent() -> ResearchAgentRunner:
         return research_agent or create_research_agent(app_settings)
+
+    def get_graph_store() -> RepositoryGraphStore:
+        return graph_store or create_graph_store(app_settings)
 
     recording_store_instance = recording_store
 
@@ -249,17 +265,12 @@ def create_app(
     )
     async def ingest_repository(request: RepositoryIngestRequest) -> IngestSummary:
         try:
-            root_path = materialize_repository_address(
-                request.repository_address,
-                app_settings.repository_cache_dir,
-            )
-            repository, files = discover_repository(
-                root_path, app_settings.max_file_size_bytes
-            )
-            return ingest_repository_if_needed(
-                database=get_database(),
-                repository=repository,
-                files=files,
+            return await run_in_threadpool(
+                _ingest_repository_sync,
+                request,
+                app_settings,
+                get_database(),
+                get_graph_store(),
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -336,6 +347,7 @@ def create_app(
             service = create_bounded_research_service(
                 settings=app_settings,
                 database=get_database(),
+                graph_store=get_graph_store(),
                 agent=get_research_agent(),
             )
             research_request = request.model_copy(update={"repository_path": root_path})
@@ -369,6 +381,36 @@ def create_app(
                 ),
             ) from error
 
+    @app.get(
+        "/repositories/graph-summary",
+        response_model=GraphSummary,
+        tags=["repositories"],
+        summary="Get the current repository graph summary",
+        operation_id="get_repository_graph_summary",
+    )
+    async def repository_graph_summary(
+        repository_path: str | None = Query(default=None, min_length=1),
+    ) -> GraphSummary:
+        root_path = (
+            Path(repository_path).resolve()
+            if repository_path
+            else app_settings.repository_root.resolve()
+        )
+        try:
+            repository, _ = discover_repository(
+                root_path, app_settings.max_file_size_bytes
+            )
+            return (
+                get_graph_store()
+                .load(
+                    repository.repository_id,
+                    repository.commit_hash,
+                )
+                .summary()
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
     @app.post(
         "/feedback",
         response_model=FeedbackEvent,
@@ -385,8 +427,7 @@ def create_app(
             comment=request.comment,
             submitted_at=datetime.now(UTC),
         )
-        get_recording_store().record_feedback(event)
-        return event
+        return get_recording_store().record_feedback(event)
 
     @app.get(
         "/monitoring/summary",
@@ -504,6 +545,26 @@ def create_app(
     return app
 
 
+def _ingest_repository_sync(
+    request: RepositoryIngestRequest,
+    app_settings: Settings,
+    database: RagDatabase,
+    graph_store: RepositoryGraphStore,
+) -> IngestSummary:
+    """Run repository ingestion away from the async server event loop."""
+    root_path = materialize_repository_address(
+        request.repository_address,
+        app_settings.repository_cache_dir,
+    )
+    repository, files = discover_repository(root_path, app_settings.max_file_size_bytes)
+    return ingest_repository_if_needed(
+        database=database,
+        graph_store=graph_store,
+        repository=repository,
+        files=files,
+    )
+
+
 def _record_completed_answer(
     *,
     recording_store: RecordingStore,
@@ -512,23 +573,34 @@ def _record_completed_answer(
     trace: RagRunTrace,
 ) -> None:
     """Persist monitoring metadata and the answer snapshot used by evaluation."""
-    recording_store.record_run(run_kind=run_kind, trace=trace)
+    version_info = current_app_version_info()
+    stamped_trace = trace.model_copy(
+        update={
+            "answer_app_version": version_info.app_version,
+            "answer_git_commit": version_info.git_commit,
+            "answer_version_provenance": VersionProvenance(version_info.provenance),
+        }
+    )
+    recording_store.record_run(run_kind=run_kind, trace=stamped_trace)
     recording_store.record_answer_snapshot(
         AnswerSnapshot(
-            request_id=trace.request_id,
-            session_id=trace.session_id,
+            request_id=stamped_trace.request_id,
+            session_id=stamped_trace.session_id,
             run_kind=run_kind,
             question=answer.question,
             answer=answer,
             evidence=answer.evidence,
-            repository_id=trace.repository_id,
-            repository_name=trace.repository_name,
-            branch=trace.branch,
-            commit_hash=trace.commit_hash,
-            question_mode=trace.question_mode,
-            retrieval_mode=trace.retrieval_mode,
-            retrieval_limit=trace.retrieval_limit,
-            created_at=trace.completed_at,
+            repository_id=stamped_trace.repository_id,
+            repository_name=stamped_trace.repository_name,
+            branch=stamped_trace.branch,
+            commit_hash=stamped_trace.commit_hash,
+            question_mode=stamped_trace.question_mode,
+            retrieval_mode=stamped_trace.retrieval_mode,
+            retrieval_limit=stamped_trace.retrieval_limit,
+            created_at=stamped_trace.completed_at,
+            answer_app_version=stamped_trace.answer_app_version,
+            answer_git_commit=stamped_trace.answer_git_commit,
+            answer_version_provenance=stamped_trace.answer_version_provenance,
         )
     )
 

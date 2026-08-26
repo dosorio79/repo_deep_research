@@ -1,12 +1,25 @@
 """Tests for bounded agentic research behavior."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 from pydantic_ai.exceptions import UnexpectedModelBehavior
 
+from repo_research.graph_models import (
+    GRAPH_SCHEMA_VERSION,
+    GraphEdge,
+    GraphManifest,
+    GraphNode,
+    GraphSummary,
+    NodeLabel,
+    RelationshipType,
+    RepositoryGraph,
+    stable_edge_id,
+    stable_node_id,
+)
 from repo_research.grounding import canonical_change_targets
 from repo_research.models import (
     ChangeTarget,
@@ -31,19 +44,35 @@ from repo_research.research import (
     ResearchBudgetExceeded,
     ResearchToolContext,
     _model_usage_from_agent_usage,
+    _research_system_prompt,
 )
 
 
 class FakeDatabase:
     """Return fixed search results and capture queries."""
 
-    def __init__(self, results: list[SearchResult]) -> None:
+    def __init__(
+        self, results: list[SearchResult], chunks: list[ParsedChunk] | None = None
+    ) -> None:
         self._results = results
+        self._chunks = chunks or [result.chunk for result in results]
         self.queries: list[SearchQuery] = []
 
     def search(self, query: SearchQuery) -> list[SearchResult]:
         self.queries.append(query)
         return self._results
+
+    def get_chunks(
+        self, repository_id: str, commit_hash: str, chunk_ids: list[str]
+    ) -> list[ParsedChunk]:
+        chunks = {chunk.chunk_id: chunk for chunk in self._chunks}
+        return [
+            chunk
+            for chunk_id in chunk_ids
+            if (chunk := chunks.get(chunk_id)) is not None
+            and chunk.repository_id == repository_id
+            and chunk.commit_hash == commit_hash
+        ]
 
 
 class InitialSearchFailingDatabase:
@@ -52,6 +81,12 @@ class InitialSearchFailingDatabase:
     def search(self, query: SearchQuery) -> list[SearchResult]:
         del query
         raise ValueError("initial search failed")
+
+    def get_chunks(
+        self, repository_id: str, commit_hash: str, chunk_ids: list[str]
+    ) -> list[ParsedChunk]:
+        del repository_id, commit_hash, chunk_ids
+        return []
 
 
 class ScriptedAgent:
@@ -69,6 +104,65 @@ class ScriptedAgent:
         assert request.question
         tools.search_repository("configuration settings")
         return ResearchAgentResult(answer=self._answer)
+
+
+class GraphExpansionAgent:
+    """Expand from seeded evidence and cite the related evidence."""
+
+    def run_research(
+        self,
+        *,
+        request: ResearchRequest,
+        tools: ResearchToolContext,
+    ) -> ResearchAgentResult:
+        related = tools.expand_related(["E1"])
+        return ResearchAgentResult(
+            answer=ResearchAnswer(
+                question=request.question,
+                mode=request.mode,
+                summary="Use the related test evidence.",
+                evidence=[item.evidence_item for item in related],
+                confidence=0.8,
+            )
+        )
+
+
+class PassiveEvidenceAgent:
+    """Return the evidence already prepared for the model without tool calls."""
+
+    def run_research(
+        self,
+        *,
+        request: ResearchRequest,
+        tools: ResearchToolContext,
+    ) -> ResearchAgentResult:
+        return ResearchAgentResult(
+            answer=ResearchAnswer(
+                question=request.question,
+                mode=request.mode,
+                summary="Use the prepared evidence.",
+                evidence=[item.evidence_item for item in tools.evidence],
+                confidence=0.8,
+            )
+        )
+
+
+class FakeGraphStore:
+    def __init__(self, graph: RepositoryGraph | None = None) -> None:
+        self._graph = graph
+
+    def write(self, graph: RepositoryGraph) -> GraphSummary:
+        return graph.summary()
+
+    def load(self, repository_id: str, commit_hash: str) -> RepositoryGraph:
+        del repository_id, commit_hash
+        if self._graph is None:
+            raise ValueError("missing graph")
+        return self._graph
+
+    def exists(self, repository_id: str, commit_hash: str) -> bool:
+        del repository_id, commit_hash
+        return self._graph is not None
 
 
 class UnknownEvidenceAgent:
@@ -236,6 +330,177 @@ def test_research_service_canonicalizes_agent_evidence(tmp_path: Path) -> None:
     assert run.trace.evidence_ids == ["E1"]
     assert "change impact" in database.queries[0].text
     assert "BoundedResearchService" not in database.queries[0].text
+
+
+def test_expand_related_returns_only_canonical_same_commit_evidence(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    seed = _chunk(repository)
+    related = _chunk(
+        repository,
+        path="tests/test_config.py",
+        symbol="test_settings",
+        content="def test_settings():\n    assert True\n",
+    )
+    database = FakeDatabase([SearchResult(chunk=seed, score=0.9)], [seed, related])
+    service = BoundedResearchService(
+        database=database,
+        graph_store=FakeGraphStore(_graph_for_chunks(repository, seed, related)),
+        agent=GraphExpansionAgent(),
+    )
+
+    run = service.run(
+        repository=repository,
+        request=ResearchRequest(question="Which tests change?", mode=RagMode.CHANGE),
+    )
+
+    assert [item.chunk_id for item in run.answer.evidence] == [related.chunk_id]
+    assert run.answer.evidence[0].reason == (
+        "Related through TESTS (test_graph, confidence 1.00)."
+    )
+    assert run.trace.graph_available is True
+    assert run.trace.graph_expansion_count == 1
+    assert run.trace.graph_nodes_visited == 1
+    assert run.trace.graph_relationship_counts == {"TESTS": 1}
+
+
+@pytest.mark.parametrize("mode", [RagMode.CHANGE, RagMode.FLOW])
+def test_agentic_change_and_flow_preexpand_graph_before_model(
+    tmp_path: Path, mode: RagMode
+) -> None:
+    repository = _repository(tmp_path)
+    seed = _chunk(repository)
+    related = _chunk(
+        repository,
+        path="tests/test_config.py",
+        symbol="test_settings",
+        content="def test_settings():\n    assert True\n",
+    )
+    database = FakeDatabase([SearchResult(chunk=seed, score=0.9)], [seed, related])
+    service = BoundedResearchService(
+        database=database,
+        graph_store=FakeGraphStore(
+            _graph_for_chunks(
+                repository,
+                seed,
+                related,
+                relationship=RelationshipType.CALLS
+                if mode is RagMode.FLOW
+                else RelationshipType.TESTS,
+            )
+        ),
+        agent=PassiveEvidenceAgent(),
+    )
+
+    run = service.run(
+        repository=repository,
+        request=ResearchRequest(question="Which modules change?", mode=mode),
+    )
+
+    assert run.trace.graph_available is True
+    assert run.trace.graph_expansion_count == 1
+    assert run.trace.graph_nodes_visited == 1
+    assert run.trace.graph_relationship_counts == {
+        ("CALLS" if mode is RagMode.FLOW else "TESTS"): 1
+    }
+    assert [item.chunk_id for item in run.answer.evidence] == [
+        seed.chunk_id,
+        related.chunk_id,
+    ]
+
+
+def test_agentic_locate_does_not_preexpand_graph(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    seed = _chunk(repository)
+    related = _chunk(
+        repository,
+        path="tests/test_config.py",
+        symbol="test_settings",
+        content="def test_settings():\n    assert True\n",
+    )
+    database = FakeDatabase([SearchResult(chunk=seed, score=0.9)], [seed, related])
+    service = BoundedResearchService(
+        database=database,
+        graph_store=FakeGraphStore(_graph_for_chunks(repository, seed, related)),
+        agent=PassiveEvidenceAgent(),
+    )
+
+    run = service.run(
+        repository=repository,
+        request=ResearchRequest(question="Where is Settings?", mode=RagMode.LOCATE),
+    )
+
+    assert run.trace.graph_available is True
+    assert run.trace.graph_expansion_count == 0
+    assert run.trace.graph_nodes_visited == 0
+    assert [item.chunk_id for item in run.answer.evidence] == [seed.chunk_id]
+
+
+def test_agentic_preexpand_respects_zero_graph_budget(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    seed = _chunk(repository)
+    related = _chunk(
+        repository,
+        path="tests/test_config.py",
+        symbol="test_settings",
+        content="def test_settings():\n    assert True\n",
+    )
+    database = FakeDatabase([SearchResult(chunk=seed, score=0.9)], [seed, related])
+    service = BoundedResearchService(
+        database=database,
+        graph_store=FakeGraphStore(_graph_for_chunks(repository, seed, related)),
+        agent=PassiveEvidenceAgent(),
+    )
+
+    run = service.run(
+        repository=repository,
+        request=ResearchRequest(
+            question="Which modules change?",
+            mode=RagMode.CHANGE,
+            budget=ResearchBudget(max_graph_expansions=0),
+        ),
+    )
+
+    assert run.trace.graph_available is True
+    assert run.trace.graph_expansion_count == 0
+    assert run.trace.graph_nodes_visited == 0
+    assert [item.chunk_id for item in run.answer.evidence] == [seed.chunk_id]
+
+
+def test_research_prompt_guides_agent_to_use_graph_expanded_evidence() -> None:
+    prompt = _research_system_prompt()
+
+    assert "graph-expanded evidence" in prompt
+    assert "change or flow" in prompt
+
+
+def test_missing_graph_falls_back_to_semantic_research(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    chunk = _chunk(repository)
+    database = FakeDatabase([SearchResult(chunk=chunk, score=0.9)])
+    service = BoundedResearchService(
+        database=database,
+        graph_store=FakeGraphStore(None),
+        agent=ScriptedAgent(
+            ResearchAnswer(
+                question="Which modules change?",
+                mode=RagMode.CHANGE,
+                summary="Use semantic evidence.",
+                evidence=[chunk_evidence("E1", chunk)],
+                confidence=0.7,
+            )
+        ),
+    )
+
+    run = service.run(
+        repository=repository,
+        request=ResearchRequest(question="Which modules change?", mode=RagMode.CHANGE),
+    )
+
+    assert run.trace.graph_available is False
+    assert run.trace.graph_fallback_reason == "missing graph"
+    assert run.answer.evidence[0].evidence_id == "E1"
 
 
 def test_canonical_change_targets_skips_targets_without_valid_evidence() -> None:
@@ -513,6 +778,7 @@ def _chunk(
     *,
     path: str = "src/repo_research/config.py",
     symbol: str = "Settings",
+    content: str = "class Settings:\n    pass\n",
 ) -> ParsedChunk:
     return ParsedChunk(
         chunk_id=f"{path}:{symbol}",
@@ -524,6 +790,90 @@ def _chunk(
         symbol=symbol,
         start_line=1,
         end_line=3,
-        content="class Settings:\n    pass\n",
+        content=content,
         content_hash=f"hash-{path}-{symbol}",
+    )
+
+
+def chunk_evidence(evidence_id: str, chunk: ParsedChunk) -> EvidenceItem:
+    return EvidenceItem(
+        evidence_id=evidence_id,
+        path=chunk.path,
+        start_line=chunk.start_line,
+        end_line=chunk.end_line,
+        symbol=chunk.symbol,
+        score=0.9,
+        reason="Seed evidence.",
+        content=chunk.content,
+    )
+
+
+def _graph_for_chunks(
+    repository: RepositoryIdentity,
+    seed: ParsedChunk,
+    related: ParsedChunk,
+    *,
+    relationship: RelationshipType = RelationshipType.TESTS,
+) -> RepositoryGraph:
+    seed_node = GraphNode(
+        id=stable_node_id(
+            repository.repository_id,
+            repository.commit_hash,
+            "Symbol",
+            seed.chunk_id,
+        ),
+        repository_id=repository.repository_id,
+        commit_hash=repository.commit_hash,
+        labels=[NodeLabel.SYMBOL],
+        key=seed.chunk_id,
+        path=seed.path,
+        symbol=seed.symbol,
+        chunk_id=seed.chunk_id,
+    )
+    related_node = GraphNode(
+        id=stable_node_id(
+            repository.repository_id,
+            repository.commit_hash,
+            "Symbol",
+            related.chunk_id,
+        ),
+        repository_id=repository.repository_id,
+        commit_hash=repository.commit_hash,
+        labels=[NodeLabel.SYMBOL],
+        key=related.chunk_id,
+        path=related.path,
+        symbol=related.symbol,
+        chunk_id=related.chunk_id,
+    )
+    edge = GraphEdge(
+        id=stable_edge_id(
+            repository.repository_id,
+            repository.commit_hash,
+            seed_node.id,
+            related_node.id,
+            relationship.value,
+            "test_graph",
+        ),
+        repository_id=repository.repository_id,
+        commit_hash=repository.commit_hash,
+        source=seed_node.id,
+        target=related_node.id,
+        type=relationship,
+        confidence=1.0,
+        method="test_graph",
+    )
+    return RepositoryGraph(
+        manifest=GraphManifest(
+            schema_version=GRAPH_SCHEMA_VERSION,
+            repository_id=repository.repository_id,
+            repository_name=repository.name,
+            branch=repository.branch,
+            commit_hash=repository.commit_hash,
+            generated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            node_count=2,
+            edge_count=1,
+            edge_counts_by_type={relationship.value: 1},
+        ),
+        nodes=[seed_node, related_node],
+        edges=[edge],
     )

@@ -26,6 +26,7 @@ from repo_research.models import (
     RetrievalEvaluationSummary,
     RetrievalMode,
     RunKind,
+    VersionProvenance,
 )
 from repo_research.recording_store import PostgresRecordingStore
 
@@ -33,8 +34,9 @@ from repo_research.recording_store import PostgresRecordingStore
 class FakeCursor:
     """Tiny fetchable cursor returned by fake recording-store connections."""
 
-    def __init__(self, rows: list[dict[str, Any]]) -> None:
+    def __init__(self, rows: list[dict[str, Any]], rowcount: int = 0) -> None:
         self._rows = rows
+        self.rowcount = rowcount
 
     def fetchall(self) -> list[dict[str, Any]]:
         return self._rows
@@ -87,6 +89,8 @@ class FakeConnection:
             return FakeCursor(self.run_rows)
         if "FROM feedback_events" in statement:
             return FakeCursor(self.feedback_rows)
+        if statement.lstrip().startswith("UPDATE "):
+            return FakeCursor([], rowcount=1)
         return FakeCursor([])
 
 
@@ -139,6 +143,20 @@ def test_recording_store_initializes_postgres_schema() -> None:
     )
     assert any("monitoring_runs_session_id_idx" in sql for sql in statements)
     assert any("monitoring_runs_completed_at_idx" in sql for sql in statements)
+    assert any("answer_app_version" in sql for sql in statements)
+    assert any("evaluation_app_version" in sql for sql in statements)
+    assert any("feedback_events_request_id_unique_idx" in sql for sql in statements)
+    dedupe_index = next(
+        index
+        for index, sql in enumerate(statements)
+        if "DELETE FROM feedback_events duplicate" in sql
+    )
+    unique_index = next(
+        index
+        for index, sql in enumerate(statements)
+        if "feedback_events_request_id_unique_idx" in sql
+    )
+    assert dedupe_index < unique_index
     assert any("feedback_events_session_id_idx" in sql for sql in statements)
     assert any("answer_snapshots_session_id_idx" in sql for sql in statements)
     assert any("evaluation_results_request_id_idx" in sql for sql in statements)
@@ -163,6 +181,7 @@ def test_recording_store_persists_run_trace_summary() -> None:
     assert params["unique_file_count"] == 2
     assert params["evidence_count"] == 2
     assert params["total_estimated_cost_usd"] == Decimal("0.012")
+    assert params["answer_version_provenance"] == "unknown"
     assert isinstance(params["model_usage"], Jsonb)
     assert params["model_usage"].obj == [
         {
@@ -195,9 +214,9 @@ def test_recording_store_persists_feedback_event() -> None:
         submitted_at=datetime(2026, 8, 7, 12, tzinfo=UTC),
     )
 
-    store.record_feedback(event)
+    recorded = store.record_feedback(event)
 
-    _statement, params = connection.executed[0]
+    _statement, params = connection.executed[1]
     assert params is not None
     assert params["feedback_id"] == "feedback-1"
     assert params["session_id"] == "session-1"
@@ -205,6 +224,44 @@ def test_recording_store_persists_feedback_event() -> None:
     assert params["run_kind"] == "agentic"
     assert params["useful"] is False
     assert params["comment"] == "Needs clearer targets."
+    assert recorded == event
+
+
+def test_recording_store_returns_existing_feedback_for_duplicate_request() -> None:
+    submitted_at = datetime(2026, 8, 7, 12, tzinfo=UTC)
+    connection = FakeConnection(
+        feedback_rows=[
+            {
+                "feedback_id": "feedback-existing",
+                "session_id": "session-1",
+                "request_id": "request-1",
+                "run_kind": "direct",
+                "useful": True,
+                "comment": "Already captured.",
+                "submitted_at": submitted_at,
+            }
+        ]
+    )
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    recorded = store.record_feedback(
+        FeedbackEvent(
+            feedback_id="feedback-new",
+            session_id="session-1",
+            request_id="request-1",
+            run_kind=RunKind.DIRECT,
+            useful=False,
+            comment="Second click.",
+            submitted_at=submitted_at,
+        )
+    )
+
+    assert len(connection.executed) == 1
+    assert recorded.feedback_id == "feedback-existing"
+    assert recorded.useful is True
+    assert recorded.duplicate is True
 
 
 def test_recording_store_persists_answer_snapshot() -> None:
@@ -225,6 +282,7 @@ def test_recording_store_persists_answer_snapshot() -> None:
     assert params["repository_name"] == "repo"
     assert params["question_mode"] == "locate"
     assert params["retrieval_mode"] == "dense"
+    assert params["answer_version_provenance"] == "unknown"
     assert isinstance(params["answer"], Jsonb)
     assert params["answer"].obj["summary"] == "Target lives in src/example.py."
     assert isinstance(params["evidence"], Jsonb)
@@ -275,6 +333,7 @@ def test_recording_store_persists_evaluation_run_and_result() -> None:
     assert run_params["evaluation_run_id"] == "eval-run-1"
     assert run_params["source_type"] == "monitored_runs"
     assert run_params["status"] == "running"
+    assert run_params["evaluation_version_provenance"] == "unknown"
     assert result_params is not None
     assert result_params["result_id"] == "result-1"
     assert result_params["request_id"] == "request-1"
@@ -282,6 +341,26 @@ def test_recording_store_persists_evaluation_run_and_result() -> None:
     assert result_params["answer_correctness"] is None
     assert result_params["faithfulness"] == 5
     assert result_params["feedback_useful"] == 1
+
+
+def test_recording_store_backfills_legacy_version_provenance() -> None:
+    connection = FakeConnection()
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    updated = store.backfill_legacy_version_provenance()
+
+    statements = [statement for statement, _params in connection.executed]
+    assert updated == 9
+    assert any("UPDATE monitoring_runs" in statement for statement in statements)
+    assert any("UPDATE answer_snapshots" in statement for statement in statements)
+    assert any("UPDATE evaluation_runs" in statement for statement in statements)
+    assert all(
+        "'inferred'" in statement
+        for statement in statements
+        if statement.lstrip().startswith("UPDATE ")
+    )
 
 
 def test_recording_store_lists_answer_snapshots_for_evaluation() -> None:
@@ -343,6 +422,7 @@ def test_recording_store_lists_answer_snapshots_for_evaluation() -> None:
         "run_kind": "agentic",
         "repository_name": "repo",
         "request_ids": ["request-1", "request-2"],
+        "unevaluated_only": False,
     }
     assert len(snapshots) == 1
     assert snapshots[0].request_id == "request-1"
@@ -352,6 +432,7 @@ def test_recording_store_lists_answer_snapshots_for_evaluation() -> None:
     assert snapshots[0].feedback_not_useful == 2
     assert snapshots[0].latency_ms_total == 1000
     assert snapshots[0].total_estimated_cost_usd == Decimal("0.012")
+    assert snapshots[0].answer_version_provenance is VersionProvenance.UNKNOWN
 
 
 def test_recording_store_returns_evaluation_dashboard_data() -> None:

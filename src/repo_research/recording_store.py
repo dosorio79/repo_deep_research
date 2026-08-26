@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -50,7 +51,9 @@ from repo_research.models import (
     RetrievalVolumeSummary,
     RunKind,
     RunKindCount,
+    VersionProvenance,
 )
+from repo_research.versioning import LEGACY_RELEASE_WINDOWS, ReleaseVersionWindow
 
 ConnectionFactory = Callable[..., AbstractContextManager[Any]]
 
@@ -69,9 +72,9 @@ class NoOpRecordingStore:
         """Accept answer snapshots without persisting them."""
         del snapshot
 
-    def record_feedback(self, event: FeedbackEvent) -> None:
+    def record_feedback(self, event: FeedbackEvent) -> FeedbackEvent:
         """Accept feedback without persisting it."""
-        del event
+        return event
 
     def record_evaluation_run(self, evaluation_run: EvaluationRunRecord) -> None:
         """Accept evaluation-run metadata without persisting it."""
@@ -93,6 +96,14 @@ class NoOpRecordingStore:
         """Accept ground-truth evaluation metrics without persisting them."""
         del result
 
+    def backfill_legacy_version_provenance(
+        self,
+        windows: tuple[ReleaseVersionWindow, ...] = LEGACY_RELEASE_WINDOWS,
+    ) -> int:
+        """No-op legacy version backfill when persistence is disabled."""
+        del windows
+        return 0
+
     def list_answer_snapshots_for_evaluation(
         self,
         *,
@@ -100,9 +111,10 @@ class NoOpRecordingStore:
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
         request_ids: list[str] | None = None,
+        unevaluated_only: bool = False,
     ) -> list[EvaluatableAnswerSnapshot]:
         """Return no answer snapshots when telemetry persistence is disabled."""
-        del limit, run_kind, repository_name, request_ids
+        del limit, run_kind, repository_name, request_ids, unevaluated_only
         return []
 
     def evaluation_summary(self) -> EvaluationDashboardSummary:
@@ -214,12 +226,25 @@ class PostgresRecordingStore:
                     "model_usage": Jsonb(
                         [usage.model_dump(mode="json") for usage in trace.model_usage]
                     ),
+                    "answer_app_version": trace.answer_app_version,
+                    "answer_git_commit": trace.answer_git_commit,
+                    "answer_version_provenance": trace.answer_version_provenance.value,
                 },
             )
 
-    def record_feedback(self, event: FeedbackEvent) -> None:
+    def record_feedback(self, event: FeedbackEvent) -> FeedbackEvent:
         """Persist a user feedback event linked by session ID and optional request."""
         with self._connect() as connection:
+            existing = connection.execute(
+                _SELECT_EXISTING_FEEDBACK_EVENT,
+                {
+                    "request_id": event.request_id,
+                    "session_id": event.session_id,
+                    "run_kind": event.run_kind.value if event.run_kind else None,
+                },
+            ).fetchall()
+            if existing:
+                return _feedback_event_from_row(existing[0], duplicate=True)
             connection.execute(
                 _INSERT_FEEDBACK_EVENT,
                 {
@@ -232,6 +257,7 @@ class PostgresRecordingStore:
                     "submitted_at": event.submitted_at,
                 },
             )
+        return event
 
     def record_answer_snapshot(self, snapshot: AnswerSnapshot) -> None:
         """Persist the answer shape needed for later quality evaluation."""
@@ -255,6 +281,11 @@ class PostgresRecordingStore:
                     "retrieval_mode": snapshot.retrieval_mode.value,
                     "retrieval_limit": snapshot.retrieval_limit,
                     "created_at": snapshot.created_at,
+                    "answer_app_version": snapshot.answer_app_version,
+                    "answer_git_commit": snapshot.answer_git_commit,
+                    "answer_version_provenance": (
+                        snapshot.answer_version_provenance.value
+                    ),
                 },
             )
 
@@ -272,6 +303,11 @@ class PostgresRecordingStore:
                     "started_at": evaluation_run.started_at,
                     "completed_at": evaluation_run.completed_at,
                     "error_message": evaluation_run.error_message,
+                    "evaluation_app_version": evaluation_run.evaluation_app_version,
+                    "evaluation_git_commit": evaluation_run.evaluation_git_commit,
+                    "evaluation_version_provenance": (
+                        evaluation_run.evaluation_version_provenance.value
+                    ),
                 },
             )
 
@@ -298,6 +334,13 @@ class PostgresRecordingStore:
                     "feedback_not_useful": result.feedback_not_useful,
                     "latency_ms_total": result.latency_ms_total,
                     "total_estimated_cost_usd": result.total_estimated_cost_usd,
+                    "graph_available": result.graph_available,
+                    "graph_expansion_count": result.graph_expansion_count,
+                    "graph_nodes_visited": result.graph_nodes_visited,
+                    "graph_relationship_counts": Jsonb(
+                        result.graph_relationship_counts
+                    ),
+                    "graph_fallback_reason": result.graph_fallback_reason,
                     "notes": result.notes,
                     "created_at": result.created_at,
                 },
@@ -352,6 +395,25 @@ class PostgresRecordingStore:
                 },
             )
 
+    def backfill_legacy_version_provenance(
+        self,
+        windows: tuple[ReleaseVersionWindow, ...] = LEGACY_RELEASE_WINDOWS,
+    ) -> int:
+        """Infer legacy application versions from conservative release windows."""
+        updated = 0
+        with self._connect() as connection:
+            for window in windows:
+                params = {
+                    "app_version": window.app_version,
+                    "git_commit": window.git_commit,
+                    "start_at": window.start_at,
+                    "end_at": window.end_at,
+                }
+                for statement in _BACKFILL_VERSION_PROVENANCE:
+                    cursor = connection.execute(statement, params)
+                    updated += int(getattr(cursor, "rowcount", 0) or 0)
+        return updated
+
     def list_answer_snapshots_for_evaluation(
         self,
         *,
@@ -359,6 +421,7 @@ class PostgresRecordingStore:
         run_kind: RunKind | None = None,
         repository_name: str | None = None,
         request_ids: list[str] | None = None,
+        unevaluated_only: bool = False,
     ) -> list[EvaluatableAnswerSnapshot]:
         """Return recent monitored answers with context needed by evaluation."""
         with self._connect() as connection:
@@ -370,6 +433,7 @@ class PostgresRecordingStore:
                         "run_kind": run_kind.value if run_kind else None,
                         "repository_name": repository_name,
                         "request_ids": request_ids or None,
+                        "unevaluated_only": unevaluated_only,
                     },
                 ).fetchall()
             )
@@ -644,17 +708,25 @@ def _build_evaluation_summary(
     failed_runs = sum(
         1 for row in run_rows if row["status"] == EvaluationRunStatus.FAILED.value
     )
-    total_results = len(result_rows)
+    completed_run_ids = {
+        str(row["evaluation_run_id"])
+        for row in run_rows
+        if row["status"] == EvaluationRunStatus.COMPLETED.value
+    }
+    aggregate_rows = [
+        row for row in result_rows if str(row["evaluation_run_id"]) in completed_run_ids
+    ]
+    total_results = len(aggregate_rows)
     results_with_unsupported_claims = sum(
-        1 for row in result_rows if int(row["unsupported_claim_count"]) > 0
+        1 for row in aggregate_rows if int(row["unsupported_claim_count"]) > 0
     )
     average_score = (
-        sum(_average_result_score(row) for row in result_rows) / total_results
+        sum(_average_result_score(row) for row in aggregate_rows) / total_results
         if total_results
         else None
     )
     by_run_kind: dict[RunKind | None, list[dict[str, Any]]] = {}
-    for row in result_rows:
+    for row in aggregate_rows:
         run_kind_value = row.get("run_kind")
         run_kind = RunKind(str(run_kind_value)) if run_kind_value else None
         by_run_kind.setdefault(run_kind, []).append(row)
@@ -694,7 +766,7 @@ def _build_evaluation_summary(
             for metric in metric_names
             if (
                 scored_rows := [
-                    row for row in result_rows if row.get(metric) is not None
+                    row for row in aggregate_rows if row.get(metric) is not None
                 ]
             )
         ],
@@ -722,6 +794,11 @@ def _evaluation_run_summary_from_row(
         started_at=row["started_at"],
         completed_at=row.get("completed_at"),
         error_message=row.get("error_message"),
+        evaluation_app_version=row.get("evaluation_app_version"),
+        evaluation_git_commit=row.get("evaluation_git_commit"),
+        evaluation_version_provenance=_version_provenance(
+            row.get("evaluation_version_provenance")
+        ),
         result_count=len(run_results),
         average_score=(
             sum(_average_result_score(result) for result in run_results)
@@ -746,6 +823,16 @@ def _evaluation_result_summary_from_row(row: dict[str, Any]) -> EvaluationResult
         repository_name=row.get("repository_name"),
         branch=row.get("branch"),
         commit_hash=row.get("commit_hash"),
+        answer_app_version=row.get("answer_app_version"),
+        answer_git_commit=row.get("answer_git_commit"),
+        answer_version_provenance=_version_provenance(
+            row.get("answer_version_provenance")
+        ),
+        evaluation_app_version=row.get("evaluation_app_version"),
+        evaluation_git_commit=row.get("evaluation_git_commit"),
+        evaluation_version_provenance=_version_provenance(
+            row.get("evaluation_version_provenance")
+        ),
         record_id=row.get("record_id"),
         request_id=row.get("request_id"),
         run_kind=RunKind(str(run_kind_value)) if run_kind_value else None,
@@ -762,10 +849,30 @@ def _evaluation_result_summary_from_row(row: dict[str, Any]) -> EvaluationResult
         feedback_not_useful=int(row["feedback_not_useful"]),
         latency_ms_total=row.get("latency_ms_total"),
         total_estimated_cost_usd=row.get("total_estimated_cost_usd"),
+        graph_available=bool(row.get("graph_available")),
+        graph_expansion_count=int(row.get("graph_expansion_count") or 0),
+        graph_nodes_visited=int(row.get("graph_nodes_visited") or 0),
+        graph_relationship_counts=_json_dict(row.get("graph_relationship_counts")),
+        graph_fallback_reason=row.get("graph_fallback_reason"),
         notes=str(row.get("notes") or ""),
         answer_evidence=_evidence_items_from_json(row.get("answer_evidence")),
         created_at=row["created_at"],
     )
+
+
+def _json_dict(value: object) -> dict[str, int]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return {str(key): int(item) for key, item in value.items()}
+    if isinstance(value, str):
+        try:
+            loaded = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(loaded, dict):
+            return {str(key): int(item) for key, item in loaded.items()}
+    return {}
 
 
 def _retrieval_evaluation_summary_from_row(
@@ -922,6 +1029,11 @@ def _run_summary_from_row(
         feedback_useful=useful,
         feedback_not_useful=not_useful,
         total_estimated_cost_usd=_optional_decimal(row.get("total_estimated_cost_usd")),
+        answer_app_version=row.get("answer_app_version"),
+        answer_git_commit=row.get("answer_git_commit"),
+        answer_version_provenance=_version_provenance(
+            row.get("answer_version_provenance")
+        ),
     )
 
 
@@ -974,7 +1086,37 @@ def _evaluatable_answer_snapshot_from_row(
         feedback_not_useful=int(row["feedback_not_useful"]),
         latency_ms_total=_optional_int(row.get("latency_ms_total")),
         total_estimated_cost_usd=_optional_decimal(row.get("total_estimated_cost_usd")),
+        answer_app_version=row.get("answer_app_version"),
+        answer_git_commit=row.get("answer_git_commit"),
+        answer_version_provenance=_version_provenance(
+            row.get("answer_version_provenance")
+        ),
     )
+
+
+def _feedback_event_from_row(
+    row: dict[str, Any], *, duplicate: bool = False
+) -> FeedbackEvent:
+    run_kind = row.get("run_kind")
+    return FeedbackEvent(
+        feedback_id=str(row["feedback_id"]),
+        session_id=str(row["session_id"]),
+        request_id=row.get("request_id"),
+        run_kind=RunKind(str(run_kind)) if run_kind else None,
+        useful=bool(row["useful"]),
+        comment=row.get("comment"),
+        submitted_at=row["submitted_at"],
+        duplicate=duplicate,
+    )
+
+
+def _version_provenance(value: object) -> VersionProvenance:
+    if value is None:
+        return VersionProvenance.UNKNOWN
+    try:
+        return VersionProvenance(str(value))
+    except ValueError:
+        return VersionProvenance.UNKNOWN
 
 
 def _answer_from_row(
@@ -1036,6 +1178,7 @@ def _feedback_matches_run(
     return (
         feedback.get("request_id") is None
         and feedback.get("session_id") == run_row["session_id"]
+        and feedback.get("run_kind") == run_row["run_kind"]
     )
 
 
@@ -1074,8 +1217,26 @@ _SCHEMA_STATEMENTS = (
         error_message TEXT,
         total_estimated_cost_usd NUMERIC,
         model_usage JSONB NOT NULL DEFAULT '[]'::jsonb,
+        answer_app_version TEXT,
+        answer_git_commit TEXT,
+        answer_version_provenance TEXT NOT NULL DEFAULT 'unknown' CHECK (
+            answer_version_provenance IN ('exact', 'inferred', 'unknown')
+        ),
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
+    """,
+    """
+    ALTER TABLE monitoring_runs
+    ADD COLUMN IF NOT EXISTS answer_app_version TEXT
+    """,
+    """
+    ALTER TABLE monitoring_runs
+    ADD COLUMN IF NOT EXISTS answer_git_commit TEXT
+    """,
+    """
+    ALTER TABLE monitoring_runs
+    ADD COLUMN IF NOT EXISTS answer_version_provenance TEXT
+    NOT NULL DEFAULT 'unknown'
     """,
     """
     CREATE INDEX IF NOT EXISTS monitoring_runs_session_id_idx
@@ -1098,6 +1259,48 @@ _SCHEMA_STATEMENTS = (
     )
     """,
     """
+    DELETE FROM feedback_events duplicate
+    USING feedback_events keeper
+    WHERE duplicate.request_id IS NOT NULL
+      AND keeper.request_id = duplicate.request_id
+      AND (
+          keeper.submitted_at,
+          keeper.created_at,
+          keeper.feedback_id
+      ) < (
+          duplicate.submitted_at,
+          duplicate.created_at,
+          duplicate.feedback_id
+      )
+    """,
+    """
+    DELETE FROM feedback_events duplicate
+    USING feedback_events keeper
+    WHERE duplicate.request_id IS NULL
+      AND keeper.request_id IS NULL
+      AND keeper.session_id = duplicate.session_id
+      AND keeper.run_kind = duplicate.run_kind
+      AND (
+          keeper.submitted_at,
+          keeper.created_at,
+          keeper.feedback_id
+      ) < (
+          duplicate.submitted_at,
+          duplicate.created_at,
+          duplicate.feedback_id
+      )
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS feedback_events_request_id_unique_idx
+    ON feedback_events (request_id)
+    WHERE request_id IS NOT NULL
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS feedback_events_legacy_session_run_kind_unique_idx
+    ON feedback_events (session_id, run_kind)
+    WHERE request_id IS NULL
+    """,
+    """
     CREATE INDEX IF NOT EXISTS feedback_events_session_id_idx
     ON feedback_events (session_id)
     """,
@@ -1117,8 +1320,26 @@ _SCHEMA_STATEMENTS = (
         question_mode TEXT NOT NULL,
         retrieval_mode TEXT NOT NULL,
         retrieval_limit INTEGER NOT NULL,
+        answer_app_version TEXT,
+        answer_git_commit TEXT,
+        answer_version_provenance TEXT NOT NULL DEFAULT 'unknown' CHECK (
+            answer_version_provenance IN ('exact', 'inferred', 'unknown')
+        ),
         created_at TIMESTAMPTZ NOT NULL
     )
+    """,
+    """
+    ALTER TABLE answer_snapshots
+    ADD COLUMN IF NOT EXISTS answer_app_version TEXT
+    """,
+    """
+    ALTER TABLE answer_snapshots
+    ADD COLUMN IF NOT EXISTS answer_git_commit TEXT
+    """,
+    """
+    ALTER TABLE answer_snapshots
+    ADD COLUMN IF NOT EXISTS answer_version_provenance TEXT
+    NOT NULL DEFAULT 'unknown'
     """,
     """
     CREATE INDEX IF NOT EXISTS answer_snapshots_session_id_idx
@@ -1142,8 +1363,26 @@ _SCHEMA_STATEMENTS = (
         started_at TIMESTAMPTZ NOT NULL,
         completed_at TIMESTAMPTZ,
         error_message TEXT,
+        evaluation_app_version TEXT,
+        evaluation_git_commit TEXT,
+        evaluation_version_provenance TEXT NOT NULL DEFAULT 'unknown' CHECK (
+            evaluation_version_provenance IN ('exact', 'inferred', 'unknown')
+        ),
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
+    """,
+    """
+    ALTER TABLE evaluation_runs
+    ADD COLUMN IF NOT EXISTS evaluation_app_version TEXT
+    """,
+    """
+    ALTER TABLE evaluation_runs
+    ADD COLUMN IF NOT EXISTS evaluation_git_commit TEXT
+    """,
+    """
+    ALTER TABLE evaluation_runs
+    ADD COLUMN IF NOT EXISTS evaluation_version_provenance TEXT
+    NOT NULL DEFAULT 'unknown'
     """,
     """
     CREATE INDEX IF NOT EXISTS evaluation_runs_started_at_idx
@@ -1169,6 +1408,11 @@ _SCHEMA_STATEMENTS = (
         feedback_not_useful INTEGER NOT NULL DEFAULT 0,
         latency_ms_total INTEGER,
         total_estimated_cost_usd NUMERIC,
+        graph_available BOOLEAN NOT NULL DEFAULT false,
+        graph_expansion_count INTEGER NOT NULL DEFAULT 0,
+        graph_nodes_visited INTEGER NOT NULL DEFAULT 0,
+        graph_relationship_counts JSONB NOT NULL DEFAULT '{}'::jsonb,
+        graph_fallback_reason TEXT,
         notes TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMPTZ NOT NULL
     )
@@ -1196,6 +1440,27 @@ _SCHEMA_STATEMENTS = (
     """
     ALTER TABLE evaluation_results
     ADD COLUMN IF NOT EXISTS presentation_quality NUMERIC NOT NULL DEFAULT 0
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS graph_available BOOLEAN NOT NULL DEFAULT false
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS graph_expansion_count INTEGER NOT NULL DEFAULT 0
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS graph_nodes_visited INTEGER NOT NULL DEFAULT 0
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS graph_relationship_counts
+    JSONB NOT NULL DEFAULT '{}'::jsonb
+    """,
+    """
+    ALTER TABLE evaluation_results
+    ADD COLUMN IF NOT EXISTS graph_fallback_reason TEXT
     """,
     """
     DO $$
@@ -1452,7 +1717,10 @@ INSERT INTO monitoring_runs (
     error_type,
     error_message,
     total_estimated_cost_usd,
-    model_usage
+    model_usage,
+    answer_app_version,
+    answer_git_commit,
+    answer_version_provenance
 ) VALUES (
     %(request_id)s,
     %(session_id)s,
@@ -1477,7 +1745,10 @@ INSERT INTO monitoring_runs (
     %(error_type)s,
     %(error_message)s,
     %(total_estimated_cost_usd)s,
-    %(model_usage)s
+    %(model_usage)s,
+    %(answer_app_version)s,
+    %(answer_git_commit)s,
+    %(answer_version_provenance)s
 )
 ON CONFLICT (request_id) DO UPDATE SET
     session_id = EXCLUDED.session_id,
@@ -1494,7 +1765,10 @@ ON CONFLICT (request_id) DO UPDATE SET
     error_type = EXCLUDED.error_type,
     error_message = EXCLUDED.error_message,
     total_estimated_cost_usd = EXCLUDED.total_estimated_cost_usd,
-    model_usage = EXCLUDED.model_usage
+    model_usage = EXCLUDED.model_usage,
+    answer_app_version = EXCLUDED.answer_app_version,
+    answer_git_commit = EXCLUDED.answer_git_commit,
+    answer_version_provenance = EXCLUDED.answer_version_provenance
 """
 
 _INSERT_FEEDBACK_EVENT = """
@@ -1532,6 +1806,9 @@ INSERT INTO answer_snapshots (
     question_mode,
     retrieval_mode,
     retrieval_limit,
+    answer_app_version,
+    answer_git_commit,
+    answer_version_provenance,
     created_at
 ) VALUES (
     %(request_id)s,
@@ -1547,6 +1824,9 @@ INSERT INTO answer_snapshots (
     %(question_mode)s,
     %(retrieval_mode)s,
     %(retrieval_limit)s,
+    %(answer_app_version)s,
+    %(answer_git_commit)s,
+    %(answer_version_provenance)s,
     %(created_at)s
 )
 ON CONFLICT (request_id) DO UPDATE SET
@@ -1562,6 +1842,9 @@ ON CONFLICT (request_id) DO UPDATE SET
     question_mode = EXCLUDED.question_mode,
     retrieval_mode = EXCLUDED.retrieval_mode,
     retrieval_limit = EXCLUDED.retrieval_limit,
+    answer_app_version = EXCLUDED.answer_app_version,
+    answer_git_commit = EXCLUDED.answer_git_commit,
+    answer_version_provenance = EXCLUDED.answer_version_provenance,
     created_at = EXCLUDED.created_at
 """
 
@@ -1574,7 +1857,10 @@ INSERT INTO evaluation_runs (
     status,
     started_at,
     completed_at,
-    error_message
+    error_message,
+    evaluation_app_version,
+    evaluation_git_commit,
+    evaluation_version_provenance
 ) VALUES (
     %(evaluation_run_id)s,
     %(source_type)s,
@@ -1583,7 +1869,10 @@ INSERT INTO evaluation_runs (
     %(status)s,
     %(started_at)s,
     %(completed_at)s,
-    %(error_message)s
+    %(error_message)s,
+    %(evaluation_app_version)s,
+    %(evaluation_git_commit)s,
+    %(evaluation_version_provenance)s
 )
 ON CONFLICT (evaluation_run_id) DO UPDATE SET
     source_type = EXCLUDED.source_type,
@@ -1591,7 +1880,10 @@ ON CONFLICT (evaluation_run_id) DO UPDATE SET
     judge_model = EXCLUDED.judge_model,
     status = EXCLUDED.status,
     completed_at = EXCLUDED.completed_at,
-    error_message = EXCLUDED.error_message
+    error_message = EXCLUDED.error_message,
+    evaluation_app_version = EXCLUDED.evaluation_app_version,
+    evaluation_git_commit = EXCLUDED.evaluation_git_commit,
+    evaluation_version_provenance = EXCLUDED.evaluation_version_provenance
 """
 
 _UPSERT_EVALUATION_RESULT = """
@@ -1613,6 +1905,11 @@ INSERT INTO evaluation_results (
     feedback_not_useful,
     latency_ms_total,
     total_estimated_cost_usd,
+    graph_available,
+    graph_expansion_count,
+    graph_nodes_visited,
+    graph_relationship_counts,
+    graph_fallback_reason,
     notes,
     created_at
 ) VALUES (
@@ -1633,6 +1930,11 @@ INSERT INTO evaluation_results (
     %(feedback_not_useful)s,
     %(latency_ms_total)s,
     %(total_estimated_cost_usd)s,
+    %(graph_available)s,
+    %(graph_expansion_count)s,
+    %(graph_nodes_visited)s,
+    %(graph_relationship_counts)s,
+    %(graph_fallback_reason)s,
     %(notes)s,
     %(created_at)s
 )
@@ -1653,6 +1955,11 @@ ON CONFLICT (result_id) DO UPDATE SET
     feedback_not_useful = EXCLUDED.feedback_not_useful,
     latency_ms_total = EXCLUDED.latency_ms_total,
     total_estimated_cost_usd = EXCLUDED.total_estimated_cost_usd,
+    graph_available = EXCLUDED.graph_available,
+    graph_expansion_count = EXCLUDED.graph_expansion_count,
+    graph_nodes_visited = EXCLUDED.graph_nodes_visited,
+    graph_relationship_counts = EXCLUDED.graph_relationship_counts,
+    graph_fallback_reason = EXCLUDED.graph_fallback_reason,
     notes = EXCLUDED.notes,
     created_at = EXCLUDED.created_at
 """
@@ -1748,6 +2055,48 @@ ON CONFLICT (dataset, run_kind) DO UPDATE SET
     measured_at = EXCLUDED.measured_at
 """
 
+_BACKFILL_VERSION_PROVENANCE = (
+    """
+    UPDATE monitoring_runs
+    SET
+        answer_app_version = %(app_version)s,
+        answer_git_commit = %(git_commit)s,
+        answer_version_provenance = 'inferred'
+    WHERE completed_at >= %(start_at)s
+      AND completed_at < %(end_at)s
+      AND (
+          answer_version_provenance IS NULL
+          OR answer_version_provenance = 'unknown'
+      )
+    """,
+    """
+    UPDATE answer_snapshots
+    SET
+        answer_app_version = %(app_version)s,
+        answer_git_commit = %(git_commit)s,
+        answer_version_provenance = 'inferred'
+    WHERE created_at >= %(start_at)s
+      AND created_at < %(end_at)s
+      AND (
+          answer_version_provenance IS NULL
+          OR answer_version_provenance = 'unknown'
+      )
+    """,
+    """
+    UPDATE evaluation_runs
+    SET
+        evaluation_app_version = %(app_version)s,
+        evaluation_git_commit = %(git_commit)s,
+        evaluation_version_provenance = 'inferred'
+    WHERE started_at >= %(start_at)s
+      AND started_at < %(end_at)s
+      AND (
+          evaluation_version_provenance IS NULL
+          OR evaluation_version_provenance = 'unknown'
+      )
+    """,
+)
+
 _SELECT_MONITORING_ROWS = """
 SELECT
     run_kind,
@@ -1762,6 +2111,33 @@ FROM monitoring_runs
 _SELECT_FEEDBACK_ROWS = """
 SELECT useful
 FROM feedback_events
+"""
+
+_SELECT_EXISTING_FEEDBACK_EVENT = """
+SELECT
+    feedback_id,
+    session_id,
+    request_id,
+    run_kind,
+    useful,
+    comment,
+    submitted_at
+FROM feedback_events
+WHERE (
+    %(request_id)s::text IS NOT NULL
+    AND request_id = %(request_id)s::text
+)
+OR (
+    %(request_id)s::text IS NULL
+    AND request_id IS NULL
+    AND session_id = %(session_id)s::text
+    AND (
+        %(run_kind)s::text IS NULL
+        OR run_kind = %(run_kind)s::text
+    )
+)
+ORDER BY submitted_at ASC
+LIMIT 1
 """
 
 _SELECT_ANSWER_SNAPSHOTS_FOR_EVALUATION = """
@@ -1780,6 +2156,9 @@ SELECT
     s.retrieval_mode,
     s.retrieval_limit,
     s.created_at,
+    s.answer_app_version,
+    s.answer_git_commit,
+    s.answer_version_provenance,
     m.latency_ms_total,
     m.total_estimated_cost_usd,
     COALESCE(
@@ -1806,6 +2185,18 @@ WHERE (%(run_kind)s::text IS NULL OR s.run_kind = %(run_kind)s::text)
       %(request_ids)s::text[] IS NULL
       OR s.request_id = ANY(%(request_ids)s::text[])
   )
+  AND (
+      %(unevaluated_only)s::boolean IS FALSE
+      OR NOT EXISTS (
+          SELECT 1
+          FROM evaluation_results er
+          JOIN evaluation_runs ev
+            ON ev.evaluation_run_id = er.evaluation_run_id
+          WHERE er.request_id = s.request_id
+            AND ev.source_type = 'monitored_runs'
+            AND ev.status = 'completed'
+      )
+  )
 GROUP BY
     s.request_id,
     s.session_id,
@@ -1821,9 +2212,12 @@ GROUP BY
     s.retrieval_mode,
     s.retrieval_limit,
     s.created_at,
+    s.answer_app_version,
+    s.answer_git_commit,
+    s.answer_version_provenance,
     m.latency_ms_total,
     m.total_estimated_cost_usd
-ORDER BY s.created_at DESC
+ORDER BY s.created_at ASC
 LIMIT %(limit)s
 """
 
@@ -1836,7 +2230,10 @@ SELECT
     status,
     started_at,
     completed_at,
-    error_message
+    error_message,
+    evaluation_app_version,
+    evaluation_git_commit,
+    evaluation_version_provenance
 FROM evaluation_runs
 """
 
@@ -1849,6 +2246,12 @@ SELECT
     s.repository_name,
     s.branch,
     s.commit_hash,
+    s.answer_app_version,
+    s.answer_git_commit,
+    s.answer_version_provenance,
+    e.evaluation_app_version,
+    e.evaluation_git_commit,
+    e.evaluation_version_provenance,
     r.record_id,
     r.request_id,
     r.run_kind,
@@ -1864,6 +2267,11 @@ SELECT
     r.feedback_not_useful,
     r.latency_ms_total,
     r.total_estimated_cost_usd,
+    r.graph_available,
+    r.graph_expansion_count,
+    r.graph_nodes_visited,
+    r.graph_relationship_counts,
+    r.graph_fallback_reason,
     r.notes,
     s.evidence AS answer_evidence,
     r.created_at
@@ -1930,7 +2338,10 @@ SELECT
     tool_call_count,
     insufficient_evidence,
     error_type,
-    total_estimated_cost_usd
+    total_estimated_cost_usd,
+    answer_app_version,
+    answer_git_commit,
+    answer_version_provenance
 FROM monitoring_runs
 """
 
@@ -1959,7 +2370,10 @@ SELECT
     error_type,
     error_message,
     total_estimated_cost_usd,
-    model_usage
+    model_usage,
+    answer_app_version,
+    answer_git_commit,
+    answer_version_provenance
 FROM monitoring_runs
 WHERE request_id = %(request_id)s
 """
@@ -1969,6 +2383,7 @@ SELECT
     feedback_id,
     session_id,
     request_id,
+    run_kind,
     useful,
     comment,
     submitted_at

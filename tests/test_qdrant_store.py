@@ -427,6 +427,61 @@ def test_indexed_chunk_count_returns_existing_revision_count() -> None:
     )
 
 
+def test_get_chunks_is_ordered_and_revision_scoped() -> None:
+    repository = RepositoryIdentity(
+        name="sample",
+        root_path=Path("/tmp/sample"),
+        branch="main",
+        commit_hash="abc123",
+    )
+    other_revision = repository.model_copy(update={"commit_hash": "def456"})
+    first = create_chunk(
+        repository=repository,
+        path="a.py",
+        language="python",
+        chunk_type="function",
+        symbol="first",
+        start_line=1,
+        end_line=2,
+        content="def first():\n    return 'a'\n",
+    )
+    second = create_chunk(
+        repository=repository,
+        path="b.py",
+        language="python",
+        chunk_type="function",
+        symbol="second",
+        start_line=1,
+        end_line=2,
+        content="def second():\n    return 'b'\n",
+    )
+    stale = create_chunk(
+        repository=other_revision,
+        path="stale.py",
+        language="python",
+        chunk_type="function",
+        symbol="stale",
+        start_line=1,
+        end_line=2,
+        content="def stale():\n    return 'old'\n",
+    )
+    client = QdrantClient(":memory:")
+    database = RepositoryDatabase(client, "chunks", 3, fake_embed, fake_sparse_embed)
+    database.replace(repository.repository_id, [first, second, stale])
+
+    chunks = database.get_chunks(
+        repository.repository_id,
+        repository.commit_hash,
+        [second.chunk_id, "missing", first.chunk_id, second.chunk_id, stale.chunk_id],
+    )
+
+    assert [chunk.chunk_id for chunk in chunks] == [
+        second.chunk_id,
+        first.chunk_id,
+        second.chunk_id,
+    ]
+
+
 def test_replace_preserves_existing_points_when_embedding_validation_fails() -> None:
     repository = RepositoryIdentity(
         name="sample",

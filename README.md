@@ -46,11 +46,12 @@ flowchart LR
 
 ## Release Status
 
-The current release is `v0.5.9 Evaluation Evidence`: a local-first capstone
-review release for technical users who can run Docker Compose. Live answer
-generation remains bring-your-own-key, while seeded offline evaluation evidence
-is available without an OpenAI key. The release handoff is documented in
-[docs/releases/v0.5.9-evaluation-evidence.md](docs/releases/v0.5.9-evaluation-evidence.md).
+The current development line is `v0.6.2 Intermediate Hardening`.
+It keeps the local-first capstone stack, adds commit-scoped JSONL repository
+graphs for bounded agentic change-impact research, and includes the graph
+expansion acceptance hardening needed before v0.7 adaptive research. Live
+answer generation remains bring-your-own-key, while seeded offline evaluation
+evidence is available without an OpenAI key.
 
 Cloud deployment is intentionally out of scope for the Local Alpha. The stack
 includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
@@ -148,13 +149,18 @@ local runs.
 | `make stack-stop` | Stop existing full-stack containers without removing them. |
 | `make stack-rebuild` | Rebuild images and start the full stack. |
 | `make ingest` | Index this repository. |
+| `make graph-summary` | Print the current commit graph artifact summary. |
 | `make rag QUESTION="..."` | Run direct RAG against the indexed repository. |
 | `make research QUESTION="..."` | Run bounded agentic repository research. |
 | `make evaluate-retrieval` | Compare dense, sparse, and hybrid retrieval. |
 | `make evaluate-answers` | Run opt-in answer evaluation. |
+| `make evaluate-relationship-graph` | Run the v0.6.1 graph readiness evaluation harness. |
 | `make export-openapi` | Refresh the versioned OpenAPI contract. |
 | `make api` | Run FastAPI locally. |
 | `make app` | Run the API and Vite frontend locally. |
+
+Run `make export-openapi` in the same change as any API response model or
+package version metadata update.
 
 Frontend-only workflows use npm directly:
 
@@ -232,6 +238,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Architecture](docs/architecture.md) including the Local Alpha stack diagram
 - [Evaluation](docs/evaluation.md)
 - [Monitoring KPIs](docs/monitoring.md)
+- [v0.6.2 Intermediate Hardening release notes](docs/releases/v0.6.2-intermediate-hardening.md)
 - [v0.5.9 Evaluation Evidence release notes](docs/releases/v0.5.9-evaluation-evidence.md)
 - [v0.5.8 Local Alpha release notes](docs/releases/v0.5.8-local-alpha.md)
 - [OpenAPI contract](docs/api/openapi.json)
@@ -242,8 +249,9 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 `main` is production. `dev` is the integration branch. Feature branches start
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
-Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current user-ready
-capstone review release is `v0.5.9`.
+Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current release
+candidate is `v0.6.2`, an intermediate hardening release before v0.7 adaptive
+research.
 
 ## Local Alpha Scope
 

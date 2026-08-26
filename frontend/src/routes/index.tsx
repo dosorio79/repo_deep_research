@@ -31,6 +31,7 @@ import { AppShell } from "@/components/AppShell";
 import { loadLatestRagRun, saveLatestRagRun } from "@/lib/latest-rag-run";
 import {
   getBackendHealth,
+  getMonitoringRunDetail,
   ingestRepository,
   runAgenticResearch,
   runRagQuery,
@@ -76,6 +77,10 @@ const EXAMPLES = [
 const QUESTION_MODES: QuestionMode[] = ["auto", "locate", "flow", "change"];
 const RETRIEVAL_MODES: RetrievalMode[] = ["dense", "sparse", "hybrid"];
 const DEFAULT_API_BASE_URL = (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "/api";
+type RecordedFeedback = {
+  useful: boolean;
+  duplicate?: boolean;
+};
 export const RESEARCH_HEAD = {
   meta: [
     { title: "Repo Deep Research" },
@@ -111,7 +116,9 @@ function ResearchView() {
   const [sessionId] = useState(() => getBrowserSessionId());
   const [ingestError, setIngestError] = useState<ApiErrorShape | null>(null);
   const [queryError, setQueryError] = useState<ApiErrorShape | null>(null);
+  const [ingestElapsedSeconds, setIngestElapsedSeconds] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
+  const activeRequestId = result?.trace?.request_id ?? null;
 
   useEffect(() => () => activeRequest.current?.abort(), []);
 
@@ -139,6 +146,9 @@ function ResearchView() {
   const ingestMutation = useMutation({
     mutationFn: (payload: { baseUrl: string; repositoryAddress: string }) =>
       ingestRepository(payload.baseUrl, { repository_address: payload.repositoryAddress }),
+    onMutate: () => {
+      setIngestElapsedSeconds(0);
+    },
     onSuccess: (data) => {
       setIngestSummary(data);
       setIngestError(null);
@@ -152,6 +162,25 @@ function ResearchView() {
       });
     },
   });
+
+  useEffect(() => {
+    if (!ingestMutation.isPending) return undefined;
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setIngestElapsedSeconds(Math.max(1, Math.floor((Date.now() - startedAt) / 1000)));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [ingestMutation.isPending]);
+
+  useEffect(() => {
+    if (!ingestMutation.isPending) return undefined;
+    const preventUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", preventUnload);
+    return () => window.removeEventListener("beforeunload", preventUnload);
+  }, [ingestMutation.isPending]);
 
   const queryMutation = useMutation({
     mutationFn: (payload: {
@@ -194,6 +223,17 @@ function ResearchView() {
         ...(payload.comment ? { comment: payload.comment } : {}),
       }),
   });
+  const monitoringDetailQuery = useQuery({
+    queryKey: ["answer-feedback-detail", baseUrl, activeRequestId],
+    queryFn: ({ signal }) => getMonitoringRunDetail(baseUrl, activeRequestId ?? "", signal),
+    enabled: Boolean(activeRequestId),
+    retry: false,
+    staleTime: 5_000,
+  });
+
+  useEffect(() => {
+    feedbackMutation.reset();
+  }, [activeRequestId]);
 
   const ingest = () => {
     setIngestError(null);
@@ -250,7 +290,10 @@ function ResearchView() {
   const ingestStatusLabel = ingestSummary?.index_updated ? "indexed" : "already indexed";
 
   return (
-    <AppShell>
+    <AppShell
+      navigationLocked={ingestMutation.isPending}
+      navigationLockReason="Repository ingestion is still running."
+    >
       <div className="space-y-3">
         <header className="border-b border-border pb-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -341,6 +384,9 @@ function ResearchView() {
                   </Button>
                 </div>
                 {ingestError ? <ApiError error={ingestError} /> : null}
+                {ingestMutation.isPending ? (
+                  <IngestionProgress elapsedSeconds={ingestElapsedSeconds} />
+                ) : null}
                 {ingestSummary ? <RepositoryReceipt summary={ingestSummary} /> : null}
               </div>
             </section>
@@ -464,7 +510,9 @@ function ResearchView() {
               result={result}
               runKind={resultKind}
               feedbackPending={feedbackMutation.isPending}
-              feedbackSubmitted={feedbackMutation.isSuccess}
+              recordedFeedback={
+                feedbackMutation.data ?? monitoringDetailQuery.data?.feedback_events[0] ?? null
+              }
               feedbackError={(feedbackMutation.error as ApiErrorShape | null) ?? null}
               onSubmitFeedback={submitRunFeedback}
             />
@@ -474,6 +522,32 @@ function ResearchView() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function IngestionProgress({ elapsedSeconds }: { elapsedSeconds: number }) {
+  const elapsedLabel =
+    elapsedSeconds > 0 ? `${elapsedSeconds.toLocaleString()}s elapsed` : "starting";
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-md border border-primary/25 bg-primary/5 p-3 text-[12px]"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
+          <span className="font-medium text-foreground">Ingestion in progress</span>
+        </div>
+        <span className="mono text-[11px] text-muted-foreground">{elapsedLabel}</span>
+      </div>
+      <div className="mt-2 grid gap-1 text-muted-foreground">
+        <span>
+          Keeping this tab active while parsing files, building graph context, and indexing vectors.
+        </span>
+        <span className="mono text-[11px]">Navigation is locked until ingestion finishes.</span>
+      </div>
+    </div>
   );
 }
 
@@ -692,14 +766,14 @@ function ReviewerResult({
   result,
   runKind,
   feedbackPending,
-  feedbackSubmitted,
+  recordedFeedback,
   feedbackError,
   onSubmitFeedback,
 }: {
   result: ResearchResult;
   runKind: ResearchKind;
   feedbackPending: boolean;
-  feedbackSubmitted: boolean;
+  recordedFeedback: RecordedFeedback | null;
   feedbackError: ApiErrorShape | null;
   onSubmitFeedback: (payload: { useful: boolean; comment?: string }) => void;
 }) {
@@ -762,7 +836,7 @@ function ReviewerResult({
           runKind={runKind}
           requestId={result.trace.request_id}
           pending={feedbackPending}
-          submitted={feedbackSubmitted}
+          recordedFeedback={recordedFeedback}
           error={feedbackError}
           onSubmit={onSubmitFeedback}
         />
@@ -775,19 +849,20 @@ function FeedbackControls({
   runKind,
   requestId,
   pending,
-  submitted,
+  recordedFeedback,
   error,
   onSubmit,
 }: {
   runKind: ResearchKind;
   requestId: string;
   pending: boolean;
-  submitted: boolean;
+  recordedFeedback: RecordedFeedback | null;
   error: ApiErrorShape | null;
   onSubmit: (payload: { useful: boolean; comment?: string }) => void;
 }) {
   const [useful, setUseful] = useState<boolean | null>(null);
   const [comment, setComment] = useState("");
+  const submitted = recordedFeedback !== null;
   const canSubmit = useful !== null && !pending && !submitted;
 
   return (
@@ -801,14 +876,18 @@ function FeedbackControls({
             {runKind} - {requestId}
           </p>
         </div>
-        {submitted ? <Badge variant="secondary">submitted</Badge> : null}
+        {submitted ? (
+          <Badge variant="secondary">
+            {recordedFeedback.duplicate ? "already recorded" : "submitted"}
+          </Badge>
+        ) : null}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button
           type="button"
           variant={useful === true ? "default" : "outline"}
           size="sm"
-          disabled={submitted}
+          disabled={submitted || pending}
           onClick={() => setUseful(true)}
           className="gap-1.5"
         >
@@ -819,7 +898,7 @@ function FeedbackControls({
           type="button"
           variant={useful === false ? "default" : "outline"}
           size="sm"
-          disabled={submitted}
+          disabled={submitted || pending}
           onClick={() => setUseful(false)}
           className="gap-1.5"
         >
@@ -838,7 +917,7 @@ function FeedbackControls({
         value={comment}
         rows={2}
         maxLength={2000}
-        disabled={submitted}
+        disabled={submitted || pending}
         onChange={(event) => setComment(event.target.value)}
         className="mt-1.5 min-h-[68px] resize-y text-[13px] leading-5"
       />
@@ -864,6 +943,11 @@ function FeedbackControls({
           )}
           {submitted ? "Feedback recorded" : "Submit feedback"}
         </Button>
+        {submitted ? (
+          <span className="text-[12px] text-muted-foreground">
+            Recorded as {recordedFeedback.useful ? "useful" : "not useful"}.
+          </span>
+        ) : null}
         {error ? <span className="text-[12px] text-destructive">{error.detail}</span> : null}
       </div>
     </div>

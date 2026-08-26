@@ -15,10 +15,19 @@ To ingest another local repository, use the CLI directly:
 uv run repo-research ingest /path/to/python-repository
 ```
 
-The command emits repository identity, indexed chunk count, `index_updated`, and
-any `skipped_files` diagnostics as JSON. Re-running ingestion upserts validated
-chunks before removing stale points, so an embedding validation or Qdrant write
-failure retains the previous searchable index.
+The command emits repository identity, indexed chunk count, graph node/edge
+counts, `index_updated`, `graph_updated`, and any `skipped_files` diagnostics as
+JSON. Re-running ingestion reuses a revision only when both the Qdrant chunks
+and commit graph artifact exist. Graph construction happens before Qdrant
+replacement, so a graph failure cannot activate a searchable revision without
+topology.
+
+Inspect the current commit's graph artifact without Qdrant or OpenAI:
+
+```bash
+make graph-summary
+uv run repo-research graph-summary --path /path/to/python-repository
+```
 
 The API exposes the same ingestion boundary:
 
@@ -87,12 +96,14 @@ Equivalent CLI form with explicit controls:
 ```bash
 uv run repo-research research "which modules must change to add bounded tools?" \
   --mode change --retrieval-mode dense --limit 5 \
-  --max-searches 5 --max-file-reads 6 --max-total-tool-calls 12
+  --max-searches 5 --max-file-reads 6 --max-total-tool-calls 12 \
+  --max-graph-expansions 2 --max-graph-nodes 12 --max-graph-depth 2
 ```
 
 The service enforces budgets in application code for `search_repository`,
-`read_chunk`, `read_file`, and `find_symbol`. File reads are scoped to the
-requested repository root, and final evidence is canonicalized from tool
+`read_chunk`, `read_file`, `find_symbol`, `expand_related`, and
+`find_references`. File reads are scoped to the requested repository root, graph
+expansion is capped at two hops, and final evidence is canonicalized from tool
 results so the agent cannot invent paths or line ranges.
 
 With the API running, callers may post the same request shape to:
@@ -206,6 +217,18 @@ RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_re
 uv run repo-research evaluate-answers --source monitored-runs \
   --run-kind agentic --limit 10 --persist \
   --output eval/results/answer-monitored-agentic.json
+```
+
+Use `--unevaluated-only --sample-size N` to run a bounded post-hoc subset
+without rejudging answers that already have completed monitored-run evaluation
+results. Without `--sample-seed`, sampling is deterministic oldest-first; with
+`--sample-seed`, the random subset is repeatable:
+
+```bash
+RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_research \
+uv run repo-research evaluate-answers --source monitored-runs \
+  --unevaluated-only --sample-size 4 --sample-seed 7 --persist \
+  --output eval/results/answer-monitored-sample.json
 ```
 
 Use repeatable `--request-id` flags to judge specific recorded answers without

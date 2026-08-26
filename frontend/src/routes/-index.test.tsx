@@ -263,6 +263,27 @@ describe("Research route", () => {
     await screen.findByText("12");
   });
 
+  it("shows progress feedback while repository ingestion is still running", async () => {
+    let resolveIngest: (summary: IngestSummary) => void = () => undefined;
+    vi.mocked(ingestRepository).mockReturnValue(
+      new Promise((resolve) => {
+        resolveIngest = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderResearchRoute();
+
+    await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
+    await user.click(screen.getByRole("button", { name: "Ingest repository" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Ingestion in progress");
+    expect(screen.getByText("Navigation is locked until ingestion finishes.")).toBeInTheDocument();
+
+    resolveIngest(ingestSummary);
+    await screen.findByText("sample-repo");
+  });
+
   it("labels an unchanged repository revision as already indexed", async () => {
     vi.mocked(ingestRepository).mockResolvedValue({
       ...ingestSummary,
