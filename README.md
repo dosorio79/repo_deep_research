@@ -238,6 +238,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Architecture](docs/architecture.md) including the Local Alpha stack diagram
 - [Evaluation](docs/evaluation.md)
 - [Monitoring KPIs](docs/monitoring.md)
+- [v0.6.2 Intermediate Hardening release notes](docs/releases/v0.6.2-intermediate-hardening.md)
 - [v0.5.9 Evaluation Evidence release notes](docs/releases/v0.5.9-evaluation-evidence.md)
 - [v0.5.8 Local Alpha release notes](docs/releases/v0.5.8-local-alpha.md)
 - [OpenAPI contract](docs/api/openapi.json)
@@ -248,8 +249,9 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 `main` is production. `dev` is the integration branch. Feature branches start
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
-Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current user-ready
-capstone review release is `v0.5.9`.
+Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current release
+candidate is `v0.6.2`, an intermediate hardening release before v0.7 adaptive
+research.
 
 ## Local Alpha Scope
 

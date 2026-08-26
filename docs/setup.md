@@ -213,4 +213,4 @@ The project uses two long-lived branches:
 
 Feature branches start from `dev`. Promote to production with a pull request
 from `dev` to `main`, then tag `main` with the release version. The current
-release is `v0.5.9`.
+release candidate is `v0.6.2`.

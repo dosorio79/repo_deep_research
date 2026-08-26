@@ -253,7 +253,7 @@ Goal: make release-to-release comparisons trustworthy before v0.7 adaptive
 research changes answer routing, and make feedback submission behavior reliable
 enough for those comparisons.
 
-Status: implemented on `dev`; release validation and tagging remain.
+Status: release candidate on `dev`; production promotion and tagging remain.
 
 ### Version-aware monitoring and evaluation comparisons
 
