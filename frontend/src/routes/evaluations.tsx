@@ -606,10 +606,7 @@ function EvaluationRunTable({ runs, loading }: { runs: EvaluationRunSummary[]; l
                     <td className="py-2 pr-3">{sourceLabel(run.source_type)}</td>
                     <td className="max-w-[240px] py-2 pr-3">{run.context_labels.join(", ")}</td>
                     <td className="py-2 pr-3 mono">
-                      {formatVersion(
-                        run.evaluation_app_version,
-                        run.evaluation_version_provenance,
-                      )}
+                      {formatVersion(run.evaluation_app_version, run.evaluation_version_provenance)}
                     </td>
                     <td className="py-2 pr-3">{run.status}</td>
                     <td className="py-2 pr-3 mono">{run.result_count}</td>
@@ -667,11 +664,15 @@ function EvaluationResultTable({
               <td className="max-w-[220px] break-words py-2 pr-3">{result.context_label}</td>
               <td className="py-2 pr-3 mono">
                 <span className="block">
-                  answer {formatVersion(result.answer_app_version, result.answer_version_provenance)}
+                  answer{" "}
+                  {formatVersion(result.answer_app_version, result.answer_version_provenance)}
                 </span>
                 <span className="block text-muted-foreground">
                   eval{" "}
-                  {formatVersion(result.evaluation_app_version, result.evaluation_version_provenance)}
+                  {formatVersion(
+                    result.evaluation_app_version,
+                    result.evaluation_version_provenance,
+                  )}
                 </span>
               </td>
               <td className="py-2 pr-3">{result.run_kind ?? "unknown"}</td>

@@ -225,8 +225,7 @@ function ResearchView() {
   });
   const monitoringDetailQuery = useQuery({
     queryKey: ["answer-feedback-detail", baseUrl, activeRequestId],
-    queryFn: ({ signal }) =>
-      getMonitoringRunDetail(baseUrl, activeRequestId ?? "", signal),
+    queryFn: ({ signal }) => getMonitoringRunDetail(baseUrl, activeRequestId ?? "", signal),
     enabled: Boolean(activeRequestId),
     retry: false,
     staleTime: 5_000,
@@ -512,9 +511,7 @@ function ResearchView() {
               runKind={resultKind}
               feedbackPending={feedbackMutation.isPending}
               recordedFeedback={
-                feedbackMutation.data ??
-                monitoringDetailQuery.data?.feedback_events[0] ??
-                null
+                feedbackMutation.data ?? monitoringDetailQuery.data?.feedback_events[0] ?? null
               }
               feedbackError={(feedbackMutation.error as ApiErrorShape | null) ?? null}
               onSubmitFeedback={submitRunFeedback}
@@ -545,7 +542,9 @@ function IngestionProgress({ elapsedSeconds }: { elapsedSeconds: number }) {
         <span className="mono text-[11px] text-muted-foreground">{elapsedLabel}</span>
       </div>
       <div className="mt-2 grid gap-1 text-muted-foreground">
-        <span>Keeping this tab active while parsing files, building graph context, and indexing vectors.</span>
+        <span>
+          Keeping this tab active while parsing files, building graph context, and indexing vectors.
+        </span>
         <span className="mono text-[11px]">Navigation is locked until ingestion finishes.</span>
       </div>
     </div>
