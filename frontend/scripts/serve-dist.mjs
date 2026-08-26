@@ -10,6 +10,7 @@ const host = process.env["HOST"] ?? "0.0.0.0";
 const port = Number(process.env["PORT"] ?? "3000");
 const apiProxyTarget = process.env["VITE_API_PROXY_TARGET"] ?? "http://127.0.0.1:8000";
 const clientRoot = resolve("dist/client");
+const proxyConnectTimeoutMs = 15000;
 
 const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -68,6 +69,12 @@ async function proxyApi(request, response) {
 
   await new Promise((resolve, reject) => {
     const client = targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
+    let clientClosed = false;
+    let upstreamEnded = false;
+    const connectTimeout = setTimeout(() => {
+      upstream.destroy(new Error(`Timed out connecting to API target ${apiProxyTarget}`));
+    }, proxyConnectTimeoutMs);
+    const clearConnectTimeout = () => clearTimeout(connectTimeout);
     const upstream = client(
       targetUrl,
       {
@@ -76,19 +83,42 @@ async function proxyApi(request, response) {
         timeout: 0,
       },
       (upstreamResponse) => {
+        clearConnectTimeout();
         response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
         upstreamResponse.pipe(response);
-        upstreamResponse.on("end", resolve);
+        upstreamResponse.on("end", () => {
+          upstreamEnded = true;
+          resolve();
+        });
       },
     );
-    upstream.on("error", reject);
-    response.on("close", () => upstream.destroy());
+    upstream.on("socket", (socket) => {
+      if (socket.connecting) {
+        socket.once("connect", clearConnectTimeout);
+      } else {
+        clearConnectTimeout();
+      }
+    });
+    upstream.on("error", (error) => {
+      clearConnectTimeout();
+      if (clientClosed) {
+        resolve();
+        return;
+      }
+      reject(error);
+    });
+    response.on("close", () => {
+      if (!upstreamEnded) {
+        clientClosed = true;
+        upstream.destroy();
+      }
+    });
     request.pipe(upstream);
   });
   return true;
 }
 
-createServer(async (request, response) => {
+const server = createServer(async (request, response) => {
   try {
     if (await proxyApi(request, response)) return;
     if (request.method === "GET" || request.method === "HEAD") {
@@ -97,9 +127,24 @@ createServer(async (request, response) => {
     await sendApp(request, response);
   } catch (error) {
     console.error(error);
-    response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
-    response.end("Internal Server Error");
+    if (!response.headersSent && !response.destroyed) {
+      response.writeHead(502, { "content-type": "application/json; charset=utf-8" });
+      response.end(
+        JSON.stringify({
+          detail:
+            "Frontend proxy could not reach the API service. Check that the API container is running and healthy.",
+        }),
+      );
+    } else if (!response.destroyed) {
+      response.end();
+    }
   }
-}).listen(port, host, () => {
+});
+
+server.requestTimeout = 0;
+server.headersTimeout = 0;
+server.keepAliveTimeout = 0;
+
+server.listen(port, host, () => {
   console.log(`Frontend listening on http://${host}:${port}`);
 });

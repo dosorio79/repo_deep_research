@@ -22,6 +22,7 @@ import { EvidenceReferences } from "@/components/EvidenceReferences";
 import { ResearchStepsPanel } from "@/components/ResearchStepsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -526,28 +527,46 @@ function ResearchView() {
 }
 
 function IngestionProgress({ elapsedSeconds }: { elapsedSeconds: number }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const elapsedLabel =
     elapsedSeconds > 0 ? `${elapsedSeconds.toLocaleString()}s elapsed` : "starting";
   return (
-    <div
+    <Collapsible
       role="status"
       aria-live="polite"
-      className="rounded-md border border-primary/25 bg-primary/5 p-3 text-[12px]"
+      open={detailsOpen}
+      onOpenChange={setDetailsOpen}
+      className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-[12px]"
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2 text-foreground">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
-          <span className="font-medium text-foreground">Ingestion in progress</span>
+          <span className="font-medium">Ingesting repository</span>
+          <span className="mono text-[11px] text-muted-foreground">{elapsedLabel}</span>
         </div>
-        <span className="mono text-[11px] text-muted-foreground">{elapsedLabel}</span>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+          >
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 transition-transform",
+                detailsOpen ? "rotate-90" : "rotate-0",
+              )}
+              aria-hidden
+            />
+            {detailsOpen ? "Hide ingestion details" : "Show ingestion details"}
+          </button>
+        </CollapsibleTrigger>
       </div>
-      <div className="mt-2 grid gap-1 text-muted-foreground">
+      <CollapsibleContent className="mt-2 grid gap-1 text-muted-foreground">
         <span>
           Keeping this tab active while parsing files, building graph context, and indexing vectors.
         </span>
         <span className="mono text-[11px]">Navigation is locked until ingestion finishes.</span>
-      </div>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

@@ -277,7 +277,12 @@ describe("Research route", () => {
     await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
     await user.click(screen.getByRole("button", { name: "Ingest repository" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Ingestion in progress");
+    expect(await screen.findByRole("status")).toHaveTextContent("Ingesting repository");
+    expect(
+      screen.queryByText("Navigation is locked until ingestion finishes."),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show ingestion details" }));
     expect(screen.getByText("Navigation is locked until ingestion finishes.")).toBeInTheDocument();
 
     resolveIngest(ingestSummary);
