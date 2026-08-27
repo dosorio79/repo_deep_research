@@ -58,13 +58,7 @@ export interface IngestSummary {
 }
 
 export type IngestionJobStatus =
-  | "queued"
-  | "discovering"
-  | "indexing"
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "interrupted";
+  "queued" | "discovering" | "indexing" | "completed" | "failed" | "cancelled" | "interrupted";
 
 export interface IngestionJob {
   job_id: string;

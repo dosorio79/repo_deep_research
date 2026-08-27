@@ -293,7 +293,13 @@ describe("Research route", () => {
     expect(startRepositoryIngestionJob).toHaveBeenCalledWith("/api", {
       repository_address: "/tmp/sample-repo",
     });
-    await waitFor(() => expect(getRepositoryIngestionJob).toHaveBeenCalledWith("/api", "job-1", expect.any(AbortSignal)));
+    await waitFor(() =>
+      expect(getRepositoryIngestionJob).toHaveBeenCalledWith(
+        "/api",
+        "job-1",
+        expect.any(AbortSignal),
+      ),
+    );
     await screen.findByText("sample-repo");
     await screen.findByText("12");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();

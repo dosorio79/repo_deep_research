@@ -171,7 +171,9 @@ function ResearchView() {
 
   const ingestMutation = useMutation({
     mutationFn: (payload: { baseUrl: string; repositoryAddress: string }) =>
-      startRepositoryIngestionJob(payload.baseUrl, { repository_address: payload.repositoryAddress }),
+      startRepositoryIngestionJob(payload.baseUrl, {
+        repository_address: payload.repositoryAddress,
+      }),
     onSuccess: (data) => {
       setActiveIngestionJobId(data.job_id);
       setIngestError(null);
@@ -431,9 +433,7 @@ function ResearchView() {
                   </Button>
                 </div>
                 {ingestError ? <ApiError error={ingestError} /> : null}
-                {ingestionActive ? (
-                  <IngestionProgress job={currentIngestionJob} />
-                ) : null}
+                {ingestionActive ? <IngestionProgress job={currentIngestionJob} /> : null}
                 {ingestSummary ? <RepositoryReceipt summary={ingestSummary} /> : null}
               </div>
             </section>
