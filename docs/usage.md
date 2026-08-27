@@ -36,7 +36,8 @@ curl -s http://127.0.0.1:8000/repositories/ingest-jobs \
   -H 'content-type: application/json' \
   -d '{"repository_address":"/path/to/python-repository"}'
 
-curl -s http://127.0.0.1:8000/repositories/ingest-jobs/<job_id>
+JOB_ID="paste-returned-job-id-here"
+curl -s "http://127.0.0.1:8000/repositories/ingest-jobs/${JOB_ID}"
 ```
 
 Reloaded browser clients can recover the newest still-active job through
