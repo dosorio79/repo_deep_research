@@ -358,3 +358,10 @@ Goal: make the v0.7 base easier to validate by synchronizing current-facing
 docs after v0.6.3 and including frontend lint in the broad local gate.
 
 Status: planned patch release before v0.7.
+
+## v0.6.5: Graph acceptance baseline
+
+Goal: record a conclusive relationship-graph acceptance gate before v0.7
+adaptive research changes routing and progress behavior.
+
+Status: planned patch release before v0.7.
