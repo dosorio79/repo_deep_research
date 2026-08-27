@@ -25,7 +25,7 @@ help:
 	printf '%s\n' '  make typecheck              run mypy'
 	printf '%s\n' '  make test                   run backend tests'
 	printf '%s\n' '  make check                  backend lint, typecheck, and tests'
-	printf '%s\n' '  make test-all               backend checks plus frontend tests/typecheck/build'
+	printf '%s\n' '  make test-all               backend checks plus frontend lint/tests/typecheck/build'
 	printf '%s\n' ''
 	printf '%s\n' 'Services and stack'
 	printf '%s\n' '  make services-up            start Qdrant and PostgreSQL'
@@ -52,7 +52,7 @@ help:
 	printf '%s\n' '  make api                    run FastAPI locally'
 	printf '%s\n' '  make app                    run API and frontend locally'
 	printf '%s\n' ''
-	printf '%s\n' 'Frontend-only commands: cd frontend && npm test | npm run typecheck | npm run build'
+	printf '%s\n' 'Frontend-only commands: cd frontend && npm run lint | npm test | npm run typecheck | npm run build'
 	printf '%s\n' 'Use uv run repo-research ... directly for path, mode, limit, dataset, and output options.'
 
 # -----------------------------------------------------------------------------
@@ -79,6 +79,7 @@ test:
 check: lint typecheck test
 
 test-all: check
+	cd frontend && $(FRONTEND_NPM) run lint
 	cd frontend && $(FRONTEND_NPM) test
 	cd frontend && $(FRONTEND_NPM) run typecheck
 	cd frontend && $(FRONTEND_NPM) run build

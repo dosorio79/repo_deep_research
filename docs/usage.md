@@ -29,7 +29,22 @@ make graph-summary
 uv run repo-research graph-summary --path /path/to/python-repository
 ```
 
-The API exposes the same ingestion boundary:
+For browser-style ingestion, start a resumable job and poll its status:
+
+```bash
+curl -s http://127.0.0.1:8000/repositories/ingest-jobs \
+  -H 'content-type: application/json' \
+  -d '{"repository_address":"/path/to/python-repository"}'
+
+JOB_ID="paste-returned-job-id-here"
+curl -s "http://127.0.0.1:8000/repositories/ingest-jobs/${JOB_ID}"
+```
+
+Reloaded browser clients can recover the newest still-active job through
+`GET /repositories/ingest-jobs/active`.
+
+The API also keeps the blocking ingestion boundary for older clients and direct
+automation:
 
 ```bash
 curl -s http://127.0.0.1:8000/repositories/ingest \
@@ -143,6 +158,7 @@ Frontend-only checks use npm directly:
 
 ```bash
 cd frontend
+npm run lint
 npm test
 npm run typecheck
 npm run build

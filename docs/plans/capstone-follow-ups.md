@@ -348,6 +348,13 @@ Goal: make large remote repository ingestion resilient to browser disconnects,
 screen lock, laptop sleep, and network resets before v0.7 adaptive research
 adds more long-running user-visible workflows.
 
-Status: implemented for `v0.6.3`.
+Status: released to `main` as `v0.6.3`.
 
 Plan: [v0.6.3 Resumable Ingestion Jobs](v0.6.3-resumable-ingestion-jobs.md)
+
+## v0.6.4: Housekeeping and gate alignment
+
+Goal: make the v0.7 base easier to validate by synchronizing current-facing
+docs after v0.6.3 and including frontend lint in the broad local gate.
+
+Status: planned patch release before v0.7.
