@@ -1,16 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  cancelRepositoryIngestionJob,
   getBackendHealth,
+  getActiveRepositoryIngestionJob,
   getEvaluationResults,
   getEvaluationRuns,
   getEvaluationSummary,
   getGroundTruthEvaluationResults,
+  getRepositoryIngestionJob,
   getMonitoringRunDetail,
   getMonitoringRuns,
   getMonitoringSummary,
   ingestRepository,
   runAgenticResearch,
   runRagQuery,
+  startRepositoryIngestionJob,
   submitFeedback,
 } from "./rag-client";
 import type {
@@ -19,6 +23,7 @@ import type {
   EvaluationRunList,
   GroundTruthEvaluationList,
   IngestSummary,
+  IngestionJob,
   MonitoringRunDetail,
   MonitoringRunList,
   MonitoringRunSummary,
@@ -96,6 +101,21 @@ const ingestSummary: IngestSummary = {
   indexed_chunks: 12,
   skipped_files: [],
   index_updated: true,
+};
+
+const ingestionJob: IngestionJob = {
+  job_id: "job-1",
+  repository_address: "/tmp/sample-repo",
+  status: "indexing",
+  created_at: "2026-08-26T12:00:00Z",
+  updated_at: "2026-08-26T12:00:05Z",
+  started_at: "2026-08-26T12:00:01Z",
+  completed_at: null,
+  elapsed_seconds: 4,
+  repository: null,
+  summary: null,
+  error_type: null,
+  error_detail: null,
 };
 
 const monitoringSummary: MonitoringSummary = {
@@ -379,6 +399,93 @@ describe("runRagQuery", () => {
         body: JSON.stringify({
           repository_address: "/tmp/sample-repo",
         }),
+      }),
+    );
+  });
+
+  it("starts a repository ingestion job", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(ingestionJob), {
+        status: 202,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      startRepositoryIngestionJob("http://localhost:8000///", {
+        repository_address: "/tmp/sample-repo",
+      }),
+    ).resolves.toEqual(ingestionJob);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/repositories/ingest-jobs",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repository_address: "/tmp/sample-repo",
+        }),
+      }),
+    );
+  });
+
+  it("polls a repository ingestion job", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(ingestionJob), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getRepositoryIngestionJob("http://localhost:8000", "job-1")).resolves.toEqual(
+      ingestionJob,
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/repositories/ingest-jobs/job-1",
+      expect.objectContaining({ signal: null }),
+    );
+  });
+
+  it("returns null when there is no active repository ingestion job", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("null", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getActiveRepositoryIngestionJob("http://localhost:8000")).resolves.toBeNull();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/repositories/ingest-jobs/active",
+      expect.objectContaining({ signal: null }),
+    );
+  });
+
+  it("cancels a repository ingestion job", async () => {
+    const cancelled = { ...ingestionJob, status: "cancelled" };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(cancelled), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(cancelRepositoryIngestionJob("http://localhost:8000", "job-1")).resolves.toEqual(
+      cancelled,
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/repositories/ingest-jobs/job-1/cancel",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
       }),
     );
   });

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 from psycopg.types.json import Jsonb
@@ -16,12 +17,16 @@ from repo_research.models import (
     EvidenceItem,
     FeedbackEvent,
     GroundTruthEvaluationSummary,
+    IngestionJob,
+    IngestionJobStatus,
+    IngestSummary,
     ModelUsage,
     MonitoringFeedbackFilter,
     PersistedEvaluationResult,
     RagAnswer,
     RagMode,
     RagRunTrace,
+    RepositoryIdentity,
     ResearchAnswer,
     RetrievalEvaluationSummary,
     RetrievalMode,
@@ -55,6 +60,7 @@ class FakeConnection:
         evaluation_result_rows: list[dict[str, Any]] | None = None,
         retrieval_evaluation_rows: list[dict[str, Any]] | None = None,
         ground_truth_evaluation_rows: list[dict[str, Any]] | None = None,
+        ingestion_job_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self.run_rows = run_rows or []
         self.feedback_rows = feedback_rows or []
@@ -63,6 +69,7 @@ class FakeConnection:
         self.evaluation_result_rows = evaluation_result_rows or []
         self.retrieval_evaluation_rows = retrieval_evaluation_rows or []
         self.ground_truth_evaluation_rows = ground_truth_evaluation_rows or []
+        self.ingestion_job_rows = ingestion_job_rows or []
         self.executed: list[tuple[str, dict[str, Any] | None]] = []
 
     def __enter__(self) -> FakeConnection:
@@ -89,6 +96,8 @@ class FakeConnection:
             return FakeCursor(self.run_rows)
         if "FROM feedback_events" in statement:
             return FakeCursor(self.feedback_rows)
+        if "FROM ingestion_jobs" in statement:
+            return FakeCursor(self.ingestion_job_rows)
         if statement.lstrip().startswith("UPDATE "):
             return FakeCursor([], rowcount=1)
         return FakeCursor([])
@@ -137,6 +146,8 @@ def test_recording_store_initializes_postgres_schema() -> None:
         "CREATE TABLE IF NOT EXISTS retrieval_evaluation_results" in sql
         for sql in statements
     )
+    assert any("CREATE TABLE IF NOT EXISTS ingestion_jobs" in sql for sql in statements)
+    assert any("ingestion_jobs_active_updated_idx" in sql for sql in statements)
     assert any("INSERT INTO retrieval_evaluation_results" in sql for sql in statements)
     assert any(
         "INSERT INTO ground_truth_evaluation_results" in sql for sql in statements
@@ -225,6 +236,73 @@ def test_recording_store_persists_feedback_event() -> None:
     assert params["useful"] is False
     assert params["comment"] == "Needs clearer targets."
     assert recorded == event
+
+
+def test_recording_store_persists_ingestion_job() -> None:
+    connection = FakeConnection()
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+    job = _ingestion_job()
+
+    recorded = store.create_ingestion_job(job)
+
+    statement, params = connection.executed[0]
+    assert "INSERT INTO ingestion_jobs" in statement
+    assert recorded == job
+    assert params is not None
+    assert params["job_id"] == "job-1"
+    assert params["repository_address"] == "/tmp/sample-repo"
+    assert params["status"] == "completed"
+    assert params["repository"] is not None
+    assert params["summary"] is not None
+
+
+def test_recording_store_returns_ingestion_job() -> None:
+    connection = FakeConnection(ingestion_job_rows=[_ingestion_job_row()])
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    job = store.get_ingestion_job("job-1")
+
+    assert job is not None
+    assert job.job_id == "job-1"
+    assert job.status == IngestionJobStatus.COMPLETED
+    assert job.summary is not None
+    assert job.summary.indexed_chunks == 12
+    assert job.repository is not None
+    assert job.repository.name == "sample-repo"
+
+
+def test_recording_store_returns_latest_active_ingestion_job() -> None:
+    connection = FakeConnection(
+        ingestion_job_rows=[_ingestion_job_row(status="indexing")]
+    )
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    job = store.latest_active_ingestion_job()
+
+    statement, _params = connection.executed[0]
+    assert "WHERE status IN ('queued', 'discovering', 'indexing')" in statement
+    assert job is not None
+    assert job.status == IngestionJobStatus.INDEXING
+
+
+def test_recording_store_interrupts_active_ingestion_jobs() -> None:
+    connection = FakeConnection()
+    store = PostgresRecordingStore(
+        "postgresql://example", FakeConnectionFactory(connection)
+    )
+
+    interrupted = store.interrupt_active_ingestion_jobs()
+
+    statement, _params = connection.executed[0]
+    assert interrupted == 1
+    assert "UPDATE ingestion_jobs" in statement
+    assert "status = 'interrupted'" in statement
 
 
 def test_recording_store_returns_existing_feedback_for_duplicate_request() -> None:
@@ -1037,6 +1115,53 @@ def _evaluation_result_row(
             }
         ],
         "created_at": datetime(2026, 8, 11, 12, tzinfo=UTC),
+    }
+
+
+def _ingestion_job() -> IngestionJob:
+    repository = RepositoryIdentity(
+        name="sample-repo",
+        root_path=Path("/tmp/sample-repo"),
+        branch="main",
+        commit_hash="abc123",
+    )
+    summary = IngestSummary(
+        repository=repository,
+        indexed_chunks=12,
+        skipped_files=[],
+        index_updated=True,
+    )
+    return IngestionJob(
+        job_id="job-1",
+        repository_address="/tmp/sample-repo",
+        status=IngestionJobStatus.COMPLETED,
+        created_at=datetime(2026, 8, 26, 12, tzinfo=UTC),
+        updated_at=datetime(2026, 8, 26, 12, 1, tzinfo=UTC),
+        started_at=datetime(2026, 8, 26, 12, tzinfo=UTC),
+        completed_at=datetime(2026, 8, 26, 12, 1, tzinfo=UTC),
+        elapsed_seconds=60,
+        repository=repository,
+        summary=summary,
+    )
+
+
+def _ingestion_job_row(*, status: str = "completed") -> dict[str, Any]:
+    job = _ingestion_job().model_copy(update={"status": IngestionJobStatus(status)})
+    return {
+        "job_id": job.job_id,
+        "repository_address": job.repository_address,
+        "status": job.status.value,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "started_at": job.started_at,
+        "completed_at": job.completed_at,
+        "elapsed_seconds": job.elapsed_seconds,
+        "repository": job.repository.model_dump(mode="json")
+        if job.repository
+        else None,
+        "summary": job.summary.model_dump(mode="json") if job.summary else None,
+        "error_type": job.error_type,
+        "error_detail": job.error_detail,
     }
 
 

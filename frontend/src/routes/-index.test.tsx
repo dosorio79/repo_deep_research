@@ -6,19 +6,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RESEARCH_HEAD, Route } from "./index";
 import { loadLatestRagRun, saveLatestRagRun } from "@/lib/latest-rag-run";
 import {
+  getActiveRepositoryIngestionJob,
   getBackendHealth,
-  ingestRepository,
+  getRepositoryIngestionJob,
   runAgenticResearch,
   runRagQuery,
+  startRepositoryIngestionJob,
   submitFeedback,
 } from "@/lib/rag-client";
-import type { IngestSummary, RagRunResult, ResearchRunResult } from "@/lib/rag-types";
+import type { IngestSummary, IngestionJob, RagRunResult, ResearchRunResult } from "@/lib/rag-types";
 
 vi.mock("@/lib/rag-client", () => ({
+  getActiveRepositoryIngestionJob: vi.fn(),
   getBackendHealth: vi.fn(),
-  ingestRepository: vi.fn(),
+  getRepositoryIngestionJob: vi.fn(),
   runAgenticResearch: vi.fn(),
   runRagQuery: vi.fn(),
+  startRepositoryIngestionJob: vi.fn(),
   submitFeedback: vi.fn(),
 }));
 
@@ -146,6 +150,31 @@ const ingestSummary: IngestSummary = {
   index_updated: true,
 };
 
+const indexingJob: IngestionJob = {
+  job_id: "job-1",
+  repository_address: "/tmp/sample-repo",
+  status: "indexing",
+  created_at: "2026-08-26T12:00:00Z",
+  updated_at: "2026-08-26T12:00:01Z",
+  started_at: "2026-08-26T12:00:01Z",
+  completed_at: null,
+  elapsed_seconds: 1,
+  repository: null,
+  summary: null,
+  error_type: null,
+  error_detail: null,
+};
+
+const completedJob: IngestionJob = {
+  ...indexingJob,
+  status: "completed",
+  updated_at: "2026-08-26T12:00:03Z",
+  completed_at: "2026-08-26T12:00:03Z",
+  elapsed_seconds: 2,
+  repository: ingestSummary.repository,
+  summary: ingestSummary,
+};
+
 function renderResearchRoute() {
   const ResearchComponent = Route.options.component as ComponentType;
   return render(
@@ -156,7 +185,8 @@ function renderResearchRoute() {
 }
 
 async function ingestSampleRepository(user: ReturnType<typeof userEvent.setup>) {
-  vi.mocked(ingestRepository).mockResolvedValue(ingestSummary);
+  vi.mocked(startRepositoryIngestionJob).mockResolvedValue(indexingJob);
+  vi.mocked(getRepositoryIngestionJob).mockResolvedValue(completedJob);
   await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
   await user.click(screen.getByRole("button", { name: "Ingest repository" }));
   await screen.findByText("sample-repo");
@@ -164,7 +194,10 @@ async function ingestSampleRepository(user: ReturnType<typeof userEvent.setup>) 
 
 describe("Research route", () => {
   beforeEach(() => {
-    vi.mocked(ingestRepository).mockReset();
+    vi.mocked(getActiveRepositoryIngestionJob).mockReset();
+    vi.mocked(getActiveRepositoryIngestionJob).mockResolvedValue(null);
+    vi.mocked(getRepositoryIngestionJob).mockReset();
+    vi.mocked(startRepositoryIngestionJob).mockReset();
     vi.mocked(getBackendHealth).mockReset();
     vi.mocked(getBackendHealth).mockResolvedValue({ status: "ok", qdrant: true });
     vi.mocked(runAgenticResearch).mockReset();
@@ -247,7 +280,8 @@ describe("Research route", () => {
   });
 
   it("ingests a repository address before research", async () => {
-    vi.mocked(ingestRepository).mockResolvedValue(ingestSummary);
+    vi.mocked(startRepositoryIngestionJob).mockResolvedValue(indexingJob);
+    vi.mocked(getRepositoryIngestionJob).mockResolvedValue(completedJob);
     const user = userEvent.setup();
 
     renderResearchRoute();
@@ -255,19 +289,22 @@ describe("Research route", () => {
     await user.type(screen.getByLabelText("Repository address"), "/tmp/sample-repo");
     await user.click(screen.getByRole("button", { name: "Ingest repository" }));
 
-    await waitFor(() => expect(ingestRepository).toHaveBeenCalled());
-    expect(ingestRepository).toHaveBeenCalledWith("/api", {
+    await waitFor(() => expect(startRepositoryIngestionJob).toHaveBeenCalled());
+    expect(startRepositoryIngestionJob).toHaveBeenCalledWith("/api", {
       repository_address: "/tmp/sample-repo",
     });
+    await waitFor(() => expect(getRepositoryIngestionJob).toHaveBeenCalledWith("/api", "job-1", expect.any(AbortSignal)));
     await screen.findByText("sample-repo");
     await screen.findByText("12");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("shows progress feedback while repository ingestion is still running", async () => {
-    let resolveIngest: (summary: IngestSummary) => void = () => undefined;
-    vi.mocked(ingestRepository).mockReturnValue(
+    let resolvePoll: (job: IngestionJob) => void = () => undefined;
+    vi.mocked(startRepositoryIngestionJob).mockResolvedValue(indexingJob);
+    vi.mocked(getRepositoryIngestionJob).mockReturnValue(
       new Promise((resolve) => {
-        resolveIngest = resolve;
+        resolvePoll = resolve;
       }),
     );
     const user = userEvent.setup();
@@ -285,14 +322,38 @@ describe("Research route", () => {
     await user.click(screen.getByRole("button", { name: "Show ingestion details" }));
     expect(screen.getByText("Navigation is locked until ingestion finishes.")).toBeInTheDocument();
 
-    resolveIngest(ingestSummary);
+    resolvePoll(completedJob);
     await screen.findByText("sample-repo");
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+  });
+
+  it("recovers an active ingestion job after reload", async () => {
+    vi.mocked(getActiveRepositoryIngestionJob).mockResolvedValue(indexingJob);
+    vi.mocked(getRepositoryIngestionJob).mockResolvedValue(completedJob);
+
+    renderResearchRoute();
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Ingesting repository");
+    expect(screen.getByLabelText("Repository address")).toHaveValue("/tmp/sample-repo");
+    await waitFor(() =>
+      expect(getRepositoryIngestionJob).toHaveBeenCalledWith(
+        "/api",
+        "job-1",
+        expect.any(AbortSignal),
+      ),
+    );
+    await screen.findByText("sample-repo");
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
   });
 
   it("labels an unchanged repository revision as already indexed", async () => {
-    vi.mocked(ingestRepository).mockResolvedValue({
-      ...ingestSummary,
-      index_updated: false,
+    vi.mocked(startRepositoryIngestionJob).mockResolvedValue(indexingJob);
+    vi.mocked(getRepositoryIngestionJob).mockResolvedValue({
+      ...completedJob,
+      summary: {
+        ...ingestSummary,
+        index_updated: false,
+      },
     });
     const user = userEvent.setup();
 
@@ -305,7 +366,7 @@ describe("Research route", () => {
   });
 
   it("shows repository ingest errors beside the repository controls", async () => {
-    vi.mocked(ingestRepository).mockRejectedValue({
+    vi.mocked(startRepositoryIngestionJob).mockRejectedValue({
       title: "Backend returned 400",
       detail: "repository path is not a directory",
       status: 400,

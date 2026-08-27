@@ -32,6 +32,9 @@ from repo_research.models import (
     FeedbackUsefulSummary,
     GroundTruthEvaluationList,
     GroundTruthEvaluationSummary,
+    IngestionJob,
+    IngestionJobStatus,
+    IngestSummary,
     LatencyByRunKind,
     ModelUsageSummary,
     MonitoringFeedbackFilter,
@@ -44,6 +47,7 @@ from repo_research.models import (
     RagAnswer,
     RagMode,
     RagRunTrace,
+    RepositoryIdentity,
     ResearchAnswer,
     RetrievalEvaluationList,
     RetrievalEvaluationSummary,
@@ -60,6 +64,9 @@ ConnectionFactory = Callable[..., AbstractContextManager[Any]]
 
 class NoOpRecordingStore:
     """Recording store used when telemetry persistence is not configured."""
+
+    def __init__(self) -> None:
+        self._ingestion_jobs: dict[str, IngestionJob] = {}
 
     def initialize(self) -> None:
         """Match the live store lifecycle without creating external state."""
@@ -179,6 +186,51 @@ class NoOpRecordingStore:
         """Return no detail when telemetry persistence is disabled."""
         del request_id
         return None
+
+    def create_ingestion_job(self, job: IngestionJob) -> IngestionJob:
+        """Keep background ingestion status in process when persistence is disabled."""
+        self._ingestion_jobs[job.job_id] = job
+        return job
+
+    def get_ingestion_job(self, job_id: str) -> IngestionJob | None:
+        """Return one in-process ingestion job when present."""
+        return self._ingestion_jobs.get(job_id)
+
+    def latest_active_ingestion_job(self) -> IngestionJob | None:
+        """Return the newest active in-process ingestion job."""
+        active_statuses = {
+            IngestionJobStatus.QUEUED,
+            IngestionJobStatus.DISCOVERING,
+            IngestionJobStatus.INDEXING,
+        }
+        for job in reversed(list(self._ingestion_jobs.values())):
+            if job.status in active_statuses:
+                return job
+        return None
+
+    def update_ingestion_job(self, job: IngestionJob) -> IngestionJob:
+        """Update one in-process ingestion job."""
+        self._ingestion_jobs[job.job_id] = job
+        return job
+
+    def interrupt_active_ingestion_jobs(self) -> int:
+        """Mark active in-process jobs interrupted on API startup."""
+        interrupted = 0
+        for job_id, job in list(self._ingestion_jobs.items()):
+            if job.status in {
+                IngestionJobStatus.QUEUED,
+                IngestionJobStatus.DISCOVERING,
+                IngestionJobStatus.INDEXING,
+            }:
+                self._ingestion_jobs[job_id] = job.model_copy(
+                    update={
+                        "status": IngestionJobStatus.INTERRUPTED,
+                        "error_type": "Interrupted",
+                        "error_detail": "API restarted before ingestion completed.",
+                    }
+                )
+                interrupted += 1
+        return interrupted
 
 
 @dataclass(frozen=True)
@@ -609,6 +661,43 @@ class PostgresRecordingStore:
                 return _run_detail_from_row(row, feedback_rows)
         return None
 
+    def create_ingestion_job(self, job: IngestionJob) -> IngestionJob:
+        """Persist a newly queued background ingestion job."""
+        with self._connect() as connection:
+            connection.execute(_UPSERT_INGESTION_JOB, _ingestion_job_params(job))
+        return job
+
+    def get_ingestion_job(self, job_id: str) -> IngestionJob | None:
+        """Return one persisted ingestion job by ID."""
+        with self._connect() as connection:
+            rows = list(
+                connection.execute(
+                    _SELECT_INGESTION_JOB,
+                    {"job_id": job_id},
+                ).fetchall()
+            )
+        return _ingestion_job_from_row(rows[0]) if rows else None
+
+    def latest_active_ingestion_job(self) -> IngestionJob | None:
+        """Return the newest ingestion job still recoverable by a reloaded UI."""
+        with self._connect() as connection:
+            rows = list(
+                connection.execute(_SELECT_LATEST_ACTIVE_INGESTION_JOB).fetchall()
+            )
+        return _ingestion_job_from_row(rows[0]) if rows else None
+
+    def update_ingestion_job(self, job: IngestionJob) -> IngestionJob:
+        """Replace mutable status fields for one ingestion job."""
+        with self._connect() as connection:
+            connection.execute(_UPSERT_INGESTION_JOB, _ingestion_job_params(job))
+        return job
+
+    def interrupt_active_ingestion_jobs(self) -> int:
+        """Mark jobs abandoned by a previous API process as interrupted."""
+        with self._connect() as connection:
+            cursor = connection.execute(_INTERRUPT_ACTIVE_INGESTION_JOBS)
+        return int(getattr(cursor, "rowcount", 0) or 0)
+
     def _connect(self) -> AbstractContextManager[Any]:
         return self.connection_factory(
             self.dsn,
@@ -873,6 +962,61 @@ def _json_dict(value: object) -> dict[str, int]:
         if isinstance(loaded, dict):
             return {str(key): int(item) for key, item in loaded.items()}
     return {}
+
+
+def _json_object(value: object) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            loaded = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(loaded, dict):
+            return loaded
+    return None
+
+
+def _ingestion_job_params(job: IngestionJob) -> dict[str, Any]:
+    return {
+        "job_id": job.job_id,
+        "repository_address": job.repository_address,
+        "status": job.status.value,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "started_at": job.started_at,
+        "completed_at": job.completed_at,
+        "elapsed_seconds": job.elapsed_seconds,
+        "repository": Jsonb(job.repository.model_dump(mode="json"))
+        if job.repository
+        else None,
+        "summary": Jsonb(job.summary.model_dump(mode="json")) if job.summary else None,
+        "error_type": job.error_type,
+        "error_detail": job.error_detail,
+    }
+
+
+def _ingestion_job_from_row(row: dict[str, Any]) -> IngestionJob:
+    repository = _json_object(row.get("repository"))
+    summary = _json_object(row.get("summary"))
+    return IngestionJob(
+        job_id=str(row["job_id"]),
+        repository_address=str(row["repository_address"]),
+        status=IngestionJobStatus(str(row["status"])),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        started_at=row.get("started_at"),
+        completed_at=row.get("completed_at"),
+        elapsed_seconds=int(row.get("elapsed_seconds") or 0),
+        repository=RepositoryIdentity.model_validate(repository)
+        if repository
+        else None,
+        summary=IngestSummary.model_validate(summary) if summary else None,
+        error_type=row.get("error_type"),
+        error_detail=row.get("error_detail"),
+    )
 
 
 def _retrieval_evaluation_summary_from_row(
@@ -1303,6 +1447,37 @@ _SCHEMA_STATEMENTS = (
     """
     CREATE INDEX IF NOT EXISTS feedback_events_session_id_idx
     ON feedback_events (session_id)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ingestion_jobs (
+        job_id TEXT PRIMARY KEY,
+        repository_address TEXT NOT NULL CHECK (length(repository_address) > 0),
+        status TEXT NOT NULL CHECK (
+            status IN (
+                'queued',
+                'discovering',
+                'indexing',
+                'completed',
+                'failed',
+                'cancelled',
+                'interrupted'
+            )
+        ),
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        started_at TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        elapsed_seconds INTEGER NOT NULL DEFAULT 0,
+        repository JSONB,
+        summary JSONB,
+        error_type TEXT,
+        error_detail TEXT
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS ingestion_jobs_active_updated_idx
+    ON ingestion_jobs (updated_at DESC)
+    WHERE status IN ('queued', 'discovering', 'indexing')
     """,
     """
     CREATE TABLE IF NOT EXISTS answer_snapshots (
@@ -2388,4 +2563,94 @@ SELECT
     comment,
     submitted_at
 FROM feedback_events
+"""
+
+_UPSERT_INGESTION_JOB = """
+INSERT INTO ingestion_jobs (
+    job_id,
+    repository_address,
+    status,
+    created_at,
+    updated_at,
+    started_at,
+    completed_at,
+    elapsed_seconds,
+    repository,
+    summary,
+    error_type,
+    error_detail
+) VALUES (
+    %(job_id)s,
+    %(repository_address)s,
+    %(status)s,
+    %(created_at)s,
+    %(updated_at)s,
+    %(started_at)s,
+    %(completed_at)s,
+    %(elapsed_seconds)s,
+    %(repository)s,
+    %(summary)s,
+    %(error_type)s,
+    %(error_detail)s
+)
+ON CONFLICT (job_id) DO UPDATE SET
+    repository_address = EXCLUDED.repository_address,
+    status = EXCLUDED.status,
+    updated_at = EXCLUDED.updated_at,
+    started_at = EXCLUDED.started_at,
+    completed_at = EXCLUDED.completed_at,
+    elapsed_seconds = EXCLUDED.elapsed_seconds,
+    repository = EXCLUDED.repository,
+    summary = EXCLUDED.summary,
+    error_type = EXCLUDED.error_type,
+    error_detail = EXCLUDED.error_detail
+"""
+
+_SELECT_INGESTION_JOB = """
+SELECT
+    job_id,
+    repository_address,
+    status,
+    created_at,
+    updated_at,
+    started_at,
+    completed_at,
+    elapsed_seconds,
+    repository,
+    summary,
+    error_type,
+    error_detail
+FROM ingestion_jobs
+WHERE job_id = %(job_id)s
+"""
+
+_SELECT_LATEST_ACTIVE_INGESTION_JOB = """
+SELECT
+    job_id,
+    repository_address,
+    status,
+    created_at,
+    updated_at,
+    started_at,
+    completed_at,
+    elapsed_seconds,
+    repository,
+    summary,
+    error_type,
+    error_detail
+FROM ingestion_jobs
+WHERE status IN ('queued', 'discovering', 'indexing')
+ORDER BY created_at DESC
+LIMIT 1
+"""
+
+_INTERRUPT_ACTIVE_INGESTION_JOBS = """
+UPDATE ingestion_jobs
+SET
+    status = 'interrupted',
+    updated_at = now(),
+    completed_at = COALESCE(completed_at, now()),
+    error_type = 'Interrupted',
+    error_detail = 'API restarted before ingestion completed.'
+WHERE status IN ('queued', 'discovering', 'indexing')
 """

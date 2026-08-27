@@ -46,12 +46,14 @@ flowchart LR
 
 ## Release Status
 
-The current development line is `v0.6.2 Intermediate Hardening`.
+The current development line is `v0.6.3 Resumable Ingestion Jobs`.
 It keeps the local-first capstone stack, adds commit-scoped JSONL repository
 graphs for bounded agentic change-impact research, and includes the graph
-expansion acceptance hardening needed before v0.7 adaptive research. Live
-answer generation remains bring-your-own-key, while seeded offline evaluation
-evidence is available without an OpenAI key.
+expansion acceptance hardening needed before v0.7 adaptive research. Repository
+ingestion now starts as a resumable background job so long remote repository
+runs can survive browser reloads and frontend connection drops. Live answer
+generation remains bring-your-own-key, while seeded offline evaluation evidence
+is available without an OpenAI key.
 
 Cloud deployment is intentionally out of scope for the Local Alpha. The stack
 includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
@@ -223,8 +225,8 @@ Important settings:
 | `RDR_OPENAI_ANSWER_MODEL` | Model used for direct RAG and agentic answers. |
 | `RDR_OPENAI_JUDGE_MODEL` | Model used for answer evaluation. |
 | `RDR_ANSWER_EVALUATION_WORKERS` | Bounded parallel workers for direct dataset answer generation and answer judging. |
-| `RDR_POSTGRES_DSN` | PostgreSQL DSN for monitoring, feedback, and evaluation data. |
-| `RDR_TELEMETRY_ENABLED` | Enables persisted recording when PostgreSQL is configured. |
+| `RDR_POSTGRES_DSN` | PostgreSQL DSN for monitoring, feedback, evaluation data, and durable ingestion jobs. |
+| `RDR_TELEMETRY_ENABLED` | Enables persisted recording when PostgreSQL is configured. Ingestion job state falls back to in-process storage when persistence is disabled. |
 | `RDR_CORS_ALLOWED_ORIGINS` | Browser origins allowed to call FastAPI. |
 | `OPENAI_API_KEY` | Required for live answer generation and judging. |
 
@@ -238,6 +240,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Architecture](docs/architecture.md) including the Local Alpha stack diagram
 - [Evaluation](docs/evaluation.md)
 - [Monitoring KPIs](docs/monitoring.md)
+- [v0.6.3 Resumable Ingestion Jobs release notes](docs/releases/v0.6.3-resumable-ingestion.md)
 - [v0.6.2 Intermediate Hardening release notes](docs/releases/v0.6.2-intermediate-hardening.md)
 - [v0.5.9 Evaluation Evidence release notes](docs/releases/v0.5.9-evaluation-evidence.md)
 - [v0.5.8 Local Alpha release notes](docs/releases/v0.5.8-local-alpha.md)
@@ -250,7 +253,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
 Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current release
-candidate is `v0.6.2`, an intermediate hardening release before v0.7 adaptive
+candidate is `v0.6.3`, a resumable ingestion release before v0.7 adaptive
 research.
 
 ## Local Alpha Scope

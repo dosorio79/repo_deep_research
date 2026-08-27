@@ -69,8 +69,10 @@ RDR_POSTGRES_DSN=postgresql://repo_research:repo_research@localhost:5432/repo_re
 ```
 
 Use `RDR_TELEMETRY_ENABLED=false` to run without persisted recording. When
-telemetry is enabled but `RDR_POSTGRES_DSN` is unset, the app uses an in-process
-no-op recorder.
+telemetry is enabled but `RDR_POSTGRES_DSN` is unset, the app uses in-process
+recording for ingestion job status and no-op recording for monitoring,
+feedback, and evaluation data. Browser reload recovery for long ingestion runs
+requires PostgreSQL persistence.
 
 ## OpenAI
 
@@ -213,4 +215,4 @@ The project uses two long-lived branches:
 
 Feature branches start from `dev`. Promote to production with a pull request
 from `dev` to `main`, then tag `main` with the release version. The current
-release candidate is `v0.6.2`.
+release candidate is `v0.6.3`.

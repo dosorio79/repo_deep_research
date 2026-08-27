@@ -1,18 +1,21 @@
 """FastAPI backend for Repo Deep Research."""
 
+import asyncio
+from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Protocol
+from queue import Queue
+from threading import Thread
+from typing import Protocol, cast
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from openai import OpenAIError
 from qdrant_client.http.exceptions import ResponseHandlingException
-from starlette.concurrency import run_in_threadpool
 
 from repo_research.config import Settings, load_dotenv_environment
 from repo_research.graph_models import GraphSummary
@@ -21,6 +24,7 @@ from repo_research.ingestion import (
     ingest_repository_if_needed,
     materialize_repository_address,
 )
+from repo_research.ingestion_jobs import IngestionJobService, WorkerStarter
 from repo_research.models import (
     AnswerSnapshot,
     EvaluationDashboardSummary,
@@ -31,6 +35,7 @@ from repo_research.models import (
     FeedbackEvent,
     FeedbackRequest,
     GroundTruthEvaluationList,
+    IngestionJob,
     IngestSummary,
     MonitoringFeedbackFilter,
     MonitoringRunDetail,
@@ -172,6 +177,21 @@ class RecordingStore(Protocol):
     def list_ground_truth_evaluation_results(self) -> GroundTruthEvaluationList:
         """Return persisted offline ground-truth answer assessments."""
 
+    def create_ingestion_job(self, job: IngestionJob) -> IngestionJob:
+        """Persist a new background ingestion job."""
+
+    def get_ingestion_job(self, job_id: str) -> IngestionJob | None:
+        """Return one ingestion job."""
+
+    def latest_active_ingestion_job(self) -> IngestionJob | None:
+        """Return the newest active ingestion job."""
+
+    def update_ingestion_job(self, job: IngestionJob) -> IngestionJob:
+        """Persist mutable ingestion job fields."""
+
+    def interrupt_active_ingestion_jobs(self) -> int:
+        """Mark abandoned active ingestion jobs as interrupted."""
+
 
 def package_version() -> str:
     """Return the installed package version used by FastAPI metadata."""
@@ -189,6 +209,7 @@ def create_app(
     research_agent: ResearchAgentRunner | None = None,
     recording_store: RecordingStore | None = None,
     graph_store: RepositoryGraphStore | None = None,
+    ingestion_worker_starter: WorkerStarter | None = None,
 ) -> FastAPI:
     """Create a FastAPI app with injectable runtime dependencies."""
     load_dotenv_environment(keys=("OPENAI_API_KEY", "OPENAI_ADMIN_KEY"))
@@ -235,6 +256,27 @@ def create_app(
             recording_store_instance = create_recording_store(app_settings)
         return recording_store_instance
 
+    def run_ingest_for_job(request: RepositoryIngestRequest) -> IngestSummary:
+        return _ingest_repository_sync(
+            request,
+            app_settings,
+            get_database(),
+            get_graph_store(),
+        )
+
+    if ingestion_worker_starter is None:
+        ingestion_jobs = IngestionJobService(
+            store=get_recording_store(),
+            run_ingest=run_ingest_for_job,
+        )
+    else:
+        ingestion_jobs = IngestionJobService(
+            store=get_recording_store(),
+            run_ingest=run_ingest_for_job,
+            worker_starter=ingestion_worker_starter,
+        )
+    ingestion_jobs.interrupt_abandoned()
+
     @app.get(
         "/",
         include_in_schema=False,
@@ -257,6 +299,55 @@ def create_app(
         return {"status": "ok" if qdrant_ok else "degraded", "qdrant": qdrant_ok}
 
     @app.post(
+        "/repositories/ingest-jobs",
+        response_model=IngestionJob,
+        status_code=status.HTTP_202_ACCEPTED,
+        tags=["repositories"],
+        summary="Start a background repository ingestion job",
+        operation_id="start_repository_ingestion_job",
+    )
+    async def start_repository_ingestion_job(
+        request: RepositoryIngestRequest,
+    ) -> IngestionJob:
+        return ingestion_jobs.start(request)
+
+    @app.get(
+        "/repositories/ingest-jobs/active",
+        response_model=IngestionJob | None,
+        tags=["repositories"],
+        summary="Get the newest active repository ingestion job",
+        operation_id="get_active_repository_ingestion_job",
+    )
+    async def active_repository_ingestion_job() -> IngestionJob | None:
+        return ingestion_jobs.latest_active()
+
+    @app.get(
+        "/repositories/ingest-jobs/{job_id}",
+        response_model=IngestionJob,
+        tags=["repositories"],
+        summary="Get repository ingestion job status",
+        operation_id="get_repository_ingestion_job",
+    )
+    async def repository_ingestion_job(job_id: str) -> IngestionJob:
+        job = ingestion_jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Ingestion job not found.")
+        return job
+
+    @app.post(
+        "/repositories/ingest-jobs/{job_id}/cancel",
+        response_model=IngestionJob,
+        tags=["repositories"],
+        summary="Cancel a queued repository ingestion job",
+        operation_id="cancel_repository_ingestion_job",
+    )
+    async def cancel_repository_ingestion_job(job_id: str) -> IngestionJob:
+        job = ingestion_jobs.cancel(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Ingestion job not found.")
+        return job
+
+    @app.post(
         "/repositories/ingest",
         response_model=IngestSummary,
         tags=["repositories"],
@@ -265,7 +356,7 @@ def create_app(
     )
     async def ingest_repository(request: RepositoryIngestRequest) -> IngestSummary:
         try:
-            return await run_in_threadpool(
+            return await _run_blocking(
                 _ingest_repository_sync,
                 request,
                 app_settings,
@@ -543,6 +634,28 @@ def create_app(
         return get_recording_store().list_ground_truth_evaluation_results()
 
     return app
+
+
+async def _run_blocking[T](function: Callable[..., T], *args: object) -> T:
+    """Run blocking work off the event loop and await completion without AnyIO."""
+    result_queue: Queue[tuple[bool, object]] = Queue(maxsize=1)
+
+    def runner() -> None:
+        try:
+            result_queue.put((True, function(*args)))
+        except BaseException as error:
+            result_queue.put((False, error))
+
+    thread = Thread(target=runner, daemon=True)
+    thread.start()
+    while thread.is_alive():
+        await asyncio.sleep(0.1)
+    success, result = result_queue.get()
+    if success:
+        return cast(T, result)
+    if isinstance(result, BaseException):
+        raise result
+    raise RuntimeError("Blocking worker exited without a result.")
 
 
 def _ingest_repository_sync(

@@ -348,6 +348,6 @@ Goal: make large remote repository ingestion resilient to browser disconnects,
 screen lock, laptop sleep, and network resets before v0.7 adaptive research
 adds more long-running user-visible workflows.
 
-Status: planned.
+Status: implemented for `v0.6.3`.
 
 Plan: [v0.6.3 Resumable Ingestion Jobs](v0.6.3-resumable-ingestion-jobs.md)

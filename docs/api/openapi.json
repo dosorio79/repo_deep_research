@@ -1233,6 +1233,128 @@
         "title": "IngestionIssue",
         "type": "object"
       },
+      "IngestionJob": {
+        "description": "Durable status for one background repository ingestion request.",
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "elapsed_seconds": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Elapsed Seconds",
+            "type": "integer"
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
+          "error_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Type"
+          },
+          "job_id": {
+            "minLength": 1,
+            "title": "Job Id",
+            "type": "string"
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RepositoryIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository_address": {
+            "minLength": 1,
+            "title": "Repository Address",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/IngestionJobStatus",
+            "default": "queued"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IngestSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository_address",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "IngestionJob",
+        "type": "object"
+      },
+      "IngestionJobStatus": {
+        "description": "Persisted lifecycle states for background repository ingestion.",
+        "enum": [
+          "queued",
+          "discovering",
+          "indexing",
+          "completed",
+          "failed",
+          "cancelled",
+          "interrupted"
+        ],
+        "title": "IngestionJobStatus",
+        "type": "string"
+      },
       "LatencyByRunKind": {
         "description": "Average latency for one monitoring run kind.",
         "properties": {
@@ -2817,7 +2939,7 @@
     },
     "summary": "Evidence-grounded research for Python repositories.",
     "title": "Repo Deep Research",
-    "version": "0.6.2"
+    "version": "0.6.3"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3421,6 +3543,160 @@
           }
         },
         "summary": "Ingest and index a repository",
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/repositories/ingest-jobs": {
+      "post": {
+        "operationId": "start_repository_ingestion_job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositoryIngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start a background repository ingestion job",
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/repositories/ingest-jobs/active": {
+      "get": {
+        "operationId": "get_active_repository_ingestion_job",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/IngestionJob"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Active Repository Ingestion Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get the newest active repository ingestion job",
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/repositories/ingest-jobs/{job_id}": {
+      "get": {
+        "operationId": "get_repository_ingestion_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get repository ingestion job status",
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/repositories/ingest-jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_repository_ingestion_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel a queued repository ingestion job",
         "tags": [
           "repositories"
         ]
