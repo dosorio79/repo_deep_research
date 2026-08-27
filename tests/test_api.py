@@ -352,7 +352,7 @@ def test_record_completed_answer_persists_agentic_snapshot() -> None:
     run_kind, stamped_trace = recording_store.runs[0]
     assert run_kind is RunKind.AGENTIC
     assert stamped_trace.request_id == trace.request_id
-    assert stamped_trace.answer_app_version == "0.6.3"
+    assert stamped_trace.answer_app_version == version("repo-deep-research")
     assert stamped_trace.answer_version_provenance.value == "exact"
     assert len(recording_store.answer_snapshots) == 1
     snapshot = recording_store.answer_snapshots[0]
@@ -360,7 +360,7 @@ def test_record_completed_answer_persists_agentic_snapshot() -> None:
     assert snapshot.run_kind is RunKind.AGENTIC
     assert snapshot.answer.summary == "Persist answer snapshots from API routes."
     assert snapshot.evidence[0].path == "src/repo_research/api.py"
-    assert snapshot.answer_app_version == "0.6.3"
+    assert snapshot.answer_app_version == version("repo-deep-research")
     assert snapshot.answer_version_provenance.value == "exact"
 
 

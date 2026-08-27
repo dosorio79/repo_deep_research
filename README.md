@@ -39,21 +39,22 @@ flowchart LR
   cli --> services[Repo research services]
   api --> services
   services --> qdrant[Qdrant<br/>dense sparse hybrid search]
-  services --> postgres[PostgreSQL<br/>monitoring feedback evaluations]
+  services --> postgres[PostgreSQL<br/>monitoring feedback evaluations ingestion jobs]
   services --> openai[OpenAI API<br/>BYOK]
   services --> repo[Local Python repository]
 ```
 
 ## Release Status
 
-The current development line is `v0.6.3 Resumable Ingestion Jobs`.
+The current released version is `v0.6.4 Housekeeping and Gate Alignment`.
 It keeps the local-first capstone stack, adds commit-scoped JSONL repository
 graphs for bounded agentic change-impact research, and includes the graph
 expansion acceptance hardening needed before v0.7 adaptive research. Repository
 ingestion now starts as a resumable background job so long remote repository
-runs can survive browser reloads and frontend connection drops. Live answer
-generation remains bring-your-own-key, while seeded offline evaluation evidence
-is available without an OpenAI key.
+runs can survive browser reloads and frontend connection drops. The broad local
+quality gate now includes frontend lint so local validation matches CI more
+closely. Live answer generation remains bring-your-own-key, while seeded
+offline evaluation evidence is available without an OpenAI key.
 
 Cloud deployment is intentionally out of scope for the Local Alpha. The stack
 includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
@@ -83,7 +84,7 @@ Reviewer shortcut:
 | Retrieval evaluation | [docs/evaluation.md](docs/evaluation.md) reports dense, sparse, and hybrid evaluation over versioned records in [eval/development.json](eval/development.json) and [eval/held_out.json](eval/held_out.json), including refreshed Datapeek held-out measurements. |
 | LLM evaluation | [docs/evaluation.md](docs/evaluation.md) reports the completed Datapeek direct-vs-agentic held-out answer comparison and documents the monitored-answer evidence audit. |
 | Interface | The app exposes a React UI, FastAPI routes, Swagger at `/docs`, and a CLI; see [docs/usage.md](docs/usage.md). |
-| Ingestion pipeline | `POST /repositories/ingest` and `repo-research ingest` run an automated application-owned Python pipeline: repository selection, local access or public GitHub clone, parse, chunk, embed, and Qdrant index. This is not a Kestra/dlt/Airflow/Prefect pipeline. |
+| Ingestion pipeline | `POST /repositories/ingest-jobs` starts resumable browser ingestion, while `POST /repositories/ingest` and `repo-research ingest` remain compatible blocking ingestion paths. All run the same application-owned Python pipeline: repository selection, local access or public GitHub clone, parse, chunk, embed, and Qdrant index. This is not a Kestra/dlt/Airflow/Prefect pipeline. |
 | Monitoring | PostgreSQL-backed feedback and at least five dashboard panels are documented in [docs/monitoring.md](docs/monitoring.md). |
 | Containerization | [docker-compose.yml](docker-compose.yml) runs frontend, API, Qdrant, and PostgreSQL for the Local Alpha. |
 | Reproducibility | [docs/setup.md](docs/setup.md), [docs/usage.md](docs/usage.md), pinned Python dependencies, and `frontend/package-lock.json` provide repeatable local setup. |
@@ -142,7 +143,7 @@ local runs.
 | `make typecheck` | Run mypy. |
 | `make test` | Run backend tests. |
 | `make check` | Run backend lint, typecheck, and tests. |
-| `make test-all` | Run backend checks plus frontend tests, typecheck, and build. |
+| `make test-all` | Run backend checks plus frontend lint, tests, typecheck, and build. |
 | `make services-up` | Start Qdrant and PostgreSQL. |
 | `make services-down` | Stop local services. |
 | `make stack-up` | Create and start API, frontend, Qdrant, and PostgreSQL without rebuilding images. |
@@ -168,6 +169,7 @@ Frontend-only workflows use npm directly:
 
 ```bash
 cd frontend
+npm run lint
 npm test
 npm run typecheck
 npm run build
@@ -241,6 +243,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Evaluation](docs/evaluation.md)
 - [Monitoring KPIs](docs/monitoring.md)
 - [v0.6.3 Resumable Ingestion Jobs release notes](docs/releases/v0.6.3-resumable-ingestion.md)
+- [v0.6.4 Housekeeping and Gate Alignment release notes](docs/releases/v0.6.4-housekeeping.md)
 - [v0.6.2 Intermediate Hardening release notes](docs/releases/v0.6.2-intermediate-hardening.md)
 - [v0.5.9 Evaluation Evidence release notes](docs/releases/v0.5.9-evaluation-evidence.md)
 - [v0.5.8 Local Alpha release notes](docs/releases/v0.5.8-local-alpha.md)
@@ -252,8 +255,8 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 `main` is production. `dev` is the integration branch. Feature branches start
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
-Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current release
-candidate is `v0.6.3`, a resumable ingestion release before v0.7 adaptive
+Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current release is
+`v0.6.4`, a housekeeping and gate-alignment release before v0.7 adaptive
 research.
 
 ## Local Alpha Scope
