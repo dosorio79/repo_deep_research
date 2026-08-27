@@ -65,6 +65,7 @@ Retrieval and storage
 Persistence
   recording_store.py  persists run telemetry, feedback, answer snapshots, and
   evaluation rows in PostgreSQL.
+  ingestion_jobs.py   owns durable ingestion job lifecycle coordination.
 
 Ingestion
   ingestion.py  discovers files, records Git identity, filters, and parses.
@@ -88,6 +89,10 @@ GET  /docs        Swagger UI for the FastAPI contract
 GET  /openapi.json  Runtime OpenAPI JSON
 GET  /health      Qdrant dependency health
 POST /repositories/ingest   Parse, graph, and index a repository
+POST /repositories/ingest-jobs  Start a resumable ingestion job
+GET  /repositories/ingest-jobs/active  Newest active ingestion job
+GET  /repositories/ingest-jobs/{job_id}  One ingestion job status
+POST /repositories/ingest-jobs/{job_id}/cancel  Cancel a queued job
 GET  /repositories/graph-summary  Current commit graph artifact summary
 POST /rag         Direct RAG answer with trace metadata
 POST /research    Bounded agentic research with trace metadata
@@ -118,7 +123,7 @@ qdrant_store.py -- FastEmbed, current chunk payloads, vector search
 rag.py / research.py -- direct RAG or bounded agentic research
         |
         v
-recording_store.py -- persist run data, feedback, snapshots, evaluations
+recording_store.py -- persist run data, feedback, snapshots, evaluations, ingestion jobs
         |
         v
 repo-research CLI / FastAPI -- JSON evidence and grounded answers
@@ -128,11 +133,14 @@ frontend/ -- browser research UI, feedback, and admin monitoring dashboard
 ```
 
 Ingestion is request-driven because the repository is selected by the user at
-runtime. The application-owned Python lifecycle is:
+runtime. Browser ingestion starts as a persisted background job so the UI can
+poll, reload, and recover status while the backend continues indexing. The CLI
+and legacy API route keep the blocking path for compatibility. All paths share
+the application-owned Python lifecycle:
 repository selection -> local access or GitHub clone -> parse -> chunk -> graph
--> embed -> Qdrant index. This keeps Local Alpha simple and reproducible without adding
-Kestra, dlt, Airflow, Prefect, or another orchestration framework solely for
-batch scheduling.
+-> embed -> Qdrant index. This keeps Local Alpha simple and reproducible without
+adding Kestra, dlt, Airflow, Prefect, or another orchestration framework solely
+for batch scheduling.
 
 `ParsedChunk` is the boundary between parsing and storage. It carries repository
 and commit identity, path, symbol, parent symbol, line range, content,
@@ -201,8 +209,10 @@ reads, and total tool calls. Tools include `search_repository`, `read_chunk`,
 output grounded in retrieved or read repository evidence.
 
 `recording_store.py` persists run summaries, feedback events, answer snapshots,
-evaluation runs, and evaluation results in PostgreSQL. `NoOpRecordingStore` is
-used when PostgreSQL is not configured.
+evaluation runs, evaluation results, and ingestion job state in PostgreSQL.
+`ingestion_jobs.py` coordinates background ingestion lifecycle state and falls
+back to in-process status when PostgreSQL recording is disabled.
+`NoOpRecordingStore` is used when PostgreSQL is not configured.
 
 `monitoring.py` provides optional Logfire instrumentation for FastAPI and
 PydanticAI. It complements PostgreSQL-backed monitoring rather than replacing
