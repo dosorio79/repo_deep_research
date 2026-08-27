@@ -22,6 +22,7 @@ import { EvidenceReferences } from "@/components/EvidenceReferences";
 import { ResearchStepsPanel } from "@/components/ResearchStepsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -30,11 +31,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { AppShell } from "@/components/AppShell";
 import { loadLatestRagRun, saveLatestRagRun } from "@/lib/latest-rag-run";
 import {
+  getActiveRepositoryIngestionJob,
   getBackendHealth,
   getMonitoringRunDetail,
-  ingestRepository,
+  getRepositoryIngestionJob,
   runAgenticResearch,
   runRagQuery,
+  startRepositoryIngestionJob,
   submitFeedback,
 } from "@/lib/rag-client";
 import { getBrowserSessionId } from "@/lib/session-id";
@@ -43,6 +46,8 @@ import type {
   BackendHealth,
   ChangeTarget,
   EvidenceItem,
+  IngestionJob,
+  IngestionJobStatus,
   IngestSummary,
   QuestionMode,
   RagRequest,
@@ -77,6 +82,11 @@ const EXAMPLES = [
 const QUESTION_MODES: QuestionMode[] = ["auto", "locate", "flow", "change"];
 const RETRIEVAL_MODES: RetrievalMode[] = ["dense", "sparse", "hybrid"];
 const DEFAULT_API_BASE_URL = (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "/api";
+const ACTIVE_INGESTION_STATUSES = new Set<IngestionJobStatus>([
+  "queued",
+  "discovering",
+  "indexing",
+]);
 type RecordedFeedback = {
   useful: boolean;
   duplicate?: boolean;
@@ -116,7 +126,7 @@ function ResearchView() {
   const [sessionId] = useState(() => getBrowserSessionId());
   const [ingestError, setIngestError] = useState<ApiErrorShape | null>(null);
   const [queryError, setQueryError] = useState<ApiErrorShape | null>(null);
-  const [ingestElapsedSeconds, setIngestElapsedSeconds] = useState(0);
+  const [activeIngestionJobId, setActiveIngestionJobId] = useState<string | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const activeRequestId = result?.trace?.request_id ?? null;
 
@@ -143,14 +153,29 @@ function ResearchView() {
     staleTime: 5_000,
   });
 
+  const activeIngestionJobQuery = useQuery({
+    queryKey: ["active-ingestion-job", baseUrl],
+    queryFn: ({ signal }) => getActiveRepositoryIngestionJob(baseUrl, signal),
+    enabled: baseUrl.trim().length > 0,
+    retry: false,
+    staleTime: 5_000,
+  });
+
+  const ingestJobQuery = useQuery({
+    queryKey: ["ingestion-job", baseUrl, activeIngestionJobId],
+    queryFn: ({ signal }) => getRepositoryIngestionJob(baseUrl, activeIngestionJobId ?? "", signal),
+    enabled: Boolean(activeIngestionJobId),
+    retry: false,
+    refetchInterval: 2_000,
+  });
+
   const ingestMutation = useMutation({
     mutationFn: (payload: { baseUrl: string; repositoryAddress: string }) =>
-      ingestRepository(payload.baseUrl, { repository_address: payload.repositoryAddress }),
-    onMutate: () => {
-      setIngestElapsedSeconds(0);
-    },
+      startRepositoryIngestionJob(payload.baseUrl, {
+        repository_address: payload.repositoryAddress,
+      }),
     onSuccess: (data) => {
-      setIngestSummary(data);
+      setActiveIngestionJobId(data.job_id);
       setIngestError(null);
     },
     onError: (err: unknown) => {
@@ -164,23 +189,46 @@ function ResearchView() {
   });
 
   useEffect(() => {
-    if (!ingestMutation.isPending) return undefined;
-    const startedAt = Date.now();
-    const timer = window.setInterval(() => {
-      setIngestElapsedSeconds(Math.max(1, Math.floor((Date.now() - startedAt) / 1000)));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [ingestMutation.isPending]);
+    const job = activeIngestionJobQuery.data;
+    if (!job || !ACTIVE_INGESTION_STATUSES.has(job.status)) return;
+    setActiveIngestionJobId(job.job_id);
+    setRepositoryAddress(job.repository_address);
+  }, [activeIngestionJobQuery.data]);
+
+  const currentIngestionJob = activeIngestionJobId
+    ? (ingestJobQuery.data ?? ingestMutation.data ?? activeIngestionJobQuery.data ?? null)
+    : null;
+  const ingestionActive =
+    ingestMutation.isPending ||
+    (currentIngestionJob !== null && ACTIVE_INGESTION_STATUSES.has(currentIngestionJob.status));
 
   useEffect(() => {
-    if (!ingestMutation.isPending) return undefined;
+    if (!ingestJobQuery.data) return;
+    const job = ingestJobQuery.data;
+    if (job.status === "completed" && job.summary) {
+      setIngestSummary(job.summary);
+      setIngestError(null);
+      setActiveIngestionJobId(null);
+      return;
+    }
+    if (job.status === "failed" || job.status === "interrupted" || job.status === "cancelled") {
+      setIngestError({
+        title: job.status === "cancelled" ? "Ingestion cancelled" : "Ingestion failed",
+        detail: job.error_detail ?? "The backend could not ingest this repository.",
+      });
+      setActiveIngestionJobId(null);
+    }
+  }, [ingestJobQuery.data]);
+
+  useEffect(() => {
+    if (!ingestionActive) return undefined;
     const preventUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", preventUnload);
     return () => window.removeEventListener("beforeunload", preventUnload);
-  }, [ingestMutation.isPending]);
+  }, [ingestionActive]);
 
   const queryMutation = useMutation({
     mutationFn: (payload: {
@@ -237,6 +285,7 @@ function ResearchView() {
 
   const ingest = () => {
     setIngestError(null);
+    setIngestSummary(null);
     ingestMutation.mutate({
       baseUrl,
       repositoryAddress: repositoryAddress.trim(),
@@ -284,14 +333,14 @@ function ResearchView() {
     });
   };
 
-  const canIngest = repositoryAddress.trim().length > 0 && !ingestMutation.isPending;
+  const canIngest = repositoryAddress.trim().length > 0 && !ingestionActive;
   const hasRepository = ingestSummary !== null;
   const canAsk = hasRepository && question.trim().length > 0 && !queryMutation.isPending;
   const ingestStatusLabel = ingestSummary?.index_updated ? "indexed" : "already indexed";
 
   return (
     <AppShell
-      navigationLocked={ingestMutation.isPending}
+      navigationLocked={ingestionActive}
       navigationLockReason="Repository ingestion is still running."
     >
       <div className="space-y-3">
@@ -375,18 +424,16 @@ function ResearchView() {
                     onClick={ingest}
                     className="w-full gap-1.5"
                   >
-                    {ingestMutation.isPending ? (
+                    {ingestionActive ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                     ) : (
                       <DatabaseZap className="h-4 w-4" aria-hidden />
                     )}
-                    {ingestMutation.isPending ? "Ingesting..." : "Ingest repository"}
+                    {ingestionActive ? "Ingesting..." : "Ingest repository"}
                   </Button>
                 </div>
                 {ingestError ? <ApiError error={ingestError} /> : null}
-                {ingestMutation.isPending ? (
-                  <IngestionProgress elapsedSeconds={ingestElapsedSeconds} />
-                ) : null}
+                {ingestionActive ? <IngestionProgress job={currentIngestionJob} /> : null}
                 {ingestSummary ? <RepositoryReceipt summary={ingestSummary} /> : null}
               </div>
             </section>
@@ -525,30 +572,61 @@ function ResearchView() {
   );
 }
 
-function IngestionProgress({ elapsedSeconds }: { elapsedSeconds: number }) {
+function IngestionProgress({ job }: { job: IngestionJob | null }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const status = job?.status ?? "queued";
   const elapsedLabel =
-    elapsedSeconds > 0 ? `${elapsedSeconds.toLocaleString()}s elapsed` : "starting";
+    job && job.elapsed_seconds > 0
+      ? `${job.elapsed_seconds.toLocaleString()}s elapsed`
+      : "starting";
+  const statusLabel = formatIngestionStatus(status);
   return (
-    <div
+    <Collapsible
       role="status"
       aria-live="polite"
-      className="rounded-md border border-primary/25 bg-primary/5 p-3 text-[12px]"
+      open={detailsOpen}
+      onOpenChange={setDetailsOpen}
+      className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-[12px]"
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2 text-foreground">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
-          <span className="font-medium text-foreground">Ingestion in progress</span>
+          <span className="font-medium">Ingesting repository</span>
+          <span className="rounded-sm bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
+            {statusLabel}
+          </span>
+          <span className="mono text-[11px] text-muted-foreground">{elapsedLabel}</span>
         </div>
-        <span className="mono text-[11px] text-muted-foreground">{elapsedLabel}</span>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+          >
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 transition-transform",
+                detailsOpen ? "rotate-90" : "rotate-0",
+              )}
+              aria-hidden
+            />
+            {detailsOpen ? "Hide ingestion details" : "Show ingestion details"}
+          </button>
+        </CollapsibleTrigger>
       </div>
-      <div className="mt-2 grid gap-1 text-muted-foreground">
-        <span>
-          Keeping this tab active while parsing files, building graph context, and indexing vectors.
-        </span>
+      <CollapsibleContent className="mt-2 grid gap-1 text-muted-foreground">
+        <span>{job?.repository_address ?? "Repository job has started."}</span>
+        <span>Status: {statusLabel}</span>
         <span className="mono text-[11px]">Navigation is locked until ingestion finishes.</span>
-      </div>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
+}
+
+function formatIngestionStatus(status: IngestionJobStatus) {
+  if (status === "queued") return "queued";
+  if (status === "discovering") return "discovering";
+  if (status === "indexing") return "indexing";
+  return status;
 }
 
 function Segmented<T extends string>({

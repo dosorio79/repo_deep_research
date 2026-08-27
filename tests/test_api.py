@@ -39,6 +39,9 @@ from repo_research.models import (
     FeedbackEvent,
     GroundTruthEvaluationList,
     GroundTruthEvaluationSummary,
+    IngestionJob,
+    IngestionJobStatus,
+    IngestSummary,
     MonitoringRunDetail,
     MonitoringRunList,
     MonitoringRunSummary,
@@ -221,6 +224,7 @@ class FakeRecordingStore:
         self.evaluation_result_list = EvaluationResultList()
         self.retrieval_evaluation_list = RetrievalEvaluationList()
         self.ground_truth_evaluation_list = GroundTruthEvaluationList()
+        self.ingestion_jobs: dict[str, IngestionJob] = {}
 
     def record_run(self, *, run_kind: RunKind, trace: RagRunTrace) -> None:
         self.runs.append((run_kind, trace))
@@ -257,6 +261,46 @@ class FakeRecordingStore:
 
     def list_ground_truth_evaluation_results(self) -> GroundTruthEvaluationList:
         return self.ground_truth_evaluation_list
+
+    def create_ingestion_job(self, job: IngestionJob) -> IngestionJob:
+        self.ingestion_jobs[job.job_id] = job
+        return job
+
+    def get_ingestion_job(self, job_id: str) -> IngestionJob | None:
+        return self.ingestion_jobs.get(job_id)
+
+    def latest_active_ingestion_job(self) -> IngestionJob | None:
+        for job in reversed(list(self.ingestion_jobs.values())):
+            if job.status in {
+                IngestionJobStatus.QUEUED,
+                IngestionJobStatus.DISCOVERING,
+                IngestionJobStatus.INDEXING,
+            }:
+                return job
+        return None
+
+    def update_ingestion_job(self, job: IngestionJob) -> IngestionJob:
+        self.ingestion_jobs[job.job_id] = job
+        return job
+
+    def interrupt_active_ingestion_jobs(self) -> int:
+        interrupted = 0
+        for job_id, job in list(self.ingestion_jobs.items()):
+            if job.status in {
+                IngestionJobStatus.QUEUED,
+                IngestionJobStatus.DISCOVERING,
+                IngestionJobStatus.INDEXING,
+            }:
+                self.ingestion_jobs[job_id] = job.model_copy(
+                    update={
+                        "status": IngestionJobStatus.INTERRUPTED,
+                        "error_type": "Interrupted",
+                        "error_detail": "API restarted before ingestion completed.",
+                        "completed_at": datetime(2026, 1, 1, tzinfo=UTC),
+                    }
+                )
+                interrupted += 1
+        return interrupted
 
 
 def test_record_completed_answer_persists_agentic_snapshot() -> None:
@@ -308,7 +352,7 @@ def test_record_completed_answer_persists_agentic_snapshot() -> None:
     run_kind, stamped_trace = recording_store.runs[0]
     assert run_kind is RunKind.AGENTIC
     assert stamped_trace.request_id == trace.request_id
-    assert stamped_trace.answer_app_version == "0.6.2"
+    assert stamped_trace.answer_app_version == "0.6.3"
     assert stamped_trace.answer_version_provenance.value == "exact"
     assert len(recording_store.answer_snapshots) == 1
     snapshot = recording_store.answer_snapshots[0]
@@ -316,7 +360,7 @@ def test_record_completed_answer_persists_agentic_snapshot() -> None:
     assert snapshot.run_kind is RunKind.AGENTIC
     assert snapshot.answer.summary == "Persist answer snapshots from API routes."
     assert snapshot.evidence[0].path == "src/repo_research/api.py"
-    assert snapshot.answer_app_version == "0.6.2"
+    assert snapshot.answer_app_version == "0.6.3"
     assert snapshot.answer_version_provenance.value == "exact"
 
 
@@ -508,7 +552,268 @@ async def test_swagger_docs_and_openapi_json_are_available() -> None:
     schema = schema_response.json()
     assert schema["info"]["title"] == "Repo Deep Research"
     assert "/repositories/ingest" in schema["paths"]
+    assert "/repositories/ingest-jobs" in schema["paths"]
+    assert "/repositories/ingest-jobs/active" in schema["paths"]
     assert "/monitoring/summary" in schema["paths"]
+
+
+@pytest.mark.anyio
+async def test_ingest_job_returns_before_background_work_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started: list[object] = []
+    store = FakeRecordingStore()
+
+    def enqueue(work: object) -> None:
+        started.append(work)
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> IngestSummary:
+        raise AssertionError("background ingestion should not run during POST")
+
+    monkeypatch.setattr(api_module, "_ingest_repository_sync", fail_if_called)
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=store,
+        graph_store=FakeGraphStore(exists=True),
+        ingestion_worker_starter=enqueue,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/repositories/ingest-jobs",
+            json={"repository_address": "/tmp/sample-repo"},
+        )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["job_id"]
+    assert body["status"] == "queued"
+    assert body["repository_address"] == "/tmp/sample-repo"
+    assert body["summary"] is None
+    assert body["error_detail"] is None
+    assert len(started) == 1
+    assert store.get_ingestion_job(body["job_id"]) is not None
+
+
+@pytest.mark.anyio
+async def test_ingest_job_polling_returns_completed_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    store = FakeRecordingStore()
+    summary = IngestSummary(
+        repository=RepositoryIdentity(
+            name="sample-repo",
+            root_path=tmp_path,
+            branch="main",
+            commit_hash="abc123",
+        ),
+        indexed_chunks=3,
+        skipped_files=[],
+        index_updated=True,
+    )
+
+    monkeypatch.setattr(api_module, "_ingest_repository_sync", lambda *_args: summary)
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=store,
+        graph_store=FakeGraphStore(exists=True),
+        ingestion_worker_starter=lambda work: work(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        created = await client.post(
+            "/repositories/ingest-jobs",
+            json={"repository_address": str(tmp_path)},
+        )
+        response = await client.get(
+            f"/repositories/ingest-jobs/{created.json()['job_id']}"
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["summary"]["indexed_chunks"] == 3
+    assert body["repository"]["name"] == "sample-repo"
+    assert body["error_detail"] is None
+
+
+@pytest.mark.anyio
+async def test_ingest_job_records_retryable_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = FakeRecordingStore()
+
+    def raise_failure(*_args: object) -> IngestSummary:
+        raise ValueError("repository does not exist")
+
+    monkeypatch.setattr(api_module, "_ingest_repository_sync", raise_failure)
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=store,
+        graph_store=FakeGraphStore(exists=True),
+        ingestion_worker_starter=lambda work: work(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        created = await client.post(
+            "/repositories/ingest-jobs",
+            json={"repository_address": "/tmp/missing-repo"},
+        )
+        response = await client.get(
+            f"/repositories/ingest-jobs/{created.json()['job_id']}"
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["error_type"] == "ValueError"
+    assert body["error_detail"] == "repository does not exist"
+    assert body["summary"] is None
+
+
+@pytest.mark.anyio
+async def test_ingest_job_skips_existing_git_revision(tmp_path: Path) -> None:
+    (tmp_path / "invalid.py").write_text("def broken(:\n", encoding="utf-8")
+    _commit_test_repo(tmp_path)
+    database = FakeDatabase(healthy=True)
+    database.existing_chunk_count = 7
+    store = FakeRecordingStore()
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=database,
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=store,
+        graph_store=FakeGraphStore(exists=True),
+        ingestion_worker_starter=lambda work: work(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        created = await client.post(
+            "/repositories/ingest-jobs",
+            json={"repository_address": str(tmp_path)},
+        )
+        response = await client.get(
+            f"/repositories/ingest-jobs/{created.json()['job_id']}"
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["summary"]["indexed_chunks"] == 7
+    assert body["summary"]["index_updated"] is False
+    assert database.replaced_repository_id is None
+
+
+@pytest.mark.anyio
+async def test_ingest_job_cancel_marks_queued_job_cancelled() -> None:
+    queued_work: list[object] = []
+    store = FakeRecordingStore()
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=store,
+        graph_store=FakeGraphStore(exists=True),
+        ingestion_worker_starter=lambda work: queued_work.append(work),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        created = await client.post(
+            "/repositories/ingest-jobs",
+            json={"repository_address": "/tmp/sample-repo"},
+        )
+        response = await client.post(
+            f"/repositories/ingest-jobs/{created.json()['job_id']}/cancel"
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+    assert len(queued_work) == 1
+
+
+@pytest.mark.anyio
+async def test_ingest_job_active_endpoint_recovers_reload() -> None:
+    store = FakeRecordingStore()
+    app = create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=store,
+        graph_store=FakeGraphStore(exists=True),
+    )
+    active = IngestionJob(
+        job_id="job-active",
+        repository_address="/tmp/sample-repo",
+        status=IngestionJobStatus.INDEXING,
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    store.create_ingestion_job(active)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.get("/repositories/ingest-jobs/active")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == "job-active"
+    assert response.json()["status"] == "indexing"
+
+
+def test_create_app_marks_abandoned_ingestion_jobs_interrupted() -> None:
+    store = FakeRecordingStore()
+    store.create_ingestion_job(
+        IngestionJob(
+            job_id="job-running",
+            repository_address="/tmp/sample-repo",
+            status=IngestionJobStatus.INDEXING,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    )
+
+    create_app(
+        settings=Settings(repository_root=Path(".")),
+        database=FakeDatabase(healthy=True),
+        generator=FakeGenerator(),
+        research_agent=FakeResearchAgent(),
+        recording_store=store,
+        graph_store=FakeGraphStore(exists=True),
+    )
+
+    job = store.get_ingestion_job("job-running")
+    assert job is not None
+    assert job.status == IngestionJobStatus.INTERRUPTED
+    assert job.error_detail == "API restarted before ingestion completed."
 
 
 @pytest.mark.anyio

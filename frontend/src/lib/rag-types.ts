@@ -50,6 +50,29 @@ export interface IngestSummary {
   indexed_chunks: number;
   skipped_files: IngestionIssue[];
   index_updated: boolean;
+  graph_nodes?: number;
+  graph_edges?: number;
+  graph_updated?: boolean;
+  graph_warning_count?: number;
+  graph_skipped_file_count?: number;
+}
+
+export type IngestionJobStatus =
+  "queued" | "discovering" | "indexing" | "completed" | "failed" | "cancelled" | "interrupted";
+
+export interface IngestionJob {
+  job_id: string;
+  repository_address: string;
+  status: IngestionJobStatus;
+  created_at: string;
+  updated_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  elapsed_seconds: number;
+  repository?: RepositoryIdentity | null;
+  summary?: IngestSummary | null;
+  error_type?: string | null;
+  error_detail?: string | null;
 }
 
 export interface BackendHealth {

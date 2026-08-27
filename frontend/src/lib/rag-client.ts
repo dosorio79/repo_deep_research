@@ -9,6 +9,7 @@ import type {
   FeedbackEvent,
   FeedbackRequest,
   GroundTruthEvaluationList,
+  IngestionJob,
   IngestSummary,
   MonitoringRunDetail,
   MonitoringRunList,
@@ -49,7 +50,7 @@ function extractDetail(body: unknown): string | null {
 
 async function postJson<TPayload, TResult>(
   baseUrl: string,
-  path: "/rag" | "/research" | "/repositories/ingest" | "/feedback",
+  path: string,
   payload: TPayload,
   signal?: AbortSignal,
 ): Promise<TResult> {
@@ -89,7 +90,11 @@ async function postJson<TPayload, TResult>(
     } satisfies ApiErrorShape;
   }
 
-  if (!parsed || typeof parsed !== "object") {
+  if (parsed === null) {
+    return parsed as TResult;
+  }
+
+  if (typeof parsed !== "object") {
     throw {
       title: "Unexpected response",
       detail: "The backend response was not valid JSON matching the expected research result.",
@@ -135,7 +140,11 @@ async function getJson<TResult>(
     } satisfies ApiErrorShape;
   }
 
-  if (!parsed || typeof parsed !== "object") {
+  if (parsed === null) {
+    return parsed as TResult;
+  }
+
+  if (typeof parsed !== "object") {
     throw {
       title: "Unexpected response",
       detail: "The backend response was not valid JSON.",
@@ -253,6 +262,51 @@ export async function ingestRepository(
     baseUrl,
     "/repositories/ingest",
     payload,
+    signal,
+  );
+}
+
+export async function startRepositoryIngestionJob(
+  baseUrl: string,
+  payload: RepositoryIngestRequest,
+  signal?: AbortSignal,
+): Promise<IngestionJob> {
+  return postJson<RepositoryIngestRequest, IngestionJob>(
+    baseUrl,
+    "/repositories/ingest-jobs",
+    payload,
+    signal,
+  );
+}
+
+export async function getRepositoryIngestionJob(
+  baseUrl: string,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<IngestionJob> {
+  return getJson<IngestionJob>(
+    baseUrl,
+    `/repositories/ingest-jobs/${encodeURIComponent(jobId)}`,
+    signal,
+  );
+}
+
+export async function getActiveRepositoryIngestionJob(
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<IngestionJob | null> {
+  return getJson<IngestionJob | null>(baseUrl, "/repositories/ingest-jobs/active", signal);
+}
+
+export async function cancelRepositoryIngestionJob(
+  baseUrl: string,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<IngestionJob> {
+  return postJson<Record<string, never>, IngestionJob>(
+    baseUrl,
+    `/repositories/ingest-jobs/${encodeURIComponent(jobId)}/cancel`,
+    {},
     signal,
   );
 }

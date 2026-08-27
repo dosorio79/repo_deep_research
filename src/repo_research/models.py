@@ -169,6 +169,35 @@ class RepositoryIngestRequest(BaseModel):
     )
 
 
+class IngestionJobStatus(StrEnum):
+    """Persisted lifecycle states for background repository ingestion."""
+
+    QUEUED = "queued"
+    DISCOVERING = "discovering"
+    INDEXING = "indexing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    INTERRUPTED = "interrupted"
+
+
+class IngestionJob(BaseModel):
+    """Durable status for one background repository ingestion request."""
+
+    job_id: str = Field(default_factory=lambda: uuid4().hex, min_length=1)
+    repository_address: str = Field(min_length=1)
+    status: IngestionJobStatus = IngestionJobStatus.QUEUED
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    elapsed_seconds: int = Field(default=0, ge=0)
+    repository: RepositoryIdentity | None = None
+    summary: IngestSummary | None = None
+    error_type: str | None = None
+    error_detail: str | None = None
+
+
 class EvidenceItem(BaseModel):
     """A canonical citation derived from a retrieved repository chunk."""
 

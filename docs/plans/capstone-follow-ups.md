@@ -253,7 +253,7 @@ Goal: make release-to-release comparisons trustworthy before v0.7 adaptive
 research changes answer routing, and make feedback submission behavior reliable
 enough for those comparisons.
 
-Status: release candidate on `dev`; production promotion and tagging remain.
+Status: released to `main` as `v0.6.2`.
 
 ### Version-aware monitoring and evaluation comparisons
 
@@ -341,3 +341,13 @@ Out of scope:
 
 - Multi-user identity or authentication.
 - Free-form feedback moderation.
+
+## v0.6.3: Resumable ingestion jobs
+
+Goal: make large remote repository ingestion resilient to browser disconnects,
+screen lock, laptop sleep, and network resets before v0.7 adaptive research
+adds more long-running user-visible workflows.
+
+Status: implemented for `v0.6.3`.
+
+Plan: [v0.6.3 Resumable Ingestion Jobs](v0.6.3-resumable-ingestion-jobs.md)
