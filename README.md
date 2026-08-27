@@ -46,15 +46,16 @@ flowchart LR
 
 ## Release Status
 
-The current released version is `v0.6.4 Housekeeping and Gate Alignment`.
+The current released version is `v0.6.5 Graph Acceptance Baseline`.
 It keeps the local-first capstone stack, adds commit-scoped JSONL repository
 graphs for bounded agentic change-impact research, and includes the graph
 expansion acceptance hardening needed before v0.7 adaptive research. Repository
 ingestion now starts as a resumable background job so long remote repository
 runs can survive browser reloads and frontend connection drops. The broad local
 quality gate now includes frontend lint so local validation matches CI more
-closely. Live answer generation remains bring-your-own-key, while seeded
-offline evaluation evidence is available without an OpenAI key.
+closely. The relationship graph acceptance gate has fresh offline and optional
+live-smoke evidence. Live answer generation remains bring-your-own-key, while
+seeded offline evaluation evidence is available without an OpenAI key.
 
 Cloud deployment is intentionally out of scope for the Local Alpha. The stack
 includes a frontend, API, Qdrant, PostgreSQL, local repository ingestion, and
@@ -244,6 +245,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 - [Monitoring KPIs](docs/monitoring.md)
 - [v0.6.3 Resumable Ingestion Jobs release notes](docs/releases/v0.6.3-resumable-ingestion.md)
 - [v0.6.4 Housekeeping and Gate Alignment release notes](docs/releases/v0.6.4-housekeeping.md)
+- [v0.6.5 Graph Acceptance Baseline release notes](docs/releases/v0.6.5-graph-acceptance.md)
 - [v0.6.2 Intermediate Hardening release notes](docs/releases/v0.6.2-intermediate-hardening.md)
 - [v0.5.9 Evaluation Evidence release notes](docs/releases/v0.5.9-evaluation-evidence.md)
 - [v0.5.8 Local Alpha release notes](docs/releases/v0.5.8-local-alpha.md)
@@ -256,7 +258,7 @@ Legacy names `RDR_OPENAI_MODEL`, `RDR_RESEARCH_LIMIT`, and
 from `dev`, merge back to `dev`, and promote to `main` when ready.
 
 Releases are `vMAJOR.MINOR.PATCH` tags cut from `main`. The current release is
-`v0.6.4`, a housekeeping and gate-alignment release before v0.7 adaptive
+`v0.6.5`, a graph acceptance baseline release before v0.7 adaptive
 research.
 
 ## Local Alpha Scope

@@ -135,6 +135,20 @@ It writes `artifacts/eval/relationship-aware/summary.json` plus separate
 ingest and graph summaries. The graph checks fail if the current repository
 artifact has no nodes, no edges, or no relationship counts.
 
+Current v0.6.5 entry-gate evidence from 2026-08-27:
+
+- Offline graph gate passed with nodes, edges, and relationship counts present.
+- Self-repository graph summary on `dev` commit
+  `85031c15e20ae22ec62c2bce432c73b4a3da35a9`: 1,533 nodes and 5,857 edges.
+- Relationship counts: 1,200 `CALLS`, 1,907 `REFERENCES`, 673 `IMPORTS`, 553
+  `TESTS`, 60 `READS_CONFIG`, 5 `INHERITS`, and 1,459 `CONTAINS`.
+- Optional live judged smoke over four relationship-heavy flow/change records
+  passed `--require-graph-expansion`: graph expansion was available and used
+  for all four rows.
+- Judged smoke averages: correctness 3.625/5, reference coverage 3.5/5,
+  citation precision 5.0/5, faithfulness 5.0/5, unsupported claims 0, and
+  average total latency 38.0 seconds.
+
 When `OPENAI_API_KEY` is available, run the same harness with answer judging:
 
 ```bash
